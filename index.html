@@ -4605,6 +4605,11 @@ function Onboarding() {
       ${Store.mode === "local" && html`<div class="banner">Tes données restent sur cet appareil : rien n'est envoyé sur internet. Pense aux sauvegardes mensuelles dans iCloud Drive.</div>`}
       <button class="btn pri" onClick=${() => setStep(1)}>Valider et continuer</button>
       <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:10px;margin-top:6px"><b>Tu utilises iCompta ?</b><span class="muted" style="font-size:14px;line-height:1.45">Reprends directement tes comptes, tes opérations en cours, ton échéancier, tes catégories et tes budgets.</span><button class="btn" onClick=${() => setImp(true)}>Importer depuis iCompta</button></div>
+      <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:10px"><b>Tu as déjà une sauvegarde Pécule ?</b><span class="muted" style="font-size:14px;line-height:1.45">Choisis le fichier « pecule-sauvegarde-….json » : tu retrouves tout, comptes, opérations, échéancier, budgets et réglages.</span>
+        <label class="btn" style="display:flex;align-items:center;justify-content:center;cursor:pointer">${busy === "rest" ? "Restauration en cours…" : "Restaurer une sauvegarde"}<input type="file" accept=".json,application/json" style="display:none" onChange=${async e => { const f = e.target.files && e.target.files[0]; if (!f) return;
+          try { const j = JSON.parse(await f.text()); if (j.app !== "pecule" || !Array.isArray(j.docs)) throw 0; setBusy("rest");
+            const docs = j.docs.filter(d => KINDS.includes(d.k)); await Store.bulk(docs.filter(d => d.k !== "set").map(d => ["put", d])); for (const d of docs.filter(d => d.k === "set")) await Store.put(d);
+            toast("Sauvegarde restaurée : " + docs.length + " éléments"); } catch { setBusy(null); toast("Ce fichier n'est pas une sauvegarde Pécule"); } }} /></label></div>
       ${imp && html`<${IcImport} close=${() => setImp(false)} />`}`}
     ${stepN === 1 && html`
       <h1>Tes comptes</h1>
