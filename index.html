@@ -4397,7 +4397,7 @@ function sqliteOpen(buf) {
 }
 /* Conversion iCompta → Pécule. Opérations : toutes celles du mois en cours + toutes celles non validées ;
    soldes : opérations validées avant le 1er du mois ; échéancier, catégories, budgets en option. */
-function icompta2pecule(db, now) {
+function icompta2pecule(db, now, onlyPending) {
   const F = x => x == null || x === "" ? 0 : Math.round(parseFloat(x) * 100) / 100;
   const slug2 = s => String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "x";
   const sid = s => String(s).replace(/[^A-Za-z0-9_-]/g, "_");
@@ -4442,8 +4442,12 @@ function icompta2pecule(db, now) {
   for (const s of Object.values(sp)) { const p = bips[s.budgetItemPeriod], t = tx[s.transaction]; if (p && p.startDate >= start && t && t.date < start && !["prevue", "annulee"].includes(st(t.status))) early.add(t.ID); }
   const bal = {};
   const valid = s => s === "pointee" || s === "verrouillee";
+  /* débit de carte et mensualité de prêt du mois : toujours repris, même validés (Pécule en a besoin pour ses calculs) */
+  const isCL = t => { const a = acc[t.account]; if (CARDS.has(a) || LOANS.has(a)) return (bytx[t.ID] || []).some(x => otherTx(x));
+    return (bytx[t.ID] || []).some(x => { const o = otherTx(x); return o && (CARDS.has(acc[o.account]) || LOANS.has(acc[o.account])); }); };
+  const structural = t => onlyPending && t.date >= start && isCL(t);
   for (const t of Object.values(tx)) { const a = acc[t.account]; if (!a) continue; const s = st(t.status);
-    if (t.date >= start || early.has(t.ID) || !valid(s)) continue;
+    if (onlyPending ? (!valid(s) || structural(t)) : (t.date >= start || early.has(t.ID) || !valid(s))) continue;
     bal[a] = Math.round(((bal[a] || 0) + (bytx[t.ID] || []).reduce((x, y) => x + F(y.amount), 0)) * 100) / 100; }
   const mkSplits = t => { const res = [];
     for (const s of bytx[t.ID] || []) { const o = {amount: F(s.amount)}; const ot = otherTx(s);
@@ -4456,7 +4460,7 @@ function icompta2pecule(db, now) {
       if (!o.amount && !o.to) continue; res.push(o); }
     return res; };
   const used = new Set(), outTx = [];
-  const keep = t => { const s = st(t.status); if (s === "prevue" || s === "annulee") return false; return t.date >= start || early.has(t.ID) || !valid(s); };
+  const keep = t => { const s = st(t.status); if (s === "prevue" || s === "annulee") return false; return onlyPending ? (!valid(s) || structural(t)) : (t.date >= start || early.has(t.ID) || !valid(s)); };
   const list = Object.values(tx).filter(t => acc[t.account] && keep(t)).sort((a, b) => (a.date + a.ID).localeCompare(b.date + b.ID));
   for (const t of list) {
     if (used.has(t.ID)) continue;
@@ -4515,17 +4519,27 @@ function icompta2pecule(db, now) {
     if (Object.keys(ov).length) d.ov = ov;
     outSch.push(d);
   }
-  /* budgets */
+  /* budgets : ce qui est déjà validé sur la période en cours, par ligne de budget */
+  const usedB = {};
+  if (onlyPending) for (const sx of Object.values(sp)) { const p = bips[sx.budgetItemPeriod], t = tx[sx.transaction]; if (!p || !t || !valid(st(t.status))) continue;
+    if (!(p.startDate <= now && (!p.endDate || p.endDate >= now))) continue;
+    const u = usedB[p.item] || (usedB[p.item] = {ps: p.startDate.slice(0, 10), v: 0}); u.v = Math.round((u.v + F(sx.amount)) * 100) / 100; }
   const outB = [], outL = []; let bi = 0;
   for (const b of Object.values(B).filter(b => b.class === "ICBudget").sort((x, y) => (x.parent || "").localeCompare(y.parent || "") || (x.index || 0) - (y.index || 0))) {
     const its = Object.values(items).filter(it => it.budget === b.ID);
     let accs = [], rem = []; try { accs = JSON.parse(b.accounts || "[]").map(x => acc[x]).filter(x => x && !CARDS.has(x)); rem = JSON.parse(b.remainingTransactionsAccounts || "[]").map(x => acc[x]).filter(Boolean); } catch {}
     const id = bdgId(b.ID);
     outB.push({k: "bdg", id, name: b.name.trim(), accounts: accs, color: PAL[bi % PAL.length], emoji: "🎯", hidden: !!b.hidden, order: bi++, noCards: false, remaining: true, remAcc: rem[0] || null, start: its.length ? its.map(x => x.startDate).sort()[0] : start, end: null});
-    for (const it of its) outL.push({k: "bud", id: "bud_ic_" + sid(it.ID).toLowerCase(), budget: id, cat: cat[it.category] || null, amount: Math.abs(F(it.amount)), income: !!it.income, start: it.startDate, end: it.endDate || null, dur: {n: it.duration || 1, u: U[it.durationUnit] || "m"}, carry: false, hist: []});
+    for (const it of its) { const l = {k: "bud", id: "bud_ic_" + sid(it.ID).toLowerCase(), budget: id, cat: cat[it.category] || null, amount: Math.abs(F(it.amount)), income: !!it.income, start: it.startDate, end: it.endDate || null, dur: {n: it.duration || 1, u: U[it.durationUnit] || "m"}, carry: false, hist: []};
+      /* Seulement les opérations en cours : l'enveloppe de la période en cours est réduite de ce qui est déjà validé dans iCompta */
+      const c = usedB[it.ID]; if (onlyPending && c && !l.income) l.ov = {[c.ps]: Math.max(0, Math.round((l.amount + c.v) * 100) / 100)};
+      outL.push(l); }
   }
-  for (const d of accDocs) { d.initial = bal[d.id] || 0; delete d._ic; }
-  return {start, acc: accDocs, cat: catDocs, tx: outTx, sch: outSch, bdg: outB, bud: outL,
+  const shown = {};
+  for (const d of accDocs) { d.initial = bal[d.id] || 0; delete d._ic; shown[d.id] = d.initial; }
+  for (const t of outTx) { if (valid(t.st)) shown[t.account] = (shown[t.account] || 0) + t.amount;
+    for (const x of t.splits || []) if (x.to && shown[x.to] != null && valid(t.st2 || t.st)) shown[x.to] -= x.amount; }
+  return {start, shown: Object.fromEntries(Object.entries(shown).map(([k, v]) => [k, Math.round(v * 100) / 100])), acc: accDocs, cat: catDocs, tx: outTx, sch: outSch, bdg: outB, bud: outL,
     counts: {acc: accDocs.length, cat: catDocs.length, tx: outTx.length, sch: outSch.length, bdg: outB.length}};
 }
 
@@ -4537,10 +4551,12 @@ function obCatDocs() {
 /* Écran d'import iCompta : choisir le fichier, cocher ce qu'on reprend, importer */
 function IcImport({close}) {
   const [r, setR] = useState(null), [err, setErr] = useState(null), [busy, setBusy] = useState(null), [fname, setFname] = useState("");
-  const [opt, setOpt] = useState({sch: true, cat: true, bdg: true});
+  const [opt, setOpt] = useState({sch: true, cat: true, bdg: true, pend: true});
+  const [dbf, setDbf] = useState(null);
+  useEffect(() => { if (dbf) { try { setR(icompta2pecule(dbf, today(), opt.pend)); } catch (x) { setErr(x && x.message ? x.message : "Lecture impossible."); } } }, [dbf, opt.pend]);
   const had = Object.keys(A().acc).length > 0;
   const pick = async e => { const f = e.target.files && e.target.files[0]; if (!f) return; setErr(null); setR(null); setFname(f.name); setBusy("lecture");
-    try { const buf = await f.arrayBuffer(); const db = sqliteOpen(buf); if (!db.has("ICTransaction") || !db.has("ICAccount")) throw new Error("Ce fichier n'a pas la structure d'une base iCompta."); setR(icompta2pecule(db, today())); }
+    try { const buf = await f.arrayBuffer(); const db = sqliteOpen(buf); if (!db.has("ICTransaction") || !db.has("ICAccount")) throw new Error("Ce fichier n'a pas la structure d'une base iCompta."); setDbf(db); }
     catch (x) { setErr(x && x.message ? x.message : "Lecture impossible."); } setBusy(null); };
   const run = async () => {
     const ops = [];
@@ -4565,15 +4581,16 @@ function IcImport({close}) {
     ${!r && html`<p class="muted" style="font-size:15px;line-height:1.5;margin:0">Choisis le fichier <b>.cdb</b> de ta base iCompta (par exemple « COMPTABILITE.cdb »), depuis Fichiers ou iCloud Drive. Il est lu sur ton appareil : il n'est envoyé nulle part.</p>
       <label class="wgo" style="display:flex;align-items:center;justify-content:center;cursor:pointer">${busy === "lecture" ? "Lecture du fichier…" : "Choisir le fichier iCompta"}<input type="file" style="display:none" onChange=${pick} /></label>
       ${err && html`<div class="banner" role="alert" style="border-color:var(--neg)"><span class="grow"><b>Impossible de lire ce fichier.</b><br />${err}</span></div>`}
-      <div class="help">Pécule reprend : tes comptes et leurs soldes validés, les opérations du mois en cours et toutes celles pas encore validées, et, si tu veux, l'échéancier, les catégories et les budgets. Ce qui est déjà validé avant ce mois-ci reste dans iCompta, résumé dans le solde.</div>`}
+      <div class="help">Pécule reprend tes comptes et leurs soldes validés, puis tu choisis : les opérations créées et prévues seulement, ou aussi les validées du mois ; l'échéancier, les catégories et les budgets. Ce qui est validé reste dans iCompta, résumé dans le solde.</div>`}
     ${r && !Array.isArray(busy) && html`
       <div class="card" style="padding:4px 16px;background:var(--bg);box-shadow:none">
         <div class="fgh" style="padding:12px 0 4px">${fname} · ${r.acc.length} comptes</div>
-        ${r.acc.map(a => html`<div style="display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--line);font-size:14px"><span><b>${a.name}</b><span class="muted"> · ${TY[a.type]}${a.linked ? " → " + (r.acc.find(x => x.id === a.linked) || {}).name : ""}</span></span><span style="font-weight:600;white-space:nowrap">${fmt(a.initial)}</span></div>`)}
+        ${r.acc.map(a => html`<div style="display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--line);font-size:14px"><span><b>${a.name}</b><span class="muted"> · ${TY[a.type]}${a.linked ? " → " + (r.acc.find(x => x.id === a.linked) || {}).name : ""}</span></span><span style="font-weight:600;white-space:nowrap">${fmt(r.shown && r.shown[a.id] != null ? r.shown[a.id] : a.initial)}</span></div>`)}
       </div>
-      <div class="help">Soldes validés au ${dayShort(addDays(r.start, -1))}. Les ${r.tx.length} opérations en cours sont toujours reprises.</div>
+      <div class="help">Soldes validés à aujourd'hui. ${opt.pend ? r.tx.length + " opérations reprises : les créées, plus le débit des cartes et la mensualité du prêt du mois." : r.tx.length + " opérations reprises : tout le mois en cours et celles non validées."}</div>
       <div style="display:flex;flex-direction:column;gap:10px">
-        <${Opt} k="sch" label="Échéancier" n=${r.sch.length} hint="Conseillé : sans lui, les prévisions sont vides" />
+        <${Opt} k="pend" label="Seulement les opérations créées et prévues" n=${r.tx.length} hint=${opt.pend ? "Les validées restent dans iCompta ; les budgets du mois partent de ce qu'il te reste" : "Reprend aussi les opérations validées du mois en cours"} />
+        <${Opt} k="sch" label="Échéancier (opérations prévues)" n=${r.sch.length} hint="Conseillé : sans lui, les prévisions sont vides" />
         <${Opt} k="cat" label="Catégories" n=${r.cat.length} hint="Sinon, Pécule propose ses catégories de base" />
         <${Opt} k="bdg" label="Budgets" n=${r.bdg.length} hint="Avec leurs montants et périodes" />
       </div>
