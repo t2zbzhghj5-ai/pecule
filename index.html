@@ -449,6 +449,28 @@ function QuickSheet({acc, close}) {
   const a0 = acc || mainAcc() || accList()[0]?.id, t = today();
   const [w, setW] = useState({type: null, step: 0, amt: "", cat: null, to: null, when: 0, date: t, rep: false, day: Number(t.slice(8)), sens: "dep", account: a0, name: "", freq: "m1"});
   const up = p => setW(x => ({...x, ...p}));
+  const [txt, setTxt] = useState(""), [perr, setPerr] = useState(null);
+  /* Saisie par texte : notification, SMS ou phrase tapée, lue sur l'appareil (aucun envoi) */
+  const guessCat = (name, account, amount) => {
+    const g = applyRules({k: "tx", account, name, amount, splits: [{cat: null, amount}]}, {isNew: true});
+    if (g.splits?.[0]?.cat) return g.splits[0].cat;
+    const k = norm(name); if (!k) return null;
+    const prev = Object.values(A().tx).filter(x => norm(x.name) === k && x.splits?.[0]?.cat && Math.sign(x.amount) === Math.sign(amount)).sort((a, b) => b.date.localeCompare(a.date))[0];
+    if (prev) return prev.splits[0].cat;
+    const sc = Object.values(A().sch).find(x => norm(x.name) === k && x.splits?.[0]?.cat);
+    return sc ? sc.splits[0].cat : null;
+  };
+  const analyse = () => {
+    const r = parseBankText(txt); setPerr(null);
+    if (!r.length) { setPerr("Je n'ai pas trouvé de montant. Il faut au moins un montant, par exemple 42,10 €."); return; }
+    if (r.length > 1) { close(); setTimeout(() => SHEET.open({type: "paste", acc: w.account, text: txt}), 40); return; }
+    const x = r[0], account = x.account || w.account, inc2 = x.amount > 0, amount = Math.abs(x.amount);
+    const cat = guessCat(x.name, account, x.amount);
+    const when = x.date === t ? 0 : x.date === addDays(t, -1) ? 1 : x.date === addDays(t, 1) ? 2 : 3;
+    setW(v => ({...v, type: inc2 ? "rev" : "dep", account, amt: String(amount.toFixed(2)).replace(".", ",").replace(/,00$/, ""), name: x.name, cat, when, date: x.date, step: cat ? 3 : 1}));
+    if (!cat) toast("Montant, date et libellé trouvés : choisis la catégorie");
+  };
+  const paste = async () => { try { const v = await navigator.clipboard.readText(); if (v) { setTxt(v); setPerr(null); } } catch { toast("Colle le texte avec un appui long dans le champ"); } };
   const steps = w.type ? WZ_T[w.type][4] : [], kind0 = w.type ? steps[w.step] : "pick";
   const n = Number(String(w.amt).replace(",", ".")) || 0;
   const inc = w.type === "rev" || (w.type === "ech" && w.sens === "rev"), isTr = w.type === "vir" || (w.type === "ech" && w.sens === "vir");
@@ -489,6 +511,12 @@ function QuickSheet({acc, close}) {
       <span style="width:40px"></span>
     </div>
     <div><div class="wiz-k">${Q[0]}</div><h2 class="wiz-q">${Q[1]}</h2></div>
+    ${kind === "pick" && html`<div class="card" style="padding:12px;background:var(--bg);box-shadow:none;border:1px solid var(--line);display:flex;flex-direction:column;gap:10px">
+      <textarea aria-label="Coller ou écrire une opération" value=${txt} onInput=${e => { setTxt(e.target.value); setPerr(null); }} placeholder="Colle une notification ou écris : « Monoprix 23,40 € hier »" style="min-height:64px;font-size:15px;border-radius:12px"></textarea>
+      ${perr && html`<div style="font-size:13px;color:var(--neg)" role="alert">${perr}</div>`}
+      <div style="display:flex;gap:8px"><button class="btn" style="flex:1" onClick=${paste}>Coller</button><button class="btn pri" style="flex:2" disabled=${!txt.trim()} onClick=${analyse}>Analyser</button></div>
+    </div>
+    <div class="fgh" style="padding:4px 2px 0">Ou choisis</div>`}
     ${kind === "pick" && html`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${Object.entries(WZ_T).map(([k, x]) => html`<button class="wtile" onClick=${() => k === "bud" ? (close(), setTimeout(() => SHEET.open({type: "bdg"}), 40)) : k === "acc" ? (close(), setTimeout(() => SHEET.open({type: "acc"}), 40)) : up({type: k, step: 0})}>
       <span class="wi" style=${`background:color-mix(in srgb, ${x[3]} 14%, transparent);color:${x[3] === "#0F172A" ? "var(--ink)" : x[3]}`}>${icon(x[2])}</span>
       <span><span style="display:block;font-size:16px;font-weight:700">${x[0]}</span><span style="display:block;font-size:12px;color:var(--muted)">${x[1]}</span></span></button>`)}</div>`}
@@ -2783,7 +2811,7 @@ const MOIS_RE = {janv: 1, jan: 1, fevr: 2, fev: 2, mars: 3, mar: 3, avr: 4, mai:
 function parseBankText(text) {
   const raw = String(text || "").replace(/ | /g, " ").trim();
   if (!raw) return [];
-  const amtRe = /([+\-−]?\s?\d{1,3}(?:[ .]\d{3})*(?:,\d{2}|\.\d{2}))\s?(€|eur\b)?|([+\-−]?\s?\d+)\s?(€|eur\b)/gi;
+  const amtRe = /([+\-−]?\s?(?:\d{1,3}(?:[ .]\d{3})+|\d+)(?:,\d{2}|\.\d{2}))\s?(€|eur\b)?|([+\-−]?\s?\d+)\s?(€|eur\b)/gi;
   const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const withAmt = lines.filter(l => { amtRe.lastIndex = 0; return amtRe.test(l); });
   const blocks = withAmt.length > 1 && withAmt.length === lines.length ? lines : [lines.join(" ")];
@@ -2809,7 +2837,7 @@ function parseBankText(text) {
     if (!name) { let rest = (b.slice(0, best.idx) + " " + b.slice(best.idx + best.len)).replace(/(\d{1,2})[\/.-](\d{1,2})([\/.-]\d{2,4})?/g, " ");
       rest = rest.replace(/\b(paiement|par|carte|cb|achat|debit|débit|credit|crédit|de|du|le|la|les|un|une|des|votre|vous|avez|effectu[ée]+|a été|été|prélèvement|prelevement|virement|reçu|recu|montant|eur|euros?|sur|compte|n°|chez|à|au|aux|le|op[ée]ration|en|attente|ce|jour|hier|aujourd'hui)\b/gi, " ").replace(/[*:€•|]/g, " ").replace(/\s+/g, " ").trim();
       name = rest.split(" ").slice(0, 5).join(" "); }
-    name = name.replace(/\s+/g, " ").trim();
+    name = name.replace(/\s+/g, " ").trim().replace(/\s+[+\-−]?\d[\d ,.]*(€|eur)?$/i, "").trim();
     if (name === name.toUpperCase() && name.length > 3) name = name.charAt(0) + name.slice(1).toLowerCase();
     return {date, amount: r2(amount), name: name || "Opération", account, src: b};
   }).filter(Boolean);
