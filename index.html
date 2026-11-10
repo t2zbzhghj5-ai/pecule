@@ -4739,7 +4739,7 @@ function ToastHost() {
   return html`<div class="toasts" aria-live="polite">${Toasts.list.map(t => html`<div class="toast" key=${t.id}>${t.t}</div>`)}</div>`;
 }
 function App() {
-  const [, setV] = useState(0); useEffect(() => Store.sub(setV), []);
+  const [, setV] = useState(0); useEffect(() => { const u = Store.sub(setV); setV(Store.v); return u; }, []);
   const [tab, setTab] = useState(readHash());
   const [stack, setStack] = useState([]);
   const [sheets, setSheets] = useState([]);
