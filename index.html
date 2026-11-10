@@ -470,12 +470,14 @@ function QuickSheet({acc, close}) {
     setW(v => ({...v, type: inc2 ? "rev" : "dep", account, amt: String(amount.toFixed(2)).replace(".", ",").replace(/,00$/, ""), name: x.name, cat, when, date: x.date, step: cat ? 3 : 1}));
     if (!cat) toast("Montant, date et libellé trouvés : choisis la catégorie");
   };
+  const startFrom = x => { const sp = x.splits || [], tr = sp.length === 1 && sp[0].to, inc2 = !tr && x.amount > 0;
+    setW(v => ({...v, type: tr ? "vir" : inc2 ? "rev" : "dep", name: x.name, cat: tr ? null : (sp[0]?.cat || null), to: tr || null, amt: "", step: 0, pre: !tr && !!sp[0]?.cat, account: x.account && A().acc[x.account] && !tr ? x.account : v.account})); setTxt(""); };
   const paste = async () => { try { const v = await navigator.clipboard.readText(); if (v) { setTxt(v); setPerr(null); } } catch { toast("Colle le texte avec un appui long dans le champ"); } };
   const steps = w.type ? WZ_T[w.type][4] : [], kind0 = w.type ? steps[w.step] : "pick";
   const n = Number(String(w.amt).replace(",", ".")) || 0;
   const inc = w.type === "rev" || (w.type === "ech" && w.sens === "rev"), isTr = w.type === "vir" || (w.type === "ech" && w.sens === "vir");
   const kind = kind0 === "cat" && isTr ? "dest" : kind0;
-  const next = () => up({step: w.step + 1});
+  const next = () => up({step: w.step + (kind0 === "amount" && w.pre && w.step === 0 && (w.type === "dep" || w.type === "rev") ? 2 : 1)});
   const back = () => kind === "pick" ? close() : w.step === 0 ? up({type: null, step: 0}) : up({step: w.step - 1});
   const press = k => up({amt: (a => { if (k === "⌫") return a.slice(0, -1); if (k === ",") return a.includes(",") ? a : (a || "0") + ","; if (a.includes(",") && a.split(",")[1].length >= 2) return a; if (a.replace(",", "").length >= 7) return a; return a === "0" ? k : a + k; })(w.amt)});
   const whenD = [t, addDays(t, -1), addDays(t, 1)];
@@ -514,10 +516,11 @@ function QuickSheet({acc, close}) {
     ${kind === "pick" && html`<div class="card" style="padding:12px;background:var(--bg);box-shadow:none;border:1px solid var(--line);display:flex;flex-direction:column;gap:10px">
       <textarea aria-label="Coller ou écrire une opération" value=${txt} onInput=${e => { setTxt(e.target.value); setPerr(null); }} placeholder="Colle une notification ou écris : « Monoprix 23,40 € hier »" style="min-height:64px;font-size:15px;border-radius:12px"></textarea>
       ${perr && html`<div style="font-size:13px;color:var(--neg)" role="alert">${perr}</div>`}
+      ${txt.trim() && !/\d/.test(txt) && nameSuggest(txt).length > 0 && html`<div class="hscroll" style="margin:0;padding:0;gap:8px" aria-label="Libellés connus">${nameSuggest(txt).map(x => html`<button class="dchip" style="flex:none" onClick=${() => startFrom(x)}>${x.splits?.[0]?.cat ? html`<span aria-hidden="true">${catEmoji(x.splits[0].cat)}</span>` : ""}<b style="font-weight:600">${x.name}</b></button>`)}</div>`}
       <div style="display:flex;gap:8px"><button class="btn" style="flex:1" onClick=${paste}>Coller</button><button class="btn pri" style="flex:2" disabled=${!txt.trim()} onClick=${analyse}>Analyser</button></div>
     </div>
     <div class="fgh" style="padding:4px 2px 0">Ou choisis</div>`}
-    ${kind === "pick" && html`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${Object.entries(WZ_T).map(([k, x]) => html`<button class="wtile" onClick=${() => k === "bud" ? (close(), setTimeout(() => SHEET.open({type: "bdg"}), 40)) : k === "acc" ? (close(), setTimeout(() => SHEET.open({type: "acc"}), 40)) : up({type: k, step: 0})}>
+    ${kind === "pick" && html`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${Object.entries(WZ_T).map(([k, x]) => html`<button class="wtile" onClick=${() => k === "bud" ? (close(), setTimeout(() => SHEET.open({type: "bdg"}), 40)) : k === "acc" ? (close(), setTimeout(() => SHEET.open({type: "acc"}), 40)) : up({type: k, step: 0, pre: false, cat: null, name: ""})}>
       <span class="wi" style=${`background:color-mix(in srgb, ${x[3]} 14%, transparent);color:${x[3] === "#0F172A" ? "var(--ink)" : x[3]}`}>${icon(x[2])}</span>
       <span><span style="display:block;font-size:16px;font-weight:700">${x[0]}</span><span style="display:block;font-size:12px;color:var(--muted)">${x[1]}</span></span></button>`)}</div>`}
     ${kind === "pick" && html`<button class="link" style="font-size:14px;padding:10px;align-self:center" onClick=${() => { close(); setTimeout(() => SHEET.open({type: "op", kind: "tx", acc: w.account}), 40); }}>Formulaire complet (ventilation, notes…)</button>`}
@@ -541,7 +544,8 @@ function QuickSheet({acc, close}) {
         ${recap.map(([k, v]) => html`<div style="display:flex;justify-content:space-between;gap:10px;padding:13px 0;border-bottom:1px solid var(--line);font-size:15px"><span class="muted">${k}</span><span style="font-weight:600;text-align:right">${v}</span></div>`)}
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 0;border-bottom:1px solid var(--line);font-size:15px"><span class="muted">Compte</span><select aria-label="Compte" value=${w.account} onChange=${e => up({account: e.target.value})} style="width:auto;min-height:34px;height:34px;padding:0 24px 0 8px;font-size:14px;font-weight:600;border-radius:10px">${accList().filter(x => x.type !== "pret" && x.id !== w.to).map(x => html`<option value=${x.id}>${x.name}</option>`)}</select></div>
         ${w.type === "ech" && html`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 0;border-bottom:1px solid var(--line);font-size:15px"><span class="muted">Fréquence</span><select aria-label="Fréquence" value=${w.freq} onChange=${e => up({freq: e.target.value})} style="width:auto;min-height:34px;height:34px;padding:0 24px 0 8px;font-size:14px;font-weight:600;border-radius:10px"><option value="m1">Chaque mois</option><option value="m2">Tous les 2 mois</option><option value="m3">Tous les 3 mois</option><option value="y1">Chaque année</option><option value="w1">Chaque semaine</option></select></div>`}
-        <label style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;font-size:15px"><span class="muted">Libellé</span><input value=${w.name} placeholder=${autoName()} onInput=${e => up({name: e.target.value})} style="flex:1;max-width:60%;text-align:right;min-height:38px;font-size:15px;font-weight:600" /></label>
+        <label style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;font-size:15px"><span class="muted">Libellé</span><input value=${w.name} placeholder=${autoName()} autocomplete="off" onInput=${e => up({name: e.target.value})} style="flex:1;max-width:60%;text-align:right;min-height:38px;font-size:15px;font-weight:600" /></label>
+        ${w.name.trim() && nameSuggest(w.name).length > 0 && html`<div style="display:flex;flex-wrap:wrap;gap:8px;padding-bottom:12px" aria-label="Libellés connus">${nameSuggest(w.name).map(x => html`<button class="dchip" onClick=${() => up({name: x.name, cat: w.cat || (isTr ? null : x.splits?.[0]?.cat || null)})}>${x.splits?.[0]?.cat ? html`<span aria-hidden="true">${catEmoji(x.splits[0].cat)}</span>` : ""}${x.name}</button>`)}</div>`}
       </div>
       ${w.type !== "ech" && !w.rep && html`<button class="link" style="font-size:14px;padding:6px;align-self:center" onClick=${() => { const v = r2(inc ? n : -n); close(); setTimeout(() => SHEET.open({type: "op", kind: "tx", acc: w.account, preset: {mode: isTr ? "transfer" : inc ? "income" : "expense", tx: {account: w.account, date, name: (w.name || "").trim() || autoName(), amount: v, splits: [isTr ? {to: w.to, amount: v} : {cat: w.cat, amount: v}]}}}), 40); }}>Plus d'options : ventiler, ajouter une note…</button>`}
       <div style="flex:1"></div><button class="wgo" onClick=${save}>Enregistrer</button>`}
@@ -2979,6 +2983,16 @@ function SchedImport({close}) {
 const FIELDS = {payee: "Tiers", pay: "Moyen de paiement", shares: "Dépense partagée", comment: "Commentaire"};
 const showF = k => (S().fields || {})[k] !== false;
 const withOpt = (o, x) => { if (x?.bm) o.bm = Number(x.bm); if (x?.nobud) o.nobud = true; if (x?.refund) o.refund = true; if (x?.noRep) o.noRep = true; if (x?.noAvg) o.noAvg = true; if (x?.owner) o.owner = x.owner; if (x?.bdg) o.bdg = x.bdg; return o; };
+/* Libellés déjà connus (opérations + échéancier), proposés dès la 1re lettre : les plus fréquents d'abord */
+function nameSuggest(v, max = 5) {
+  const n = norm(v || "").trim(); if (!n) return [];
+  const all = memo("nmsg", () => { const m = {};
+    for (const t of [...Object.values(A().tx), ...Object.values(A().sch)]) { const k = norm(t.name || "").trim(); if (!k || t.kind) continue;
+      const e = m[k] || (m[k] = {k, name: t.name, n: 0, date: "", t});
+      e.n++; const d = t.date || t.next || ""; if (d >= e.date) { e.date = d; e.t = t; e.name = t.name; } }
+    return Object.values(m).sort((a, b) => b.n - a.n || b.date.localeCompare(a.date)); });
+  return all.filter(e => e.k.startsWith(n) || e.k.split(/[\s\-']+/).some(w => w.startsWith(n))).filter(e => e.k !== n).slice(0, max).map(e => e.t);
+}
 const suggest = field => memo("sg" + field, () => { const c = {}; for (const t of Object.values(A().tx)) if (t[field]) c[t[field]] = (c[t[field]] || 0) + 1; return Object.entries(c).sort((a, b) => b[1] - a[1]).map(x => x[0]).slice(0, 60); });
 const HL = ["", "#F2643D", "#F0A52E", "#3BA55C", "#2F6FED", "#7B61FF"];
 function SplitOpts({o, set}) {
@@ -3020,10 +3034,8 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
 
   const onName = v => {
     set("name", v);
-    if (isSch || base || v.length < 2) { setSugg([]); return; }
-    const n = norm(v), seen = new Set(), out = [];
-    for (const t of Object.values(A().tx).sort((a, b) => b.date.localeCompare(a.date))) { const k = norm(t.name); if (k.startsWith(n) && !seen.has(k)) { seen.add(k); out.push(t); if (out.length >= 4) break; } }
-    setSugg(out);
+    if (isSch || base || !v.trim()) { setSugg([]); return; }
+    setSugg(nameSuggest(v, 5));
   };
   const pickSugg = t => {
     const sp = t.splits || [];
