@@ -1946,7 +1946,9 @@ const kidsOf = (accs, id) => accs.filter(c => c.type === "carte" && c.linked ===
 const isKid = (accs, c) => c.type === "carte" && c.linked && accs.some(a => a.id === c.linked);
 const nextDebit = c => cardDebitFor(c, today());
 /* Prochain débit prévu d'une carte à débit différé (montant calculé par l'échéancier) */
-const cardNext = c => { const t = today(), o = occurrences(addDays(t, 45)).find(o => o.card === c.id && o.date >= t); return o ? {amt: -o.amount, date: o.date} : null; };
+const cardNext = c => { const t = today(), o = occurrences(addDays(t, 45)).find(o => o.card === c.id && o.date >= t); return o ? {amt: -o.amount, date: o.date, cut: o.cut} : null; };
+/* Opérations de la carte pas encore validées (pointées), jusqu'à aujourd'hui */
+const cardPending = id => { const t = today(); let n = 0, s = 0; for (const [x, v] of idx()[id] || []) { if (x.date > t || Math.abs(v) < 0.005) continue; const st = sideSt(x, id); if (st === "annulee" || st === "pointee" || st === "verrouillee") continue; n++; s += v; } return {n, amt: r2(-s)}; };
 function accGroups(accs) {
   const out = [], byName = {};
   for (const a of accs) {
@@ -2267,13 +2269,14 @@ function Glance() {
   const g = glanceState(id), t = today(), a = g.a;
   const isCard = a.type === "carte", isLoan = a.type === "pret";
   if (isLoan) return html`<section class="hero"><div class="cap" style="margin:0">Capital restant dû</div><div class="big">${fmt(-g.b)}</div></section>`;
-  if (isCard) { const nx = cardNext(a), val = balance(id, {cleared: true});
+  if (isCard) { const nx = cardNext(a), val = balance(id, {cleared: true}), pend = cardPending(id), diff = nx ? r2(nx.amt + g.b) : 0, lk = a.linked && A().acc[a.linked];
     return html`<section style="display:flex;flex-direction:column;gap:10px"><div class="hero">
-      <div class="cap" style="margin:0">Encours</div><div class="big">${fmt(g.b)}</div>
-      ${a.linked && A().acc[a.linked] && html`<button class="link" style="margin-top:12px;font-size:14px;font-weight:500;color:var(--muted);padding:6px 0;text-align:left" onClick=${() => Store.put({...S(), k: "set", id: "set_main", mainAcc: a.linked})}>Débitée sur le <b style="color:var(--accent)">${A().acc[a.linked].name.replace(/^Compte/, "compte")}</b> le ${dayShort(nextDebit(a))} ›</button>`}</div>
+      <div class="cap" style="margin:0">${nx ? "Prochain débit le " + dayShort(nx.date) : "Encours"}</div><div class="big">${nx ? fmt(nx.amt) : fmt(g.b)}</div>
+      ${nx && Math.abs(diff) > 0.004 && html`<div style="font-size:14px;color:var(--muted);margin-top:4px">${diff > 0 ? "dont " + fmt(diff) + " prévus d'ici le " + dayShort(nx.cut || nx.date) : fmt(-diff) + " d'achats après le " + dayShort(nx.cut || nx.date) + " partiront au débit suivant"}</div>`}
+      ${lk && html`<button class="link" style="margin-top:10px;font-size:14px;font-weight:500;color:var(--muted);padding:6px 0;text-align:left" onClick=${() => Store.put({...S(), k: "set", id: "set_main", mainAcc: a.linked})}>Débitée sur le <b style="color:var(--accent)">${A().acc[a.linked].name.replace(/^Compte/, "compte")}</b>${nx ? "" : " le " + dayShort(nextDebit(a))} ›</button>`}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div class="tile"><div class="l">Solde validé</div><div class="v">${fmt(val)}</div></div>
-        <div class="tile"><div class="l">${nx ? "Prochain débit · " + dayShort(nx.date) : "Prochain débit"}</div><div class="v">${nx ? fmt(nx.amt) : "—"}</div></div>
+        <div class="tile"><div class="l">Solde validé</div><div class="v">${fmt(-val)}</div></div>
+        <div class="tile"><div class="l">${"À valider" + (pend.n ? " · " + pend.n + (pend.n > 1 ? " opérations" : " opération") : "")}</div><div class="v">${fmt(pend.amt)}</div></div>
       </div></section>`; }
   const left = Math.max(0, daysBetween(t, g.pe)), pct = Math.min(100, Math.max(0, Math.round(g.dNow / g.dN * 100)));
   const inc = sortTx([...occurrences(addDays(t, 62)).filter(o => o.date >= t && sides(o).some(([x]) => x === id)), ...(idx()[id] || []).map(([x]) => x).filter(x => x.date >= t && x.st !== "annulee")].filter(o => amtFor(o, id) > 0), "dd", id).pop();
