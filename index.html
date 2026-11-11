@@ -775,21 +775,58 @@ function ConfirmSheet({kind, items, close}) {
 const halfJoint = () => { const D = A(), j = J()?.acc; if (j && D.acc[j]) return j; return accList().find(a => a.type !== "carte" && /joint|commun/i.test(a.name))?.id || null; };
 const halfFrom = () => { const D = A(), f = S().halfFrom; if (f && D.acc[f]) return f; const j = halfJoint(), m = mainAcc(); if (m && m !== j && D.acc[m] && !["carte", "pret"].includes(D.acc[m].type)) return m; return accList().find(a => a.type === "courant" && a.id !== j)?.id || null; };
 const isJointAcc = id => { const j = halfJoint(), a = A().acc[id]; return !!j && !!a && (id === j || (a.type === "carte" && a.linked === j)); };
-const halfName = () => S().halfName || "Partenaire";
+const normN = x => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+const halfGuess = () => memo("halfGuess", () => { const j = halfJoint(); if (!j) return null;
+  const c = Object.values(A().tx).filter(t => t.account === j && t.st !== "annulee" && !t.kind && t.date === halfDate(ym(t.date)) && (t.amount || 0) > 0 && !(t.splits || []).some(x => x.to)).sort((a, b) => b.date.localeCompare(a.date));
+  return c.length ? c[0].name.trim() : null; });
+const halfName = () => S().halfName || (J()?.partner && A().per?.[J().partner]?.name) || halfGuess() || "Partenaire";
 const halfDate = k => { const [y, m] = k.split("-").map(Number); return `${k}-${pad(dim(y, m) - 1)}`; };
+/* Parts 50/50 d'un mois : ta moitié (virement vers le joint) et sa moitié (sa rentrée sur le joint). hf = opération d'origine */
+function halfParts(k) { return memo("hp" + k, () => {
+  const D = A(), j = halfJoint(), mine = [], hers = []; if (!j) return {mine, hers};
+  const txs = Object.values(D.tx).filter(t => t.half && t.st !== "annulee" && isJointAcc(t.account) && ym(t.date) === k).sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+  for (const t of txs) for (const sp of t.splits || []) {
+    if (sp.to) continue; const v = sp.amount || 0; if (v >= 0) continue;
+    const me = r2(v / 2), her = r2(v - me), memo = `${t.name} · ${dayShort(t.date)}`;
+    mine.push({to: j, cat: sp.cat || null, amount: me, memo, hf: t.id}); hers.push({cat: sp.cat || null, amount: -her, memo, refund: true, hf: t.id});
+  }
+  for (const x of (S().halfAdj || []).filter(x => x.k === k && Number(x.amount) > 0)) { const v = r2(Number(x.amount)), memo = x.memo || "Ajout manuel"; mine.push({to: j, cat: x.cat || null, amount: -v, memo, hf: "adj"}); hers.push({cat: x.cat || null, amount: v, memo, refund: true, hf: "adj"}); }
+  return {mine, hers}; }); }
+/* Virement et opération de la partenaire déjà présents l'avant-dernier jour du mois (saisis à la main ou importés d'iCompta) :
+   les nouvelles dépenses 50/50 s'y ajoutent tant qu'ils ne sont pas validés par la banque */
+function halfBase(k) { return memo("hb" + k, () => {
+  const j = halfJoint(), from = halfFrom(), d = halfDate(k), nm = normN(halfName()); if (!j || !from) return {};
+  const list = Object.values(A().tx).filter(t => t.date === d && t.st !== "annulee" && (!t.kind || t.kind === "half"));
+  const sp = t => t.splits || [];
+  const T = list.find(t => t.id === "tx_half_" + k) || list.find(t => t.account === from && sp(t).some(x => x.hf)) || list.find(t => t.account === from && sp(t).length && sp(t).every(x => x.to === j));
+  const M = list.find(t => t.id === "tx_halfm_" + k) || list.find(t => t.account === j && !sp(t).some(x => x.to) && normN(t.name) === nm);
+  return {T, M}; }); }
+const halfOpen = t => !!t && !["pointee", "verrouillee"].includes(t.st) && !["pointee", "verrouillee"].includes(t.st2);
+function halfSync() {
+  if (!Store.ready) return; const D = A(), j = halfJoint(), from = halfFrom(); if (!j || !from) return;
+  const months = new Set();
+  for (const t of Object.values(D.tx)) { if (t.half && isJointAcc(t.account)) months.add(ym(t.date)); if ((t.splits || []).some(x => x.hf)) months.add(ym(t.date)); }
+  for (const x of S().halfAdj || []) if (x.k) months.add(x.k);
+  for (const k of months) { const {T, M} = halfBase(k), {mine, hers} = halfParts(k);
+    for (const [b, parts] of [[T, mine], [M, hers]]) { if (!halfOpen(b)) continue;
+      const splits = [...(b.splits || []).filter(x => !x.hf), ...parts];
+      if (JSON.stringify(splits) === JSON.stringify(b.splits || [])) continue;
+      Store.put({...b, splits, amount: r2(splits.reduce((a, x) => a + (x.amount || 0), 0))}); } }
+}
 function halfOccs(start, until) {
   const D = A(), j = halfJoint(), from = halfFrom(); if (!j || !from) return [];
   const byM = {};
   for (const t of Object.values(D.tx)) { if (!t.half || t.st === "annulee" || !isJointAcc(t.account)) continue; (byM[ym(t.date)] ||= []).push(t); }
   for (const x of S().halfAdj || []) if (x.k && !byM[x.k]) byM[x.k] = [];
   const out = [];
-  const emit = (idBase, account, name, splits, d) => {
+  const emit = (idBase, account, name, splits, d, base) => {
     const total = r2(splits.reduce((a, s) => a + s.amount, 0));
-    const reals = Object.values(D.tx).filter(x => x.id === idBase || x.id.startsWith(idBase + "_"));
+    if (base && halfOpen(base)) return;
+    const reals = Object.values(D.tx).filter(x => x.id === idBase || x.id.startsWith(idBase + "_") || (base && x.id === base.id));
     if (!reals.length) { if (Math.abs(total) > 0.004) out.push({virtual: true, kind: "half", id: idBase, date: d, account, name, amount: total, splits, pay: "virement"}); return; }
     const want = {}, got = {}; const key = s => (s.cat || "") + "|" + (s.to || "");
     for (const s of splits) want[key(s)] = r2((want[key(s)] || 0) + s.amount);
-    for (const x of reals) if (x.st !== "annulee") for (const s of x.splits || []) got[key(s)] = r2((got[key(s)] || 0) + s.amount);
+    for (const x of reals) if (x.st !== "annulee") for (const s of x.splits || []) { if (base && x.id === base.id && !s.hf && !x.id.startsWith(idBase)) continue; got[key(s)] = r2((got[key(s)] || 0) + s.amount); }
     const adj = [];
     for (const kk of new Set([...Object.keys(want), ...Object.keys(got)])) { const dv = r2((want[kk] || 0) - (got[kk] || 0)); if (Math.abs(dv) > 0.004) { const [cat, to] = kk.split("|"); adj.push({...(to ? {to} : {}), cat: cat || null, amount: dv, memo: "ajustement", ...(to ? {} : {refund: true})}); } }
     const at = r2(adj.reduce((a, s) => a + s.amount, 0));
@@ -797,15 +834,9 @@ function halfOccs(start, until) {
   };
   for (const [k, txs] of Object.entries(byM)) {
     const d = halfDate(k); if (d > until || d < addDays(start, -40)) continue;
-    const mine = [], hers = [];
-    for (const t of txs.sort((a, b) => a.date.localeCompare(b.date))) for (const s of t.splits || []) {
-      if (s.to) continue; const v = s.amount || 0; if (v >= 0) continue;
-      const me = r2(v / 2), her = r2(v - me), memo = `${t.name} · ${dayShort(t.date)}`;
-      mine.push({to: j, cat: s.cat || null, amount: me, memo}); hers.push({cat: s.cat || null, amount: -her, memo, refund: true});
-    }
-    for (const x of (S().halfAdj || []).filter(x => x.k === k && Number(x.amount) > 0)) { const v = r2(Number(x.amount)), memo = x.memo || "Ajout manuel"; mine.push({to: j, cat: x.cat || null, amount: -v, memo}); hers.push({cat: x.cat || null, amount: v, memo, refund: true}); }
-    emit("tx_half_" + k, from, "Remboursement compte joint (50/50)", mine, d);
-    emit("tx_halfm_" + k, j, halfName(), hers, d);
+    const {mine: mine0, hers: hers0} = halfParts(k), strip = a => a.map(({hf, ...x}) => x), mine = strip(mine0), hers = strip(hers0), {T, M} = halfBase(k);
+    emit("tx_half_" + k, from, "Virement au " + accName(j) + " (50/50)", mine, d, T);
+    emit("tx_halfm_" + k, j, halfName(), hers, d, M);
   }
   return out;
 }
@@ -1219,7 +1250,7 @@ function bSplits(b) {
       if (t.st === "annulee" || !acc || acc.type === "pret") continue;
       if (af && !af.has(t.account)) continue;
       if (t.id.startsWith("tx_half_")) continue;
-      for (const s of t.splits || []) { if ((s.to && !s.cat) || s.nobud || (s.bdg && s.bdg !== b.id && A().bdg[s.bdg])) continue; out.push({d: s.bm ? addMonths(t.date, s.bm) : t.date, cat: s.cat || null, a: s.amount, rf: !!s.refund, t}); }
+      for (const s of t.splits || []) { if ((s.to && !s.cat) || s.nobud || s.hf || (s.bdg && s.bdg !== b.id && A().bdg[s.bdg])) continue; out.push({d: s.bm ? addMonths(t.date, s.bm) : t.date, cat: s.cat || null, a: s.amount, rf: !!s.refund, t}); }
     }
     const hf = halfFrom();
     if (af && hf && af.has(hf)) for (const t of Object.values(A().tx)) { if (!t.half || t.st === "annulee" || !isJointAcc(t.account) || af.has(t.account)) continue;
@@ -1249,8 +1280,8 @@ function lineBudget(l, ps, depth = 0) {
 }
 function linePlanned(l, ps, pe, occ) {
   const af = bAccs(budgetOf(l)), m = lineMatcher(l); let s = 0;
-  for (const o of occ) { if (o.kind === "bud" || o.date < ps || o.date > pe) continue; if (af.length && !af.includes(o.account)) continue;
-    for (const sp of o.splits || []) { if ((sp.to && !sp.cat) || sp.nobud || (sp.bdg && sp.bdg !== l.budget && A().bdg[sp.bdg]) || !m(sp.cat)) continue; if (l.income ? sp.amount > 0 : sp.amount < 0) s += l.income ? sp.amount : -sp.amount; } }
+  for (const o of occ) { if (o.kind === "bud" || o.kind === "half" || o.date < ps || o.date > pe) continue; if (af.length && !af.includes(o.account)) continue;
+    for (const sp of o.splits || []) { if ((sp.to && !sp.cat) || sp.nobud || sp.hf || (sp.bdg && sp.bdg !== l.budget && A().bdg[sp.bdg]) || !m(sp.cat)) continue; if (l.income ? sp.amount > 0 : sp.amount < 0) s += l.income ? sp.amount : -sp.amount; } }
   return r2(s);
 }
 /* Déjà prévu dans l'échéancier sur la période (opérations rattachées au budget, pas encore passées) */
@@ -2323,6 +2354,16 @@ function AccPill() {
   return html`<button class="accpill" onClick=${() => SHEET.open({type: "accPick"})} aria-label=${"Changer de compte, compte affiché : " + (a ? a.name : "aucun")}>
     <span class="ini">${(a?.name || "?").replace(/^compte\s+/i, "").charAt(0).toUpperCase()}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a ? a.name : "Choisir un compte"}</span>
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none;color:var(--muted)"><path d="M6 9l6 6 6-6" /></svg></button>`;
+}
+function HalfSheet({close}) {
+  const [n, setN] = useState(halfName() === "Partenaire" ? "" : halfName()), [from, setFrom] = useState(halfFrom() || "");
+  const save = () => { Store.put({...S(), k: "set", id: "set_main", halfName: n.trim() || null, halfFrom: from || null}); close(); toast("Remboursement 50/50 enregistré"); };
+  return html`<${Sheet} title="Remboursement 50/50" close=${close} right=${html`<button class="link" onClick=${save}>Enregistrer</button>`}>
+    <div class="help">Les dépenses cochées « 50/50 » sur le ${halfJoint() ? accName(halfJoint()) : "compte joint"} sont partagées en deux, l'avant-dernier jour du mois : ta moitié s'ajoute au virement vers le joint, l'autre à l'opération de la personne avec qui tu partages. Si ces deux opérations existent déjà ce jour-là, les nouvelles dépenses s'y ajoutent.</div>
+    <${Field} label="Prénom" id="hs-n"><input id="hs-n" value=${n} placeholder="Prénom" onInput=${e => setN(e.target.value)} /></${Field}>
+    <${Field} label="Ta moitié part du" id="hs-f"><${AccSelect} id="hs-f" v=${from} set=${setFrom} exclude=${halfJoint()} /></${Field}>
+    <button class="btn pri" onClick=${save}>Enregistrer</button>
+  </${Sheet}>`;
 }
 function AccPickSheet({close}) {
   const main = mainAcc(), all = accList(), pick = id => { Store.put({...S(), k: "set", id: "set_main", mainAcc: id}); close(); };
@@ -4180,6 +4221,7 @@ function Settings() {
     ${H("Partage")}
     <div class="card">
       <${Item} icon="heart" label="Compte joint à deux" sub=${J() ? "Prorata " + Math.round(jRatio(ym(today())) * 100) + " / " + (100 - Math.round(jRatio(ym(today())) * 100)) : "Répartir les charges au prorata des revenus"} go=${() => NAV.push({v: "joint"})} />
+      <${Item} icon="users" label="Remboursement 50/50" sub=${halfJoint() ? "Avec " + halfName() + (halfFrom() ? " · depuis le " + accName(halfFrom()) : "") : "Aucun compte joint"} go=${() => SHEET.open({type: "half"})} />
       <${Item} icon="users" label="Personnes" sub="Dépenses partagées, qui doit quoi" go=${() => NAV.push({v: "people"})} />
     </div>
     ${H("Données")}
@@ -4188,7 +4230,7 @@ function Settings() {
       <${Item} icon="save" label="Sauvegarde et export" go=${() => NAV.push({v: "data"})} />
       <${Item} icon="gear" label="Préférences" go=${() => NAV.push({v: "prefs"})} />
     </div>
-    <p class="help" style="text-align:center">Tes données sont privées : elles sont rangées dans ton espace personnel de Claude et suivent ton compte sur tous tes appareils.</p>
+    <p class="help" style="text-align:center">${STANDALONE ? "Tes données sont privées : elles restent sur cet appareil, rien n'est envoyé sur internet." : "Tes données sont privées : elles sont rangées dans ton espace personnel de Claude et suivent ton compte sur tous tes appareils."}</p>
   </main>`;
 }
 function Prefs() {
@@ -4788,6 +4830,7 @@ function SheetHost({s, close}) {
     case "gloss": return html`<${GlossSheet} ...${p} />`;
     case "icImport": return html`<${IcImport} ...${p} />`;
     case "accPick": return html`<${AccPickSheet} ...${p} />`;
+    case "half": return html`<${HalfSheet} ...${p} />`;
     case "accActions": return html`<${AccActions} ...${p} />`;
     case "reconcile": return html`<${Reconcile} ...${p} />`;
     case "import": return html`<${ImportSheet} ...${p} />`;
@@ -4900,6 +4943,9 @@ function App() {
     <${ToastHost} /><${UndoBar} />
   </div>`;
 }
+/* 50/50 : les dépenses cochées s'ajoutent au virement et à l'opération de la partenaire du mois */
+let halfT = null;
+Store.sub(() => { if (halfT) return; halfT = setTimeout(() => { halfT = null; try { halfSync(); } catch (e) { console.error(e); } }, 60); });
 render(html`<${App} />`, document.getElementById("app"));
 Store.init();
 if ("serviceWorker" in navigator) { try { navigator.serviceWorker.register("./sw.js"); } catch {} }
