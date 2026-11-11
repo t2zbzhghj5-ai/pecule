@@ -4458,6 +4458,12 @@ function icompta2pecule(db, now, onlyPending) {
   const slug2 = s => String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "x";
   const sid = s => String(s).replace(/[^A-Za-z0-9_-]/g, "_");
   const start = now.slice(0, 7) + "-01", ymOf = d => d.slice(0, 7);
+  const end = new Date(Date.UTC(+now.slice(0, 4), +now.slice(5, 7), 0)).toISOString().slice(0, 10);
+  /* date de la k-ième occurrence d'une échéance iCompta (unités : 1 jour, 2 mois, 3 an, 4 semaine) */
+  const occDate = (d0, k, n, u) => { const y = +d0.slice(0, 4), m = +d0.slice(5, 7) - 1, d = +d0.slice(8, 10);
+    if (u === 1 || u === 4) return new Date(Date.UTC(y, m, d + k * n * (u === 4 ? 7 : 1))).toISOString().slice(0, 10);
+    const mm = m + k * n * (u === 3 ? 12 : 1), last = new Date(Date.UTC(y, mm + 1, 0)).getUTCDate();
+    return new Date(Date.UTC(y, mm, Math.min(d, last))).toISOString().slice(0, 10); };
   const ST = {ClearedStatus: "pointee", CreatedStatus: "saisie", LockedStatus: "verrouillee", CanceledStatus: "annulee", PlannedStatus: "prevue"};
   const st = s => ST[String(s || "").split(".").pop()] || "saisie";
   const PAL = ["#2F6FED", "#13A38A", "#7B61FF", "#0EA5C6", "#E3579A", "#3BA55C", "#B7791F", "#F2643D", "#5B6B8C", "#E0A100"];
@@ -4516,7 +4522,9 @@ function icompta2pecule(db, now, onlyPending) {
       if (!o.amount && !o.to) continue; res.push(o); }
     return res; };
   const used = new Set(), outTx = [];
-  const keep = t => { const s = st(t.status); if (s === "prevue" || s === "annulee") return false; return onlyPending ? (!valid(s) || structural(t)) : (t.date >= start || early.has(t.ID) || !valid(s)); };
+  const BUDPROJ = /\(.*\d\d\/\d\d\/\d{4} - \d\d\/\d\d\/\d{4}\)/;
+  const planNow = t => t.date <= end && !BUDPROJ.test(t.name) && !isCL(t);
+  const keep = t => { const s = st(t.status); if (s === "annulee") return false; if (s === "prevue") return planNow(t); return onlyPending ? (!valid(s) || structural(t)) : (t.date >= start || early.has(t.ID) || !valid(s)); };
   const list = Object.values(tx).filter(t => acc[t.account] && keep(t)).sort((a, b) => (a.date + a.ID).localeCompare(b.date + b.ID));
   for (const t of list) {
     if (used.has(t.ID)) continue;
@@ -4527,9 +4535,9 @@ function icompta2pecule(db, now, onlyPending) {
     if ((CARDS.has(a) || LOANS.has(a)) && others.size) continue;
     if (others.size && splits.reduce((x, y) => x + y.amount, 0) > 0 && !touchCL && [...others].some(x => !used.has(x) && keep(tx[x]))) continue;
     others.forEach(x => used.add(x)); used.add(t.ID);
-    const s = st(t.status);
+    const s = st(t.status) === "prevue" ? "saisie" : st(t.status);
     const d = {k: "tx", id: "tx_ic_" + sid(t.ID).toLowerCase(), account: a, date: t.date, name: t.name.trim(), amount: Math.round(splits.reduce((x, y) => x + y.amount, 0) * 100) / 100, splits, st: s, pay: others.size ? "virement" : "cb", payee: null, project: null, comment: "Importé d'iCompta"};
-    if (others.size) d.st2 = st(tx[[...others][0]].status);
+    if (others.size) d.st2 = (x => x === "prevue" ? "saisie" : x)(st(tx[[...others][0]].status));
     const card = [...oAcc].find(x => CARDS.has(x)), loan = [...oAcc].find(x => LOANS.has(x));
     if (card) { d.splits = d.splits.map(x => { const y = {...x}; delete y.cat; delete y.bdg; delete y.bm; delete y.refund; return y; }); d.id = `tx_card_${card}_${ymOf(t.date)}`; d.kind = "card"; d.card = card; d.cut = new Date(Date.UTC(+t.date.slice(0, 4), +t.date.slice(5, 7) - 1, 0)).toISOString().slice(0, 10); d.pay = "prelevement"; }
     if (loan) { d.id = `tx_loan_${loan}_${ymOf(t.date)}`; d.kind = "loan"; d.loanId = loan; d.pay = "prelevement"; }
@@ -4538,7 +4546,7 @@ function icompta2pecule(db, now, onlyPending) {
   /* opérations prévues ponctuelles (hors échéancier et hors projections de budget) */
   for (const t of Object.values(tx).sort((a, b) => a.date.localeCompare(b.date))) {
     if (st(t.status) !== "prevue" || t.scheduledTransaction || !acc[t.account] || used.has(t.ID)) continue;
-    if (/\(.*\d\d\/\d\d\/\d{4} - \d\d\/\d\d\/\d{4}\)/.test(t.name)) continue;
+    if (BUDPROJ.test(t.name)) continue;
     const splits = mkSplits(t), others = new Set((bytx[t.ID] || []).map(otherTx).filter(Boolean).map(x => x.ID));
     others.forEach(x => used.add(x)); used.add(t.ID);
     const d = {k: "tx", id: "tx_ic_" + sid(t.ID).toLowerCase(), account: acc[t.account], date: t.date, name: t.name.trim(), amount: Math.round(splits.reduce((x, y) => x + y.amount, 0) * 100) / 100, splits, st: "saisie", pay: others.size ? "virement" : "cb", payee: null, project: null, comment: "Importé d'iCompta"};
@@ -4553,24 +4561,34 @@ function icompta2pecule(db, now, onlyPending) {
   const outSch = [], usedS = new Set(), U = {1: "d", 2: "m", 3: "y", 4: "w"};
   for (const s of schAll) {
     if (usedS.has(s.ID) || !acc[s.account] || /-(CreditCardAccount|LoanAccount)-/.test(s.ID)) continue;
-    const pl = plan[s.ID] || []; if (!pl.length) continue;
+    if (!s.date) continue;
     const a = acc[s.account];
+    if ((CARDS.has(a) || LOANS.has(a)) && (byS[s.ID] || []).some(x => ssp[x.linkedSplit])) continue;
     const links = (byS[s.ID] || []).map(x => [x, ssp[x.linkedSplit]]).filter(([, l]) => l && schById[l.transaction] && acc[schById[l.transaction].account]);
     const oAcc = new Set(links.map(([, l]) => acc[schById[l.transaction].account]));
     if ([...oAcc].some(x => CARDS.has(x) || LOANS.has(x))) continue;
+    /* première occurrence après le mois en cours (celles du mois sont reprises comme opérations) ;
+       si iCompta n'a pas encore créé une occurrence du mois, on repart d'elle */
+    const fn = Number(s.frequency) || 1, fu = Number(s.frequencyUnit) || 2, nb = Number(s.numberOfOccurrences) || 0;
+    let k = 0; while (k < 100000 && occDate(s.date, k, fn, fu) <= end) k++;
+    const gen = s.nextOccurrence == null || s.nextOccurrence === "" ? null : Number(s.nextOccurrence);
+    if (gen != null && gen < k) k = gen;
+    if (nb && k >= nb) continue;
+    const nextDate = occDate(s.date, k, fn, fu);
     const total = (byS[s.ID] || []).reduce((x, y) => x + F(y.amount), 0);
-    if (links.length) { const os = links[0][1].transaction; if (total > 0 && !usedS.has(os) && plan[os]) continue; usedS.add(os); }
+    if (links.length) { const os = links[0][1].transaction; if (total > 0 && !usedS.has(os)) continue; usedS.add(os); }
     usedS.add(s.ID);
-    const nxt = pl[0], occ = bytx[nxt.ID] || [];
+    const pl = plan[s.ID] || [], nxt = pl.find(x => x.date > end) || pl[0], occ = nxt ? bytx[nxt.ID] || [] : [];
     const splits = (byS[s.ID] || []).map((x, i) => { const o = {amount: F(x.amount), cat: cat[x.category] || null}; const l = ssp[x.linkedSplit];
       if (l && schById[l.transaction] && acc[schById[l.transaction].account]) o.to = acc[schById[l.transaction].account];
       if (x.comment) o.memo = x.comment; if (x.refund) o.refund = true; const b = occ[i] && bdgOf(occ[i].budgetItemPeriod); if (b) o.bdg = b; return o; });
     const u = U[s.frequencyUnit] || "m";
     const d = {k: "sch", id: "sch_ic_" + sid(s.ID).toLowerCase(), account: a, name: s.name.trim(), amount: Math.round(splits.reduce((x, y) => x + y.amount, 0) * 100) / 100, splits,
-      freq: {n: s.frequency || 1, u}, next: nxt.date, anchor: Number(nxt.date.slice(8)), left: s.numberOfOccurrences ? s.numberOfOccurrences - (done[s.ID] || 0) : null, end: null, paused: false, auto: false,
+      freq: {n: fn, u}, next: nextDate, anchor: Number(s.date.slice(8, 10)), left: nb ? nb - k : null, end: null, paused: false, auto: false,
       pay: links.length ? "virement" : "prelevement", payee: null, project: null, comment: "Importé d'iCompta", skips: []};
+    /* montants modifiés à la main sur une occurrence future déjà créée par iCompta */
     const ov = {};
-    for (const o of pl.slice(0, 24)) { if (o.account !== s.account) continue; const os = mkSplits(o), tot = Math.round(os.reduce((x, y) => x + y.amount, 0) * 100) / 100;
+    for (const o of pl.filter(x => x.date > end).slice(0, 24)) { if (o.account !== s.account) continue; const os = mkSplits(o), tot = Math.round(os.reduce((x, y) => x + y.amount, 0) * 100) / 100;
       if (Math.abs(tot - d.amount) > 0.004) ov[o.date] = {date: o.date, amount: tot, name: o.name.trim(), account: a, splits: os}; }
     if (Object.keys(ov).length) d.ov = ov;
     outSch.push(d);
