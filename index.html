@@ -1650,7 +1650,7 @@ function healthChecksAll() {
     const otherDue = due.filter(o => o.kind !== "card");
     if (otherDue.length) out.push({lvl: "warn", ic: "⏰", title: otherDue.length + " échéance" + (otherDue.length > 1 ? "s" : "") + " passée" + (otherDue.length > 1 ? "s" : "") + " à valider", text: otherDue.slice(0, 4).map(o => `${o.name} (${dayShort(o.date)})`).join(", ") + (otherDue.length > 4 ? "…" : ""), act: ["Voir", () => NAV.tab("echeancier")]});
     const uncat = Object.values(D.tx).filter(x => x.st !== "annulee" && (x.splits || []).some(s => !s.cat && !s.to));
-    if (uncat.length) out.push({lvl: "warn", ic: "❔", title: uncat.length + " opération" + (uncat.length > 1 ? "s" : "") + " sans catégorie", text: "Elles ne comptent dans aucun budget ni dans les analyses par catégorie.", act: ["Voir", () => NAV.push({v: "allTx", f0: {cats: ["none"]}})], act2: ["✨ Ranger avec Claude", () => SHEET.open({type: "claudeCat"})]});
+    if (uncat.length) out.push({lvl: "warn", ic: "❔", title: uncat.length + " opération" + (uncat.length > 1 ? "s" : "") + " sans catégorie", text: "Elles ne comptent dans aucun budget ni dans les analyses par catégorie.", act: ["Voir", () => NAV.push({v: "allTx", f0: {cats: ["none"]}})], act2: STANDALONE ? null : ["✨ Ranger avec Claude", () => SHEET.open({type: "claudeCat"})]});
     const bl = budgets(true);
     if (bl.length && !bl.some(b => !bAccs(b).length)) {
       const mon = new Set(bl.flatMap(b => bAccs(b)));
@@ -1909,7 +1909,7 @@ function MonthClose({k: k0}) {
 
       ${step === 2 && html`<section class="card pad"><div class="sec-h" style="margin:0 0 6px"><h2>3. Opérations sans catégorie</h2></div>
         ${uncat.length ? html`<p class="help" style="margin:0 0 10px">${uncat.length} opération${uncat.length > 1 ? "s" : ""} de ${MOIS[Number(k.slice(5)) - 1]} sans catégorie : elles faussent les budgets et le bilan.</p>
-          <div class="btns"><button class="btn pri" onClick=${() => SHEET.open({type: "claudeCat", ids: uncat.map(t => t.id)})}>✨ Ranger avec Claude</button><button class="btn" onClick=${() => Store.bulk(categorizeLikePrevious(uncat)).then(() => toast("Catégorisées d'après les précédentes"))}>D'après les précédentes</button></div>
+          <div class="btns"><button class="btn pri" onClick=${() => SHEET.open({type: "claudeCat", ids: uncat.map(t => t.id)})} hidden=${STANDALONE}>✨ Ranger avec Claude</button><button class="btn" onClick=${() => Store.bulk(categorizeLikePrevious(uncat)).then(() => toast("Catégorisées d'après les précédentes"))}>D'après les précédentes</button></div>
           <div class="card" style="box-shadow:none;border:1px solid var(--line);margin-top:10px">${uncat.slice(0, 30).map(t => html`<${TxRow} t=${t} showAcc />`)}</div>`
         : html`<div class="empty"><b>✅ Tout est rangé</b>Chaque opération du mois a sa catégorie.</div>`}</section>`}
 
@@ -2789,11 +2789,11 @@ function BatchMore({ids, acc, done, close}) {
     <div class="card">
       <${It} ic="✏️" l="Modifier les champs communs" f=${() => { close(); setTimeout(() => SHEET.open({type: "bulk", ids, acc, done}), 30); }} />
       <${It} ic="🏷️" l="Catégoriser d'après les opérations précédentes" sub="Reprend la catégorie de la dernière opération de même libellé." f=${() => run(categorizeLikePrevious(txs), "# opérations catégorisées")} />
-      <${It} ic="✨" l="Ranger avec Claude" sub="Propose une catégorie pour celles qui n'en ont pas, et des règles." f=${() => { close(); done && done(); setTimeout(() => SHEET.open({type: "claudeCat", ids}), 30); }} />
+      ${!STANDALONE && html`<${It} ic="✨" l="Ranger avec Claude" sub="Propose une catégorie pour celles qui n'en ont pas, et des règles." f=${() => { close(); done && done(); setTimeout(() => SHEET.open({type: "claudeCat", ids}), 30); }} />`}
       <${It} ic="🪄" l="Appliquer les règles" f=${() => run(txs.filter(t => t.st !== "verrouillee").map(t => [t, applyRules(t)]).filter(([x, y]) => x !== y).map(([, y]) => ["put", y]), "# opérations modifiées")} />
       <${It} ic="⇄" l="Convertir en virement" sub=${txs.length !== 2 ? "Sélectionne exactement 2 opérations de même montant, une sortie et une entrée, sur deux comptes." : conv ? "Fusionne la sortie et l'entrée en un seul virement." : "Ces deux opérations ne se correspondent pas (montants opposés, comptes différents)."} dis=${!conv} f=${() => run(conv, "Virement créé")} />
       <${It} ic="🎯" l="Créer un budget depuis ces opérations" f=${() => { close(); done && done(); setTimeout(() => SHEET.open({type: "bdgFromTx", ids}), 30); }} />
-      <${It} ic="🗑️" l="Supprimer" f=${() => { close(); confirmIt("Supprimer " + txs.length + " opérations ?", "Elles disparaîtront de tous tes appareils.", "Supprimer", () => run(txs.map(t => ["del", t]), "# opérations supprimées")); }} />
+      <${It} ic="🗑️" l="Supprimer" f=${() => { close(); confirmIt("Supprimer " + txs.length + " opérations ?", STANDALONE ? "Elles seront supprimées de Pécule." : "Elles disparaîtront de tous tes appareils.", "Supprimer", () => run(txs.map(t => ["del", t]), "# opérations supprimées")); }} />
     </div></${Sheet}>`;
 }
 /* Choix de la période des opérations prévues : 3, 6, 9 ou 12 mois */
@@ -3195,7 +3195,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
     } else if (!occ) toast(base ? "Opération modifiée" : "Opération enregistrée");
     close();
   };
-  const remove = () => confirmIt(isSch ? "Supprimer cette échéance ?" : "Supprimer cette opération ?", isSch ? "Les opérations déjà passées restent dans tes comptes." : "Elle disparaîtra de tous tes appareils.", "Supprimer", () => { Store.del(base); close(); toast("Supprimée"); });
+  const remove = () => confirmIt(isSch ? "Supprimer cette échéance ?" : "Supprimer cette opération ?", isSch ? "Les opérations déjà passées restent dans tes comptes." : (STANDALONE ? "Elle sera supprimée de Pécule." : "Elle disparaîtra de tous tes appareils."), "Supprimer", () => { Store.del(base); close(); toast("Supprimée"); });
 
   const fut = !!occ && occ.kind === "sch" && (occ.odate || occ.date) > today();
   const title = isSch ? (base ? "Échéance" : "Nouvelle échéance") : fut ? "Échéance prévue" : occ ? "Valider l'échéance" : base ? "Opération" : "Nouvelle opération";
@@ -4251,7 +4251,7 @@ function PinPref() {
   const s = S(); const [a, setA] = useState(""), [b, setB] = useState(""), [msg, setMsg] = useState("");
   const save = async () => { if (!/^\d{4,8}$/.test(a)) return setMsg("Le code doit faire 4 à 8 chiffres."); if (a !== b) return setMsg("Les deux codes ne sont pas identiques."); const h = await pinHash(a); UNLOCKED = h; try { sessionStorage.setItem("pecule-unlock", h); } catch {} Store.put({...s, k: "set", id: "set_main", pin: h}); setA(""); setB(""); setMsg(""); toast("Code enregistré"); };
   return html`<div class="field"><span class="lb">Code à l'ouverture</span>
-    ${s.pin ? html`<div class="help">Un code est demandé à chaque ouverture de Pécule. C'est une protection d'affichage : tes données restent celles de ton compte Claude.</div><button class="btn" onClick=${() => { Store.put({...s, k: "set", id: "set_main", pin: null}); toast("Code retiré"); }}>Retirer le code</button>`
+    ${s.pin ? html`<div class="help">Un code est demandé à chaque ouverture de Pécule. C'est une protection d'affichage : tes données ne sont pas chiffrées pour autant.</div><button class="btn" onClick=${() => { Store.put({...s, k: "set", id: "set_main", pin: null}); toast("Code retiré"); }}>Retirer le code</button>`
       : html`<div class="grid2"><input type="password" inputmode="numeric" aria-label="Nouveau code" placeholder="Nouveau code" value=${a} onInput=${e => setA(e.target.value)} /><input type="password" inputmode="numeric" aria-label="Confirmer le code" placeholder="Confirmer" value=${b} onInput=${e => setB(e.target.value)} /></div>
         ${msg && html`<div class="help" style="color:var(--neg)">${msg}</div>`}<button class="btn" onClick=${save}>Définir un code</button>`}</div>`;
 }
@@ -4268,7 +4268,11 @@ function DataView() {
   const restore = async e => {
     const file = e.target.files[0]; if (!file) return;
     try { const j = JSON.parse(await file.text()); if (j.app !== "pecule" || !Array.isArray(j.docs)) throw 0;
-      confirmIt("Restaurer cette sauvegarde ?", `${j.docs.length} éléments du ${j.date} seront ajoutés ou remplaceront ceux qui ont le même identifiant.`, "Restaurer", async () => { toast("Restauration en cours…"); await Store.bulk(j.docs.filter(d => KINDS.includes(d.k)).map(d => ["put", d])); toast("Sauvegarde restaurée"); }, false);
+      confirmIt("Restaurer cette sauvegarde ?", `Tes données reviendront exactement à leur état du ${j.date ? dayShort(String(j.date).slice(0, 10)) : "jour de la sauvegarde"} (${j.docs.length} éléments). Ce qui a été saisi ou importé depuis sera effacé.`, "Restaurer", async () => {
+        toast("Restauration en cours…"); const docs = j.docs.filter(d => KINDS.includes(d.k) && d.k !== "bak"), keep = new Set(docs.map(d => d.k + "|" + d.id));
+        const gone = Store.all().filter(d => d.k !== "bak" && !keep.has(d.k + "|" + d.id));
+        await Store.bulk([...gone.map(d => ["del", d]), ...docs.filter(d => d.k !== "set").map(d => ["put", d])]); for (const d of docs.filter(d => d.k === "set")) await Store.put(d);
+        toast("Sauvegarde restaurée"); }, false);
     } catch { toast("Ce fichier n'est pas une sauvegarde Pécule"); }
   };
   return html`<${Top} title="Sauvegarde" back /><main class="scr">
@@ -4279,12 +4283,12 @@ function DataView() {
         <button class="btn sm" disabled=${b.docs.length !== b.parts} onClick=${() => confirmIt("Restaurer la copie de " + monthLabel(b.month) + " ?", "Toutes tes données reviendront à leur état du " + dayShort(b.date) + ". Ce qui a été saisi depuis sera perdu.", "Restaurer", () => restoreBackup(b))}>Restaurer</button></div>`) : html`<div class="empty">Aucune copie pour l'instant.</div>`}</div>
       <button class="btn" onClick=${async () => { await makeBackup(true); toast("Copie du mois mise à jour"); }}>Mettre à jour la copie de ce mois maintenant</button></div>
     <div class="field"><span class="lb">Copie hors de Pécule</span>
-      <div class="help">${S().lastExport ? "Dernière sauvegarde téléchargée le " + dayShort(S().lastExport) + " " + S().lastExport.slice(0, 4) + "." : "Aucune sauvegarde téléchargée pour l'instant."} Range le fichier dans Fichiers › iCloud Drive › Pécule : il te protège même si Pécule ou ton compte Claude avait un problème. Un rappel apparaît sur l'accueil tous les mois.</div>
+      <div class="help">${S().lastExport ? "Dernière sauvegarde téléchargée le " + dayShort(S().lastExport) + " " + S().lastExport.slice(0, 4) + "." : "Aucune sauvegarde téléchargée pour l'instant."} Range le fichier dans Fichiers › iCloud Drive › Pécule : il te protège même si cet appareil ou Pécule avait un problème. Un rappel apparaît sur l'accueil tous les mois.</div>
       <button class="btn pri" onClick=${exportJSON}>Télécharger une sauvegarde complète (JSON)</button></div>
     <div class="field"><span class="lb">iCompta</span><div class="help">Reprendre une base iCompta : comptes, opérations en cours, échéancier, catégories, budgets.</div><button class="btn" onClick=${() => SHEET.open({type: "icImport"})}>Importer depuis iCompta</button></div>
     <button class="btn" onClick=${() => SHEET.open({type: "export", ids: accList(true).map(a => a.id)})}>Exporter toutes les opérations (CSV, QIF, OFX)</button>
     <${Field} label="Restaurer une sauvegarde" id="dv-r"><input id="dv-r" type="file" accept=".json,application/json" onChange=${restore} /></${Field}>
-    <button class="btn danger" onClick=${() => confirmIt("Tout effacer ?", "Comptes, opérations, échéances, budgets et réglages seront supprimés sur tous tes appareils. Fais une sauvegarde avant.", "Tout effacer", async () => { toast("Effacement…"); await Store.bulk(Store.all().filter(d => d.id !== "set_main").map(d => ["del", d])); Store.del(A().set.set_main); })}>Tout effacer</button>
+    <button class="btn danger" onClick=${() => confirmIt("Tout effacer ?", "Comptes, opérations, échéances, budgets et réglages seront supprimés" + (STANDALONE ? " de cet appareil" : " sur tous tes appareils") + ". Fais une sauvegarde avant.", "Tout effacer", async () => { toast("Effacement…"); await Store.bulk(Store.all().filter(d => d.id !== "set_main").map(d => ["del", d])); Store.del(A().set.set_main); })}>Tout effacer</button>
   </main>`;
 }
 async function moveCat(arr, i) { const l = arr.map((x, k) => ({...x, order: k})); [l[i].order, l[i - 1].order] = [i - 1, i]; await Store.bulk([["put", l[i]], ["put", l[i - 1]]]); }
@@ -4587,7 +4591,7 @@ function icompta2pecule(db, now, onlyPending) {
   }
   /* opérations prévues ponctuelles (hors échéancier et hors projections de budget) */
   for (const t of Object.values(tx).sort((a, b) => a.date.localeCompare(b.date))) {
-    if (st(t.status) !== "prevue" || t.scheduledTransaction || !acc[t.account] || used.has(t.ID)) continue;
+    if (st(t.status) !== "prevue" || t.scheduledTransaction || !acc[t.account] || used.has(t.ID) || isCL(t)) continue;
     if (BUDPROJ.test(t.name)) continue;
     const splits = mkSplits(t), others = new Set((bytx[t.ID] || []).map(otherTx).filter(Boolean).map(x => x.ID));
     others.forEach(x => used.add(x)); used.add(t.ID);
