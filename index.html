@@ -243,6 +243,48 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .searchbox input{padding-left:38px;background:var(--surface)}
 .searchbox svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted)}
 .tag{font-size:11px;font-weight:700;color:var(--muted);background:var(--surface2);border-radius:6px;padding:1px 6px;margin-left:6px;vertical-align:1px}
+.side,.plus-l{display:none}
+.bgrid{display:flex;flex-direction:column;gap:10px}
+/* Grand écran (Mac, iPad à l'horizontale) : menu latéral, contenu plus large, fenêtres centrées */
+@media (min-width: 1000px){
+  :root{--side:236px}
+  .app{max-width:none;margin:0 0 0 var(--side)}
+  .top{max-width:860px;margin:0 auto;padding:22px 32px 12px}
+  .scr{max-width:860px;margin:0 auto;padding:6px 32px 56px}
+  .app:has(main.wide) .top,main.wide{max-width:1200px}
+  .tabbar{top:0;right:auto;width:var(--side);flex-direction:column;justify-content:flex-start;border-top:0;border-right:1px solid var(--line);padding:22px 14px;background:var(--surface)}
+  .tabbar-in{display:flex;flex-direction:column;align-items:stretch;gap:2px;max-width:none}
+  .tab.side{display:flex}
+  .side{display:block}
+  .side-brand{font-family:var(--display);font-size:24px;font-weight:700;letter-spacing:-.02em;padding:0 10px 18px}
+  .side-sep{height:1px;background:var(--line);margin:10px 10px}
+  .tab{flex-direction:row;justify-content:flex-start;gap:12px;font-size:15px;font-weight:600;padding:0 12px;min-height:44px;border-radius:12px;color:var(--ink)}
+  .tab svg{color:var(--muted)}
+  .tab:hover{background:var(--surface2)}
+  .tab.on{background:color-mix(in srgb,var(--accent) 11%,transparent);color:var(--accent)}
+  .tab.on svg{color:var(--accent)}
+  .tab-plus{order:-1;margin-bottom:12px}
+  .tab-plus button:not(.bub){width:100%;height:46px;margin:0;border:0;border-radius:14px;gap:8px;font-size:15px;font-weight:700;box-shadow:0 6px 16px color-mix(in srgb,var(--accent) 28%,transparent)}
+  .plus-l{display:inline}
+  .side-brand{order:-2}
+  .sheet-back{align-items:center;padding:24px}
+  .sheet{max-width:620px;max-height:88vh;border-radius:24px;animation:fade .18s ease}
+  .wiz{background:rgba(9,13,24,.45);align-items:center;padding:24px}
+  .wiz-in{background:var(--surface);border-radius:28px;max-height:min(860px,94vh);padding:24px 28px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+  .undobar{left:calc(var(--side) + 24px);right:24px;bottom:24px}
+  .toasts{left:var(--side);bottom:40px}
+  .selbar{left:var(--side);bottom:24px}
+  .fab{right:32px;bottom:32px}
+  .hscroll,.carousel{margin:0;padding-left:0;padding-right:0}
+  .dash{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:28px;align-items:start}
+  .dash-full{grid-column:1/-1}
+  .dash-l,.dash-r{display:flex;flex-direction:column;gap:20px;min-width:0}
+  .dash-l{position:sticky;top:84px}
+  .dash-l .hscroll{flex-wrap:wrap;overflow:visible}
+  .dash-l .bpill{width:calc(50% - 5px)}
+  .bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}
+}
+@media (max-width: 999.98px){.dash-l,.dash-r{display:contents}.sch-auto{order:2}}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -1417,6 +1459,7 @@ const VISIBLE = {};
 const planHorizon = () => { const t = today(), p = S().planUntil || "m3"; const mm = /^m(\d+)$/.exec(p); if (mm) return eom(ymAdd(ym(t), Number(mm[1]) - 1)); return p === "eom" ? eom(ym(t)) : p === "eoy" ? t.slice(0, 4) + "-12-31" : p === "d90" ? addDays(t, 90) : p === "d30" ? addDays(t, 30) : eom(ymAdd(ym(t), 1)); };
 const SHEET = {open(){}, close(){}};
 const TABS = [["comptes","Accueil","home"],["budgets","Budgets","target"],["prev","Prévisions","trend"],["mes","Comptes","wallet"]];
+const TABS_SIDE = [["echeancier","Échéancier","repeat",1],["analyses","Analyses","chart",1]];
 const ROUTES = ["comptes","budgets","prev","mes","echeancier","analyses"];
 const readHash = () => { const h = location.hash.slice(1); return ROUTES.includes(h) ? h : "comptes"; };
 const openOcc = o => o.kind === "bud" ? NAV.push({v: "line", id: o.line}) : SHEET.open({type: "op", kind: "tx", occ: o});
@@ -2291,12 +2334,12 @@ function Accounts() {
   const main = mainAcc();
   return html`
     <header class="top" style="align-items:center;gap:8px"><span style="display:flex;align-items:center;gap:6px;min-width:0;flex:1"><${AccPill} /></span><span class="muted" style="font-size:13px;font-weight:500;white-space:nowrap">${(d => d.charAt(0).toUpperCase() + d.slice(1))(P(today()).toLocaleDateString("fr-FR", {weekday: "short", day: "numeric", month: "short"}))}</span><button class="hbtn" style="width:40px;height:40px;font-size:18px;font-weight:700;flex:none" aria-label="Guide de Pécule" onClick=${() => NAV.push({v: "guide"})}>?</button></header>
-    <main class="scr" style="gap:20px">
-      <${BackupNudge} />
-      <${Glance} />
-      ${main && html`<${GlanceBudgets} />`}
-      ${main && html`<${DashOps} id=${main} key=${main} />`}
-      ${!main && html`<div class="card"><div class="empty"><b>Aucun compte</b><button class="link" onClick=${() => SHEET.open({type:"acc"})}>+ Ajouter un compte</button></div></div>`}
+    <main class="scr wide dash" style="gap:20px">
+      <div class="dash-full"><${BackupNudge} /></div>
+      <div class="dash-l"><${Glance} />
+      ${main && html`<${GlanceBudgets} />`}</div>
+      <div class="dash-r">${main && html`<${DashOps} id=${main} key=${main} />`}
+      ${!main && html`<div class="card"><div class="empty"><b>Aucun compte</b><button class="link" onClick=${() => SHEET.open({type:"acc"})}>+ Ajouter un compte</button></div></div>`}</div>
     </main>`;
 }
 /* Opérations du compte sous le tableau de bord, sur une période au choix (1 mois par défaut) */
@@ -2335,7 +2378,7 @@ function Previsions() {
   const [sel, setSel] = useState(0), i0 = Math.min(sel, Math.max(0, pts.length - 1));
   const vals = pts.map(p => p[1]), mn = Math.min(0, ...vals), mx = Math.max(0, ...vals), H = 170, sc = v => (v - mn) / ((mx - mn) || 1) * (H - 10), zero = Math.round(H - 5 - sc(0));
   return html`<header class="top" style="align-items:center"><${AccPill} /></header>
-  <main class="scr" style="gap:14px">
+  <main class="scr wide" style="gap:14px">
     <div style="padding:0 4px"><h1 style="margin:4px 0 2px;font-family:var(--display);font-size:28px;font-weight:700;letter-spacing:-0.02em">Prévisions</h1><div class="muted" style="font-size:14px">Restant en fin de période, sur ${N} mois</div>
       <div role="group" aria-label="Durée des prévisions" style="display:flex;gap:6px;margin-top:10px">${[12, 24, 36].map(n => html`<button class=${"chip-s" + (N === n ? " on" : "")} aria-pressed=${N === n} onClick=${() => { setSel(0); Store.put({...S(), k: "set", id: "set_main", prevSpan: n}); }}>${n} mois</button>`)}</div></div>
     ${pts.length ? html`<section class="card" style="padding:18px">
@@ -2458,7 +2501,7 @@ function smoothPath(pts) {
 function AreaChart({series, split, warn, mark, light: _l}) {
   const light = false;
   if (!series || series.length < 2) return null;
-  const W = 340, H = 130, top = 10, bot = 22;
+  const W = typeof innerWidth === "number" && innerWidth >= 1000 ? 700 : 340, H = 130, top = 10, bot = 22;
   const step = Math.max(1, Math.floor(series.length / 60));
   const s = series.filter((_, i) => i % step === 0 || i === series.length - 1 || series[i][0] === split || (mark && series[i][0] === mark[0]));
   const vals = s.map(p => p[1]); let mn = Math.min(...vals), mx = Math.max(...vals); if (mx - mn < 1) { mx += 50; mn -= 50; } const pad0 = (mx - mn) * .12; mn -= pad0; mx += pad0;
@@ -3485,7 +3528,7 @@ function BackupNudge() {
   if ((last && days < 30) || (s.bakSnooze && s.bakSnooze > t) || !Object.keys(A().tx).length) return null;
   return html`<div class="card" role="status" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;border:1px solid color-mix(in srgb,var(--accent) 25%,transparent)">
     <div style="display:flex;gap:12px;align-items:flex-start"><span style="width:36px;height:36px;border-radius:12px;background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);display:flex;align-items:center;justify-content:center;flex:none"><${Ic} n="save" s=${19} /></span>
-      <span class="grow"><div style="font-size:15px;font-weight:700">${last ? "Dernière sauvegarde il y a " + days + " jours" : "Aucune sauvegarde téléchargée"}</div><div class="muted" style="font-size:13px;line-height:1.4;margin-top:2px">Tes données ne sont que sur cet iPhone : garde une copie dans Fichiers › iCloud Drive.</div></span></div>
+      <span class="grow"><div style="font-size:15px;font-weight:700">${last ? "Dernière sauvegarde il y a " + days + " jours" : "Aucune sauvegarde téléchargée"}</div><div class="muted" style="font-size:13px;line-height:1.4;margin-top:2px">Tes données ne sont que sur cet appareil : garde une copie dans iCloud Drive.</div></span></div>
     <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn sm" onClick=${() => Store.put({...S(), k: "set", id: "set_main", bakSnooze: addDays(t, 7)})}>Plus tard</button><button class="btn sm pri" onClick=${exportJSON}>Télécharger</button></div>
   </div>`;
 }
@@ -3560,10 +3603,10 @@ function Schedules() {
   const auto = sel ? autoOf(sel) : [];
   return html`
     <${Top} title="Échéancier" sub="Ce qui revient, mois après mois" right=${html`<button class="ibtn" aria-label="Importer un échéancier" onClick=${() => SHEET.open({type: "schedImport"})}><${Ic} n="import" /></button>`} />
-    <main class="scr" style="gap:16px">
-      <div class="hscroll" role="tablist" aria-label="Compte" style="padding-top:0">${accs.map(a => html`<button role="tab" aria-selected=${a.id === sel} onClick=${() => setSel(a.id)} style=${"flex:none;height:36px;padding:0 16px;border-radius:18px;font-size:14px;font-weight:600;" + (a.id === sel ? "border:0;background:var(--ink);color:var(--surface)" : "border:1px solid var(--line);background:var(--surface);color:var(--ink)")}>${short(a)}</button>`)}</div>
-      ${due.length > 0 && html`<div class="banner" style="padding:10px 14px;align-items:center"><span class="grow"><b>${due.length} à valider</b></span><button class="link" onClick=${() => confirmIt("Tout valider ?", due.length + " échéances seront enregistrées avec leur montant prévu.", "Tout valider", async () => { for (const o of due) { validateOcc(o); await sleep(80); } toast("Échéances validées"); }, false)}>Tout valider</button></div>`}
-      ${sel && html`<section class="card" style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+    <main class="scr wide dash" style="gap:16px">
+      <div class="hscroll dash-full" role="tablist" aria-label="Compte" style="padding-top:0">${accs.map(a => html`<button role="tab" aria-selected=${a.id === sel} onClick=${() => setSel(a.id)} style=${"flex:none;height:36px;padding:0 16px;border-radius:18px;font-size:14px;font-weight:600;" + (a.id === sel ? "border:0;background:var(--ink);color:var(--surface)" : "border:1px solid var(--line);background:var(--surface);color:var(--ink)")}>${short(a)}</button>`)}</div>
+      ${due.length > 0 && html`<div class="banner dash-full" style="padding:10px 14px;align-items:center"><span class="grow"><b>${due.length} à valider</b></span><button class="link" onClick=${() => confirmIt("Tout valider ?", due.length + " échéances seront enregistrées avec leur montant prévu.", "Tout valider", async () => { for (const o of due) { validateOcc(o); await sleep(80); } toast("Échéances validées"); }, false)}>Tout valider</button></div>`}
+      <div class="dash-l">${sel && html`<section class="card" style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
         <div class="muted" style="font-size:13px">Chaque mois sur ce compte</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div><div class="muted" style="font-size:12px">Rentrées</div><div style="font-size:20px;font-weight:700;color:var(--pos)">${fmt(incM, true)}</div></div>
@@ -3571,9 +3614,9 @@ function Schedules() {
         </div>
         <div style="font-size:14px;padding-top:10px;border-top:1px solid var(--line)">${nx ? html`Prochaine : <b>${nx.name}</b>, le ${dayShort(npOf(nx))} · ${fmt(amtFor(nx, sel), true)}` : "Aucune échéance à venir"}</div>
       </section>`}
-      ${G.map(([title, l]) => html`<div><div class="fgh">${title}</div><div class="card">${l.map(x => html`<${Row} x=${x} key=${x.id} />`)}</div></div>`)}
-      ${auto.length > 0 && html`<div><div class="fgh">Calculé par Pécule</div><div class="card">${auto.map(([n2, d]) => html`<div class="row" style="min-height:56px"><span class="dcirc"><b style="font-size:14px">⚙︎</b></span><span class="grow"><div class="t1">${n2}</div><div class="t2" style="white-space:normal">${d}</div></span></div>`)}</div></div>`}
-      ${!accs.length && html`<div class="card"><div class="empty"><b>Rien de prévu</b>Ajoute ton salaire, ton loyer, tes abonnements… avec le bouton +.</div></div>`}
+      ${auto.length > 0 && html`<div class="sch-auto"><div class="fgh">Calculé par Pécule</div><div class="card">${auto.map(([n2, d]) => html`<div class="row" style="min-height:56px"><span class="dcirc"><b style="font-size:14px">⚙︎</b></span><span class="grow"><div class="t1">${n2}</div><div class="t2" style="white-space:normal">${d}</div></span></div>`)}</div></div>`}</div>
+      <div class="dash-r">${G.map(([title, l]) => html`<div><div class="fgh">${title}</div><div class="card">${l.map(x => html`<${Row} x=${x} key=${x.id} />`)}</div></div>`)}</div>
+      ${!accs.length && html`<div class="card dash-full"><div class="empty"><b>Rien de prévu</b>Ajoute ton salaire, ton loyer, tes abonnements… avec le bouton +.</div></div>`}
     </main>`;
 }
 
@@ -3601,13 +3644,13 @@ function Budgets() {
   const t = today(), list = budgets(true).filter(b => showHidden || !b.hidden);
   return html`
     <${Top} title="Budgets" right=${html`${list.length > 0 && html`<button class=${"ibtn" + (del ? " on" : "")} aria-label=${del ? "Terminer" : "Supprimer des budgets"} onClick=${() => setDel(!del)}>${del ? html`<${Ic} n="check" />` : html`<${Ic} n="trash" />`}</button>`}`} />
-    <main class="scr">
+    <main class="scr wide">
       <${QuickEntry} kind="bdg" acc=${mainAcc()} />
       ${(() => { const order = accList(true).map(a => a.id), G = [];
         for (const b of list) { const own = (b.accounts || []).filter(id => A().acc[id]).sort((x, y) => order.indexOf(x) - order.indexOf(y)); const k = own.join(",") || "*"; let g = G.find(x => x.k === k); if (!g) G.push(g = {k, own, l: []}); g.l.push(b); }
         G.sort((x, y) => (x.k === "*") - (y.k === "*") || order.indexOf(x.own[0]) - order.indexOf(y.own[0]));
         return G.map(g => html`<section><div class="sec-h" style="align-items:center"><h2 style="display:flex;align-items:center;gap:8px;color:var(--ink);text-transform:none;letter-spacing:-.01em;font-size:16px">${g.own.length ? html`<${AccIcon} a=${A().acc[g.own[0]]} sm />${g.own.map(accName).join(" + ")}` : "Tous les comptes"} <span class="muted" style="font-size:13px;font-weight:600">· ${g.l.length} ${g.l.length > 1 ? "budgets" : "budget"}</span></h2></div>
-          <div style="display:flex;flex-direction:column;gap:10px">${g.l.map(b => { const rows = linesOf(b.id).map(l => lineAt(l, t)).filter(Boolean); const exp = rows.filter(x => !x.l.income); const tb = exp.reduce((s, x) => s + x.bud, 0), ta = exp.reduce((s, x) => s + x.act, 0), tp = r2(exp.reduce((s, x) => s + (x.plan || 0), 0)), ts = exp.reduce((s, x) => s + (x.spent ?? x.act), 0);
+          <div class="bgrid">${g.l.map(b => { const rows = linesOf(b.id).map(l => lineAt(l, t)).filter(Boolean); const exp = rows.filter(x => !x.l.income); const tb = exp.reduce((s, x) => s + x.bud, 0), ta = exp.reduce((s, x) => s + x.act, 0), tp = r2(exp.reduce((s, x) => s + (x.plan || 0), 0)), ts = exp.reduce((s, x) => s + (x.spent ?? x.act), 0);
         if (del) return html`<div class="card" style="padding:12px 16px;display:flex;align-items:center;gap:10px">${budDot(b)}<span class="grow t1">${b.name}</span><button class="btn sm danger" onClick=${() => delBudget(b)}><${Ic} n="trash" s=${16} />Supprimer</button></div>`;
         return html`<button class="card" style="padding:16px;border:0;text-align:left;width:100%;display:flex;flex-direction:column;gap:6px" onClick=${() => NAV.push({v: "budget", id: b.id})}>
           <span style="display:flex;align-items:center;gap:10px">${budDot(b)}<span class="grow"><div class="t1">${b.name}${b.hidden ? html`<span class="tag">masqué</span>` : ""}</div><div class="t2">${(n => n + (n > 1 ? " catégories" : " catégorie"))(new Set(linesOf(b.id).map(l => l.cat)).size)}</div></span><span class="muted">›</span></span>
@@ -4825,7 +4868,7 @@ function App() {
   const content = top ? html`<${View} v=${top} key=${stack.length} />` : tab === "comptes" ? html`<${Accounts} />` : tab === "echeancier" ? html`<${Schedules} />` : tab === "budgets" ? html`<${Budgets} />` : tab === "analyses" ? html`<${Reports} />` : tab === "prev" ? html`<${Previsions} />` : tab === "mes" ? html`<${AccListView} asTab />` : html`<${Accounts} />`;
   return html`<div class="app">
     ${content}
-    <nav class="tabbar" aria-label="Navigation"><div class="tabbar-in">${[...TABS.slice(0, 2), null, ...TABS.slice(2)].map(x => x ? (([k, l, ic]) => html`<button class=${"tab" + (tab === k && !top ? " on" : "")} aria-current=${tab === k && !top ? "page" : null} onClick=${() => NAV.tab(k)}><${Ic} n=${ic} s=${22} />${l}</button>`)(x) : html`<div class="tab-plus" style="position:relative"><button aria-label="Saisir" onClick=${() => SHEET.open({type: "quick"})}><${Ic} n="plus" s=${22} w=${2.6} /></button></div>`)}</div></nav>
+    <nav class="tabbar" aria-label="Navigation"><div class="tabbar-in"><div class="side side-brand" aria-hidden="true">Pécule</div>${[...TABS.slice(0, 2), null, ...TABS.slice(2), "sep", ...TABS_SIDE].map(x => x === "sep" ? html`<div class="side side-sep"></div>` : x ? (([k, l, ic, side]) => html`<button class=${"tab" + (side ? " side" : "") + (tab === k && !top ? " on" : "")} aria-current=${tab === k && !top ? "page" : null} onClick=${() => NAV.tab(k)}><${Ic} n=${ic} s=${22} />${l}</button>`)(x) : html`<div class="tab-plus" style="position:relative"><button aria-label="Saisir" onClick=${() => SHEET.open({type: "quick"})}><${Ic} n="plus" s=${22} w=${2.6} /><span class="plus-l" aria-hidden="true">Saisir</span></button></div>`)}</div></nav>
     ${sheets.map((s, i) => html`<${SheetHost} key=${s.key} s=${s} close=${() => setSheets(x => x.filter(y => y.key !== s.key))} />`)}
     <${ToastHost} /><${UndoBar} />
   </div>`;
