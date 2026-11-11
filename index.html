@@ -1945,6 +1945,8 @@ function SimSheet({close}) {
 const kidsOf = (accs, id) => accs.filter(c => c.type === "carte" && c.linked === id);
 const isKid = (accs, c) => c.type === "carte" && c.linked && accs.some(a => a.id === c.linked);
 const nextDebit = c => cardDebitFor(c, today());
+/* Prochain débit prévu d'une carte à débit différé (montant calculé par l'échéancier) */
+const cardNext = c => { const t = today(), o = occurrences(addDays(t, 45)).find(o => o.card === c.id && o.date >= t); return o ? {amt: -o.amount, date: o.date} : null; };
 function accGroups(accs) {
   const out = [], byName = {};
   for (const a of accs) {
@@ -2264,11 +2266,15 @@ function Glance() {
   const id = mainAcc(); if (!id) return null;
   const g = glanceState(id), t = today(), a = g.a;
   const isCard = a.type === "carte", isLoan = a.type === "pret";
-  const nx = isCard ? occurrences(addDays(t, 45)).find(o => o.card === id && o.date > t) : null;
-  if (isCard || isLoan) return html`<section class="hero"><div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
-      <div style="min-width:0"><div class="cap" style="margin:0">${isCard ? "Encours" : "Capital restant dû"}</div><div class="big">${fmt(isLoan ? -g.b : g.b)}</div></div>
-      ${isCard && html`<div style="text-align:right"><div class="cap" style="margin:0">Prochain débit</div><div style="font-size:15px;font-weight:600">${nx ? fmt(-nx.amount) + " · " + dayShort(nx.date) : "—"}</div></div>`}
-    </div>${isCard && a.linked && A().acc[a.linked] && html`<button class="link" style="margin-top:12px;font-size:14px;font-weight:500;color:var(--muted);padding:6px 0;text-align:left" onClick=${() => Store.put({...S(), k: "set", id: "set_main", mainAcc: a.linked})}>Débitée sur le <b style="color:var(--accent)">${A().acc[a.linked].name.replace(/^Compte/, "compte")}</b> le ${dayShort(nextDebit(a))} ›</button>`}</section>`;
+  if (isLoan) return html`<section class="hero"><div class="cap" style="margin:0">Capital restant dû</div><div class="big">${fmt(-g.b)}</div></section>`;
+  if (isCard) { const nx = cardNext(a), val = balance(id, {cleared: true});
+    return html`<section style="display:flex;flex-direction:column;gap:10px"><div class="hero">
+      <div class="cap" style="margin:0">Encours</div><div class="big">${fmt(g.b)}</div>
+      ${a.linked && A().acc[a.linked] && html`<button class="link" style="margin-top:12px;font-size:14px;font-weight:500;color:var(--muted);padding:6px 0;text-align:left" onClick=${() => Store.put({...S(), k: "set", id: "set_main", mainAcc: a.linked})}>Débitée sur le <b style="color:var(--accent)">${A().acc[a.linked].name.replace(/^Compte/, "compte")}</b> le ${dayShort(nextDebit(a))} ›</button>`}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="tile"><div class="l">Solde validé</div><div class="v">${fmt(val)}</div></div>
+        <div class="tile"><div class="l">${nx ? "Prochain débit · " + dayShort(nx.date) : "Prochain débit"}</div><div class="v">${nx ? fmt(nx.amt) : "—"}</div></div>
+      </div></section>`; }
   const left = Math.max(0, daysBetween(t, g.pe)), pct = Math.min(100, Math.max(0, Math.round(g.dNow / g.dN * 100)));
   const inc = sortTx([...occurrences(addDays(t, 62)).filter(o => o.date >= t && sides(o).some(([x]) => x === id)), ...(idx()[id] || []).map(([x]) => x).filter(x => x.date >= t && x.st !== "annulee")].filter(o => amtFor(o, id) > 0), "dd", id).pop();
   return html`<section style="text-align:center;padding:10px 0 2px">
@@ -2283,7 +2289,7 @@ function Glance() {
       <div class="tile"><div class="l">Solde validé</div><div class="v" style=${g.b < 0 ? "color:var(--neg)" : ""}>${fmt(g.b)}</div></div>
       <div class="tile"><div class="l">${inc ? "Prochaine rentrée · " + dayShort(inc.date) : "Prochaine rentrée"}</div><div class="v" style="color:var(--pos)">${inc ? fmt(amtFor(inc, id), true) : "—"}</div></div>
     </div>
-    ${kidsOf(accList(), id).length > 0 && html`<div class="dchips">${kidsOf(accList(), id).map(c => { const b = shownBal(c); return html`<button class="dchip" onClick=${() => Store.put({...S(), k: "set", id: "set_main", mainAcc: c.id})} aria-label=${"Ouvrir " + c.name}><span aria-hidden="true">💳</span><b style="font-weight:600">${c.name}</b><span class="muted">${Math.abs(b) > 0.004 ? fmt(Math.abs(b)) + " le " + dayShort(nextDebit(c)) : "rien à débiter"}</span></button>`; })}</div>`}
+    ${kidsOf(accList(), id).length > 0 && html`<div class="dchips">${kidsOf(accList(), id).map(c => { return html`<button class="dchip" onClick=${() => Store.put({...S(), k: "set", id: "set_main", mainAcc: c.id})} aria-label=${"Ouvrir " + c.name}><span aria-hidden="true">💳</span><b style="font-weight:600">${c.name}</b><span class="muted">${(n => n ? fmt(n.amt) + " le " + dayShort(n.date) : "rien à débiter")(cardNext(c))}</span></button>`; })}</div>`}
   </section>`;
 }
 function GlanceBudgets() {
@@ -2325,7 +2331,7 @@ function AccPickSheet({close}) {
       <span class="grow"><div class="t1">${a.name}</div></span><span class="muted" style="font-size:14px">${fmt(a.type === "pret" ? -shownBal(a) : shownBal(a))}</span>
       <span style="width:22px;color:var(--accent);font-weight:700;text-align:center">${a.id === main ? "✓" : ""}</span></button>
       ${kidsOf(all, a.id).length > 0 && html`<div class="nest">${kidsOf(all, a.id).map(c => html`<button class="row" style="border-top:0" onClick=${() => pick(c.id)} aria-current=${c.id === main ? "true" : null} aria-label=${c.name + ", carte débitée sur " + a.name + " le " + dayShort(nextDebit(c))}>
-        <span class="grow"><div class="t1" style="font-size:15px">${c.name}</div></span><span class="muted" style="font-size:13px">débit le ${dayShort(nextDebit(c))}</span>
+        <span class="grow"><div class="t1" style="font-size:15px">${c.name}</div><div class="t2">${(n => n ? "débit de " + fmt(n.amt) + " le " + dayShort(n.date) : "rien à débiter")(cardNext(c))}</div></span><span class="muted" style="font-size:14px" aria-label=${"Solde validé " + fmt(balance(c.id, {cleared: true}))}>${fmt(balance(c.id, {cleared: true}))}</span>
         <span style="width:22px;color:var(--accent);font-weight:700;text-align:center">${c.id === main ? "✓" : ""}</span></button>`)}</div>`}`)}</div>
     <button class="btn" style="margin-top:14px;width:100%" onClick=${() => { close(); NAV.tab("mes"); }}>Cartes, prêt et tous les comptes</button>
   </${Sheet}>`;
