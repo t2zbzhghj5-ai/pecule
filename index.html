@@ -524,7 +524,7 @@ function QuickSheet({acc, close}) {
   const press = k => up({amt: (a => { if (k === "⌫") return a.slice(0, -1); if (k === ",") return a.includes(",") ? a : (a || "0") + ","; if (a.includes(",") && a.split(",")[1].length >= 2) return a; if (a.replace(",", "").length >= 7) return a; return a === "0" ? k : a + k; })(w.amt)});
   const whenD = [t, addDays(t, -1), addDays(t, 1)];
   const date = w.when === 3 ? w.date : whenD[w.when];
-  const catsK = cats().filter(c => (c.type || cat(c.parent)?.type || "dep") === (inc ? "rev" : "dep"));
+  const catsK = cats().filter(c => { const ty = c.type || cat(c.parent)?.type || "dep"; return ty === "both" || ty === (inc ? "rev" : "dep"); });
   const others = accList().filter(x => x.id !== w.account && x.type !== "pret");
   const label = w.type ? WZ_T[w.type][0] : "";
   const autoName = () => isTr ? "Virement vers " + accName(w.to) : w.cat ? (catName(w.cat).charAt(0).toUpperCase() + catName(w.cat).slice(1)) : label;
