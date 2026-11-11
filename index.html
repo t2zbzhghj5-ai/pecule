@@ -1211,7 +1211,9 @@ function linePlanned(l, ps, pe, occ) {
     for (const sp of o.splits || []) { if ((sp.to && !sp.cat) || sp.nobud || (sp.bdg && sp.bdg !== l.budget && A().bdg[sp.bdg]) || !m(sp.cat)) continue; if (l.income ? sp.amount > 0 : sp.amount < 0) s += l.income ? sp.amount : -sp.amount; } }
   return r2(s);
 }
-function lineAt(l, d) { const p = periodAt(l, d); if (!p) return null; const bud = lineBudget(l, p[0]), act = lineActual(l, p[0], p[1]); return {l, ps: p[0], pe: p[1], bud, act, rest: r2(bud - act), pct: bud > 0 ? act / bud : (act > 0 ? 1.5 : 0)}; }
+/* Déjà prévu dans l'échéancier sur la période (opérations rattachées au budget, pas encore passées) */
+const linePlan = (l, ps, pe) => l.income ? 0 : memo("lp" + l.id + ps + pe, () => linePlanned(l, ps, pe, occurrences(pe)));
+function lineAt(l, d) { const p = periodAt(l, d); if (!p) return null; const bud = lineBudget(l, p[0]), act = lineActual(l, p[0], p[1]); return {l, ps: p[0], pe: p[1], bud, act, rest: r2(bud - act), plan: linePlan(l, p[0], p[1]), free: r2(bud - act - linePlan(l, p[0], p[1])), pct: bud > 0 ? act / bud : (act > 0 ? 1.5 : 0)}; }
 function avgLine(l, ref, n = 3) { let s = 0, c = 0; let p = periodAt(l, ref) || periodsOf(l, ref, ref)[0]; let pp = p ? prevPeriod(l, p[0]) : null; while (pp && c < n) { s += lineActual(l, pp[0], pp[1]); c++; pp = prevPeriod(l, pp[0]); }
   if (!c) { const set = l.cat === "__other__" ? null : catSet(l.cat); for (let i = 1; i <= n; i++) { const k = ymAdd(ym(ref), -i); for (const x of bSplits(budgetOf(l))) if (x.d.startsWith(k) && (set ? set.has(x.cat) : true) && counts(l, x)) s += l.income ? x.a : -x.a; } c = n; }
   return r2(s / c); }
@@ -1997,9 +1999,9 @@ function BudgetCursors({id, cardIds, card}) {
       const tot = r2(fut.filter(l => l.start === st).map(l => lineAt(l, st)).filter(Boolean).reduce((s2, x) => s2 + x.bud, 0));
       return {bd, ls: [], tot, act: 0, el: 0, col: budColor(bd), soon: st};
     }
-    const tot = r2(ls.reduce((s2, x) => s2 + x.bud, 0)), act = r2(ls.reduce((s2, x) => s2 + x.act, 0));
+    const tot = r2(ls.reduce((s2, x) => s2 + x.bud, 0)), act = r2(ls.reduce((s2, x) => s2 + x.act, 0)), plan = r2(ls.reduce((s2, x) => s2 + (x.plan || 0), 0));
     const el = ls.reduce((s2, x) => s2 + x.bud * Math.min(1, Math.max(0, (daysBetween(x.ps, t) + 1) / (daysBetween(x.ps, x.pe) + 1))), 0) / tot;
-    return {bd, ls, tot, act, el, col: budColor(bd)};
+    return {bd, ls, tot, act, plan, el, col: budColor(bd)};
   }).filter(Boolean).sort((a, b) => (!!a.soon - !!b.soon) || (a.bd.order ?? 0) - (b.bd.order ?? 0));
   if (!rows.length) return null;
   const body = html`<div style="margin-top:10px;display:flex;flex-direction:column;gap:12px;position:relative">
@@ -2015,10 +2017,11 @@ function BudgetCursors({id, cardIds, card}) {
   const rest = r2(rows.filter(r => !r.soon).reduce((s2, r) => s2 + Math.max(0, r.tot - r.act), 0));
   if (card) return html`<section><div class="sec-h" style="align-items:center"><h2 style="display:flex;align-items:center;gap:8px">Budgets</h2><button class="link" style="font-size:14px" onClick=${() => NAV.tab("budgets")}>Tout voir</button></div>
     <div class="hscroll">${rows.map(r => { const c = `color-mix(in srgb, ${r.col} var(--bmix), white)`, over = r.act > r.tot, left = r2(r.tot - r.act), done = !over && !r.soon && left < 0.005, pct = Math.min(1, r.act / r.tot);
-      return html`<button class="bpill" onClick=${() => NAV.push({v: "budget", id: r.bd.id})} aria-label=${r.bd.name + " : " + (r.soon ? "commence le " + dayShort(r.soon) : over ? "dépassé de " + fmt(-left) : done ? "épuisé" : "reste " + fmt(left))}>
+      return html`<button class="bpill" onClick=${() => NAV.push({v: "budget", id: r.bd.id})} aria-label=${r.bd.name + " : " + (r.soon ? "commence le " + dayShort(r.soon) : over ? "dépassé de " + fmt(-left) : done ? "épuisé" : "reste " + fmt(left)) + (r.plan > 0.004 && !over ? ", dont " + fmt(r.plan) + " prévus" : "")}>
         <span style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;width:100%"><span aria-hidden="true" style=${"width:8px;height:8px;border-radius:4px;flex:none;background:" + c}></span><span style="overflow:hidden;text-overflow:ellipsis">${r.bd.name}</span></span>
         <span style=${"font-size:15px;font-weight:700;color:" + (over ? "var(--neg)" : done || r.soon ? "var(--muted)" : "var(--ink)")}>${r.soon ? "Dès le " + dayShort(r.soon) : over ? "−" + fmt(-left) : done ? "Épuisé" : fmt(left)}</span>
-        <span style=${`display:block;width:100%;height:6px;border-radius:3px;overflow:hidden;background:color-mix(in srgb, ${c} 16%, transparent)`}><span style=${`display:block;height:6px;border-radius:3px;width:${pct * 100}%;background:${over ? "var(--neg)" : c};opacity:${done ? .45 : 1}`}></span></span>
+        ${r.plan > 0.004 && !over && !r.soon && html`<span class="muted" style="font-size:11.5px;font-weight:600;margin-top:-4px">${fmt0(r.plan)} prévus · ${fmt0(Math.max(0, left - r.plan))} libres</span>`}
+        <span style=${`display:flex;width:100%;height:6px;border-radius:3px;overflow:hidden;background:color-mix(in srgb, ${c} 16%, transparent)`}><span style=${`display:block;height:6px;width:${pct * 100}%;background:${over ? "var(--neg)" : c};opacity:${done ? .45 : 1}`}></span>${r.plan > 0.004 && !over && html`<span style=${`display:block;height:6px;width:${Math.min(1 - pct, r.plan / r.tot) * 100}%;background:repeating-linear-gradient(135deg, color-mix(in srgb, ${c} 55%, transparent) 0 4px, color-mix(in srgb, ${c} 30%, transparent) 4px 8px)`}></span>`}</span>
       </button>`; })}</div></section>`;
   return body;
 }
@@ -3575,20 +3578,21 @@ function Schedules() {
 }
 
 /* ============ Budgets : écrans ============ */
-function BudBar({col, pct, over, h = 9}) {
-  return html`<span aria-hidden="true" style=${`display:block;position:relative;height:${h}px;border-radius:6px;background:color-mix(in srgb, ${col} 22%, var(--surface2))`}><span style=${`position:absolute;inset:0 auto 0 0;width:${Math.min(100, Math.max(0, pct * 100))}%;border-radius:6px;transition:width .3s;background:${over ? "var(--neg)" : col}`}></span></span>`;
+function BudBar({col, pct, over, h = 9, ppct = 0}) {
+  const a = Math.min(100, Math.max(0, pct * 100)), b = Math.min(100 - a, Math.max(0, ppct * 100));
+  return html`<span aria-hidden="true" style=${`display:block;position:relative;height:${h}px;border-radius:6px;background:color-mix(in srgb, ${col} 22%, var(--surface2))`}>${b > 0 && html`<span style=${`position:absolute;top:0;bottom:0;left:${a}%;width:${b}%;border-radius:6px;background:repeating-linear-gradient(135deg, color-mix(in srgb, ${col} 55%, transparent) 0 4px, color-mix(in srgb, ${col} 35%, transparent) 4px 8px)`}></span>`}<span style=${`position:absolute;inset:0 auto 0 0;width:${Math.min(100, Math.max(0, pct * 100))}%;border-radius:6px;transition:width .3s;background:${over ? "var(--neg)" : col}`}></span></span>`;
 }
 const elOf = (ps, pe, t = today()) => Math.min(1, Math.max(0, (daysBetween(ps, t) + 1) / (daysBetween(ps, pe) + 1)));
 const budDot = b => html`<i style=${`width:12px;height:12px;border-radius:50%;background:${budColor(b)};display:inline-block;flex:none`}></i>`;
 function LineRow({x, onClick}) {
-  const {l, bud, act, rest, pct} = x;
+  const {l, bud, act, rest, pct, plan = 0, free} = x;
   const col = l.income ? "var(--pos)" : budColor(budgetOf(l)), fast = !l.income && pct <= 1 && act > bud * Math.max(elOf(x.ps, x.pe), .05) * 1.1;
   return html`<button class="row" style="flex-direction:column;align-items:stretch;gap:0" onClick=${onClick || (() => NAV.push({v: "line", id: l.id, d: x.ps}))}>
     <span style="display:flex;align-items:center;gap:12px">${l.cat === "__other__" ? html`<span class="ic sm" style="background:var(--surface2)">✳️</span>` : html`<${CatIcon} id=${l.cat} sm />`}
       <span class="grow" style="min-width:0"><div class="t1">${lineName(l)}</div><div class="t2">${periodLabel(x.ps, x.pe)}${l.carry ? " · avec report" : ""}</div></span>
       <span class="amt" style="font-size:15px">${fmt0(act)} <span class="muted" style="font-weight:500">/ ${fmt0(bud)}</span></span></span>
-    <span style="margin-top:8px"><${BudBar} col=${col} pct=${pct} over=${!l.income && pct > 1} /></span>
-    <span class="t2" style=${"margin-top:5px;" + (!l.income && rest < 0 ? "color:var(--neg)" : fast ? "color:var(--warn)" : "")}>${l.income ? (rest > 0 ? "Encore " + fmt(rest) + " attendus" : "Objectif atteint") : rest >= 0 ? (fast ? "⚡ " : "") + "Reste " + fmt(rest) : "Dépassé de " + fmt(-rest)}</span>
+    <span style="margin-top:8px"><${BudBar} col=${col} pct=${pct} over=${!l.income && pct > 1} ppct=${bud > 0 ? plan / bud : 0} /></span>
+    <span class="t2" style=${"margin-top:5px;" + (!l.income && rest < 0 ? "color:var(--neg)" : fast ? "color:var(--warn)" : "")}>${l.income ? (rest > 0 ? "Encore " + fmt(rest) + " attendus" : "Objectif atteint") : rest >= 0 ? (fast ? "⚡ " : "") + "Reste " + fmt(rest) + (plan > 0.004 ? " · " + fmt(plan) + " prévus · " + (free >= 0 ? fmt(free) + " libres" : "dépassement prévu de " + fmt(-free)) : "") : "Dépassé de " + fmt(-rest)}</span>
   </button>`;
 }
 function Budgets() {
@@ -3603,13 +3607,13 @@ function Budgets() {
         for (const b of list) { const own = (b.accounts || []).filter(id => A().acc[id]).sort((x, y) => order.indexOf(x) - order.indexOf(y)); const k = own.join(",") || "*"; let g = G.find(x => x.k === k); if (!g) G.push(g = {k, own, l: []}); g.l.push(b); }
         G.sort((x, y) => (x.k === "*") - (y.k === "*") || order.indexOf(x.own[0]) - order.indexOf(y.own[0]));
         return G.map(g => html`<section><div class="sec-h" style="align-items:center"><h2 style="display:flex;align-items:center;gap:8px;color:var(--ink);text-transform:none;letter-spacing:-.01em;font-size:16px">${g.own.length ? html`<${AccIcon} a=${A().acc[g.own[0]]} sm />${g.own.map(accName).join(" + ")}` : "Tous les comptes"} <span class="muted" style="font-size:13px;font-weight:600">· ${g.l.length} ${g.l.length > 1 ? "budgets" : "budget"}</span></h2></div>
-          <div style="display:flex;flex-direction:column;gap:10px">${g.l.map(b => { const rows = linesOf(b.id).map(l => lineAt(l, t)).filter(Boolean); const exp = rows.filter(x => !x.l.income); const tb = exp.reduce((s, x) => s + x.bud, 0), ta = exp.reduce((s, x) => s + x.act, 0);
+          <div style="display:flex;flex-direction:column;gap:10px">${g.l.map(b => { const rows = linesOf(b.id).map(l => lineAt(l, t)).filter(Boolean); const exp = rows.filter(x => !x.l.income); const tb = exp.reduce((s, x) => s + x.bud, 0), ta = exp.reduce((s, x) => s + x.act, 0), tp = r2(exp.reduce((s, x) => s + (x.plan || 0), 0));
         if (del) return html`<div class="card" style="padding:12px 16px;display:flex;align-items:center;gap:10px">${budDot(b)}<span class="grow t1">${b.name}</span><button class="btn sm danger" onClick=${() => delBudget(b)}><${Ic} n="trash" s=${16} />Supprimer</button></div>`;
         return html`<button class="card" style="padding:16px;border:0;text-align:left;width:100%;display:flex;flex-direction:column;gap:6px" onClick=${() => NAV.push({v: "budget", id: b.id})}>
           <span style="display:flex;align-items:center;gap:10px">${budDot(b)}<span class="grow"><div class="t1">${b.name}${b.hidden ? html`<span class="tag">masqué</span>` : ""}</div><div class="t2">${(n => n + (n > 1 ? " catégories" : " catégorie"))(new Set(linesOf(b.id).map(l => l.cat)).size)}</div></span><span class="muted">›</span></span>
           ${exp.length > 0 ? html`<span class="amt" style="text-align:left;font-size:24px;margin-top:4px">${fmt0(ta)} <span class="muted" style="font-size:16px;font-weight:500">/ ${fmt0(tb)}</span></span>
-          <${BudBar} col=${budColor(b)} pct=${tb ? ta / tb : 0} over=${ta > tb} />
-          ${(() => { const el = tb ? exp.reduce((s2, x) => s2 + x.bud * elOf(x.ps, x.pe, t), 0) / tb : 0, fast = ta <= tb && ta > tb * Math.max(el, .05) * 1.1; return html`<span class="t2" style=${ta > tb ? "color:var(--neg)" : fast ? "color:var(--warn)" : ""}>${ta <= tb ? (fast ? "⚡ " : "") + "Reste " + fmt(tb - ta) : "Dépassement de " + fmt(ta - tb)}</span>`; })()}` : html`<span class="t2">${(() => { const fut = linesOf(b.id).filter(l => !l.income && l.start > t).map(l => l.start).sort()[0]; return fut ? "Commence le " + dayShort(fut) + " " + fut.slice(0, 4) : "Rien en cours aujourd'hui."; })()}</span>`}
+          <${BudBar} col=${budColor(b)} pct=${tb ? ta / tb : 0} over=${ta > tb} ppct=${tb ? tp / tb : 0} />
+          ${(() => { const el = tb ? exp.reduce((s2, x) => s2 + x.bud * elOf(x.ps, x.pe, t), 0) / tb : 0, fast = ta <= tb && ta > tb * Math.max(el, .05) * 1.1; return html`<span class="t2" style=${ta > tb ? "color:var(--neg)" : fast ? "color:var(--warn)" : ""}>${ta <= tb ? (fast ? "⚡ " : "") + "Reste " + fmt(tb - ta) + (tp > 0.004 ? " · " + fmt(tp) + " prévus · " + (tb - ta - tp >= 0 ? fmt(r2(tb - ta - tp)) + " libres" : "dépassement prévu de " + fmt(r2(ta + tp - tb))) : "") : "Dépassement de " + fmt(ta - tb)}</span>`; })()}` : html`<span class="t2">${(() => { const fut = linesOf(b.id).filter(l => !l.income && l.start > t).map(l => l.start).sort()[0]; return fut ? "Commence le " + dayShort(fut) + " " + fut.slice(0, 4) : "Rien en cours aujourd'hui."; })()}</span>`}
         </button>`; })}</div></section>`); })()}
       ${!list.length && html`<div class="card"><div class="empty"><b>Pas encore de budget</b>Un budget surveille un ou plusieurs comptes. Ses lignes fixent un montant par catégorie et par période : courses par mois, vacances par an, etc. Ce qui reste à dépenser alimente ton Cash.<div style="margin-top:14px"><button class="btn pri" onClick=${() => SHEET.open({type: "bdg"})}>Créer un budget</button></div></div></div>`}
       ${budgets(true).some(b => b.hidden) && html`<button class="link" onClick=${() => setSH(!showHidden)}>${showHidden ? "Cacher les budgets masqués" : "Afficher les budgets masqués"}</button>`}
