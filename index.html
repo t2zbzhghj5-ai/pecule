@@ -2313,7 +2313,9 @@ function Glance() {
         <div class="tile"><div class="l">${"À valider" + (pend.n ? " · " + pend.n + (pend.n > 1 ? " opérations" : " opération") : "")}</div><div class="v">${fmt(pend.amt)}</div></div>
       </div></section>`; }
   const left = Math.max(0, daysBetween(t, g.pe)), pct = Math.min(100, Math.max(0, Math.round(g.dNow / g.dN * 100)));
-  const inc = sortTx([...occurrences(addDays(t, 62)).filter(o => o.date >= t && sides(o).some(([x]) => x === id)), ...(idx()[id] || []).map(([x]) => x).filter(x => x.date >= t && x.st !== "annulee")].filter(o => amtFor(o, id) > 0), "dd", id).pop();
+  /* Prochaine rentrée : toutes les rentrées du premier jour où il y en a une, additionnées */
+  const inc = (l => { if (!l.length) return null; const d = l.reduce((m, o) => o.date < m ? o.date : m, l[0].date), same = l.filter(o => o.date === d);
+    return {date: d, amt: r2(same.reduce((s, o) => s + amtFor(o, id), 0)), n: same.length}; })([...occurrences(addDays(t, 62)).filter(o => o.date >= t && sides(o).some(([x]) => x === id)), ...(idx()[id] || []).map(([x]) => x).filter(x => x.date >= t && x.st !== "annulee")].filter(o => amtFor(o, id) > 0));
   return html`<section style="text-align:center;padding:10px 0 2px">
     <div style="font-size:14px;color:var(--muted);font-weight:500">Tu peux encore dépenser</div>
     <div style="display:flex;align-items:center;justify-content:center;gap:8px"><span style="font-family:var(--display);font-size:52px;font-weight:700;letter-spacing:-0.03em;line-height:1.1;margin-top:4px;color:${g.eomB < 0 ? "var(--low)" : "var(--ink)"}">${fmt(g.eomB)}</span></div>
@@ -2324,7 +2326,7 @@ function Glance() {
     </div></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px;position:relative">
       <div class="tile"><div class="l">Solde validé</div><div class="v" style=${g.b < 0 ? "color:var(--neg)" : ""}>${fmt(g.b)}</div></div>
-      <div class="tile"><div class="l">${inc ? "Prochaine rentrée · " + dayShort(inc.date) : "Prochaine rentrée"}</div><div class="v" style="color:var(--pos)">${inc ? fmt(amtFor(inc, id), true) : "—"}</div></div>
+      <div class="tile"><div class="l">${inc ? (inc.n > 1 ? inc.n + " rentrées · " : "Prochaine rentrée · ") + dayShort(inc.date) : "Prochaine rentrée"}</div><div class="v" style="color:var(--pos)">${inc ? fmt(inc.amt, true) : "—"}</div></div>
     </div>
     ${kidsOf(accList(), id).length > 0 && html`<div class="dchips">${kidsOf(accList(), id).map(c => { return html`<button class="dchip" onClick=${() => Store.put({...S(), k: "set", id: "set_main", mainAcc: c.id})} aria-label=${"Ouvrir " + c.name}><span aria-hidden="true">💳</span><b style="font-weight:600">${c.name}</b><span class="muted">${(n => n ? fmt(n.amt) + " le " + dayShort(n.date) : "rien à débiter")(cardNext(c))}</span></button>`; })}</div>`}
   </section>`;
@@ -3357,7 +3359,9 @@ function AccSheet({id, pre, close}) {
       <input id="ac-i" inputmode="decimal" value=${f.initialStr} onInput=${e => set("initialStr", e.target.value)} placeholder="0,00" /></${Field}>
       ${calc(f.initialStr || "0") > 0 && html`<${Field} label="Sera débité le" id="ac-id"><select id="ac-id" value=${f.initDebit || (a0 && !a0.initDebit ? "" : debitDates(f.debitDay)[0])} onChange=${e => set("initDebit", e.target.value)}>${a0 && !a0.initDebit ? html`<option value="">au premier débit après le ${refDate}</option>` : ""}${[...new Set([...(f.initDebit ? [f.initDebit] : []), ...debitDates(f.debitDay)])].sort().map(d => html`<option value=${d}>${dayLabel(d)} ${d.slice(0, 4)}</option>`)}</select></${Field}>`}`
     : html`<${Field} label=${isLoan ? `Capital restant dû au ${refDate}` : `Solde au ${refDate}`} id="ac-i" help=${isLoan ? "Ce que tu dois encore à la banque." : "Le solde de ton relevé à cette date."}>
-      <div style="display:flex;gap:8px">${!isCard && !isLoan && html`<button type="button" class="btn sm" style="min-width:56px" onClick=${() => set("neg", !f.neg)} aria-label="Changer le signe">${f.neg ? "−" : "+"}</button>`}<input id="ac-i" inputmode="decimal" value=${f.initialStr} onInput=${e => set("initialStr", e.target.value)} placeholder="0,00" /></div></${Field}>`}
+      <div style="display:flex;gap:8px">${!isCard && !isLoan && html`<button type="button" class="btn sm" style="min-width:56px" onClick=${() => set("neg", !f.neg)} aria-label="Changer le signe">${f.neg ? "−" : "+"}</button>`}<input id="ac-i" inputmode="decimal" value=${f.initialStr} onInput=${e => set("initialStr", e.target.value)} placeholder="0,00" /></div></${Field}>
+      ${a0 && !isLoan && (() => { const v = calc(f.initialStr || "0"); if (isNaN(v)) return null; const ni = r2(f.neg ? -Math.abs(v) : v), oi = r2(a0.initial || 0); if (Math.abs(ni - oi) < 0.005) return null;
+        const cur = shownBal(a0); return html`<div class="banner" role="status" style="padding:10px 14px;font-size:14px">Attention : le solde de ce compte passera de <b>${fmt(cur)}</b> à <b>${fmt(r2(cur - oi + ni))}</b>.${Math.abs(ni + oi) < 0.005 ? " Seul le signe change : vérifie le bouton − / +." : ""}</div>`; })()}`}
     ${isCard && html`<div class="grid2">
       <${Field} label="Débitée sur" id="ac-l"><${AccSelect} id="ac-l" v=${f.linked} set=${v => set("linked", v)} none="Choisir…" exclude=${f.id} /></${Field}>
       <${Field} label="Jour du débit" id="ac-d"><input id="ac-d" type="number" min="1" max="31" value=${f.debitDay} onInput=${e => set("debitDay", e.target.value)} /></${Field}>

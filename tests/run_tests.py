@@ -642,6 +642,27 @@ def reorganiser_comptes(br, url):
 
 
 @test
+def rentrees_et_solde_de_depart(br, url):
+    """Deux rentrées le même jour : additionnées sur l'accueil. Changer le signe du solde de départ : avertissement avant d'enregistrer."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    c = a.acc_id("Courant")
+    a.js("D.Store.put({k: 'tx', id: 'tx_prime', account: arg, date: '2026-11-28', name: 'Prime', amount: 300, splits: [{amount: 300}], st: 'saisie'});", c)
+    a.pick("Courant")
+    t = a.pg.inner_text("main section")
+    check("2 rentrées · 28 nov." in t and "+2 800,00" in t.replace("\u202f", " ").replace("\xa0", " "), "rentrées du 28 nov. non additionnées : %s" % t.replace("\n", " | ")[:300])
+    a.js("D.SHEET.open({type: 'acc', id: arg});", c)
+    a.wait(500)
+    check(not a.pg.locator(".sheet .banner[role=status]").count(), "avertissement affiché sans changement")
+    a.pg.click('.sheet [aria-label="Changer le signe"]')
+    a.wait(300)
+    w = a.pg.inner_text(".sheet .banner[role=status]") if a.pg.locator(".sheet .banner[role=status]").count() else ""
+    check("passera de" in w and "Seul le signe change" in w, "pas d'avertissement en changeant le signe : %s" % w)
+    a.no_errors("solde de départ")
+    a.close()
+
+
+@test
 def valider_echeance(br, url):
     """Valider une échéance à venir (loyer du 5 déc.) : elle devient une opération, l'échéancier passe à janvier, les soldes projetés ne bougent pas."""
     a = App(br, url)
