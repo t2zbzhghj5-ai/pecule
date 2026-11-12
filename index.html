@@ -215,7 +215,11 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .catgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
 .catbtn{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:8px 10px;text-align:left;font-size:14px;font-weight:600;min-height:44px}
 .catbtn.on{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 30%,transparent)}
-.catbtn .e{font-size:17px}
+.catbtn .e{font-size:17px;display:inline-flex}
+.cic{display:inline-grid;place-items:center;border-radius:50%;flex:none;background:color-mix(in srgb,var(--c) 15%,transparent);color:color-mix(in srgb,var(--c) 76%,var(--ink))}
+.icgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(48px,1fr));gap:8px}
+.icpick{height:48px;border-radius:14px;border:1px solid var(--line);background:var(--surface);color:color-mix(in srgb,var(--c) 76%,var(--ink));display:grid;place-items:center;font-size:12px;font-weight:700}
+.icpick.on{border:2px solid var(--c);background:color-mix(in srgb,var(--c) 15%,var(--surface))}
 .split{display:grid;grid-template-columns:1fr 110px 36px;gap:8px;align-items:center}
 .selbtn{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 12px;min-height:44px}
 .chart{width:100%;height:auto;display:block}
@@ -547,7 +551,7 @@ function QuickSheet({acc, close}) {
   const icon = d => html`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d=${d} /></svg>`;
   const sign = isTr ? "" : inc ? "+" : "−";
   const recap = w.type ? [["Type", w.type === "ech" ? "Échéance · " + {dep: "dépense", rev: "revenu", vir: "virement"}[w.sens] : label], ["Montant", sign + fmt(n)],
-    isTr ? ["Vers", w.to ? accName(w.to) : "—"] : ["Catégorie", w.cat ? catEmoji(w.cat) + " " + catName(w.cat) : "Sans catégorie"],
+    isTr ? ["Vers", w.to ? accName(w.to) : "—"] : ["Catégorie", w.cat ? catName(w.cat) : "Sans catégorie"],
     ["Quand", w.type === "ech" ? "Le " + (w.day === 1 ? "1er" : w.day) + " · " + {m1: "chaque mois", m2: "tous les 2 mois", m3: "tous les 3 mois", y1: "chaque année", w1: "chaque semaine"}[w.freq] : dayLabel(date) + (w.rep ? ", puis chaque mois" : "")]] : [];
   return html`<div class="wiz" role="dialog" aria-modal="true" aria-label=${kind === "pick" ? "Ajouter" : label}><div class="wiz-in">
     <div style="display:flex;align-items:center;justify-content:space-between">
@@ -559,7 +563,7 @@ function QuickSheet({acc, close}) {
     ${kind === "pick" && html`<div class="card" style="padding:12px;background:var(--bg);box-shadow:none;border:1px solid var(--line);display:flex;flex-direction:column;gap:10px">
       <textarea aria-label="Coller ou écrire une opération" value=${txt} onInput=${e => { setTxt(e.target.value); setPerr(null); }} placeholder="Colle une notification ou écris : « Monoprix 23,40 € hier »" style="min-height:64px;font-size:15px;border-radius:12px"></textarea>
       ${perr && html`<div style="font-size:13px;color:var(--neg)" role="alert">${perr}</div>`}
-      ${txt.trim() && !/\d/.test(txt) && nameSuggest(txt).length > 0 && html`<div class="hscroll" style="margin:0;padding:0;gap:8px" aria-label="Libellés connus">${nameSuggest(txt).map(x => html`<button class="dchip" style="flex:none" onClick=${() => startFrom(x)}>${x.splits?.[0]?.cat ? html`<span aria-hidden="true">${catEmoji(x.splits[0].cat)}</span>` : ""}<b style="font-weight:600">${x.name}</b></button>`)}</div>`}
+      ${txt.trim() && !/\d/.test(txt) && nameSuggest(txt).length > 0 && html`<div class="hscroll" style="margin:0;padding:0;gap:8px" aria-label="Libellés connus">${nameSuggest(txt).map(x => html`<button class="dchip" style="flex:none" onClick=${() => startFrom(x)}>${x.splits?.[0]?.cat ? html`<span aria-hidden="true"><${CatGlyph} id=${x.splits[0].cat} box=${20} s=${13} /></span>` : ""}<b style="font-weight:600">${x.name}</b></button>`)}</div>`}
       <div style="display:flex;gap:8px"><button class="btn" style="flex:1" onClick=${paste}>Coller</button><button class="btn pri" style="flex:2" disabled=${!txt.trim()} onClick=${analyse}>Analyser</button></div>
     </div>
     <div class="fgh" style="padding:4px 2px 0">Ou choisis</div>`}
@@ -573,7 +577,7 @@ function QuickSheet({acc, close}) {
         <label style="font-size:14px;color:var(--muted);display:inline-flex;justify-content:center;align-items:center;gap:6px">${isTr ? "Depuis le" : "Sur le"}<select aria-label="Compte" value=${w.account} onChange=${e => up({account: e.target.value, to: null})} style="width:auto;min-height:32px;height:32px;padding:0 24px 0 8px;font-size:14px;font-weight:600;border-radius:10px">${accList().filter(x => x.type !== "pret").map(x => html`<option value=${x.id}>${x.name}</option>`)}</select></label></div>
       <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px">${["1", "2", "3", "4", "5", "6", "7", "8", "9", ",", "0", "⌫"].map(k => html`<button class="wkey" aria-label=${k === "⌫" ? "Effacer" : k === "," ? "Virgule" : k} onClick=${() => press(k)}>${k}</button>`)}</div>
       <button class="wgo" disabled=${!(n > 0)} onClick=${next}>Continuer</button>`}
-    ${kind === "cat" && html`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${catsK.map(c => html`<button class=${"wbig" + (w.cat === c.id ? " on" : "")} onClick=${() => up({cat: c.id, step: w.step + 1})}><span aria-hidden="true">${catEmoji(c.id)}</span><span style="overflow:hidden;text-overflow:ellipsis">${catName(c.id)}</span></button>`)}
+    ${kind === "cat" && html`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${catsK.map(c => html`<button class=${"wbig" + (w.cat === c.id ? " on" : "")} onClick=${() => up({cat: c.id, step: w.step + 1})}><${CatGlyph} id=${c.id} box=${34} s=${19} /><span style="overflow:hidden;text-overflow:ellipsis">${catName(c.id)}</span></button>`)}
       <button class=${"wbig" + (w.cat === null && w.step > 0 ? "" : "")} style="grid-column:1/-1;justify-content:center;color:var(--muted)" onClick=${() => up({cat: null, step: w.step + 1})}>Sans catégorie</button></div>`}
     ${kind === "dest" && html`<div style="display:flex;flex-direction:column;gap:10px">${others.map(x => html`<button class=${"wbig" + (w.to === x.id ? " on" : "")} onClick=${() => up({to: x.id, step: w.step + 1})}><${AccIcon} a=${x} sm /><span class="grow">${x.name}</span><span class="muted" style="font-size:13px;font-weight:500">${fmt(shownBal(x))}</span></button>`)}</div>`}
     ${kind === "when" && html`<div style="display:flex;flex-direction:column;gap:10px">
@@ -588,7 +592,7 @@ function QuickSheet({acc, close}) {
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 0;border-bottom:1px solid var(--line);font-size:15px"><span class="muted">Compte</span><select aria-label="Compte" value=${w.account} onChange=${e => up({account: e.target.value})} style="width:auto;min-height:34px;height:34px;padding:0 24px 0 8px;font-size:14px;font-weight:600;border-radius:10px">${accList().filter(x => x.type !== "pret" && x.id !== w.to).map(x => html`<option value=${x.id}>${x.name}</option>`)}</select></div>
         ${w.type === "ech" && html`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 0;border-bottom:1px solid var(--line);font-size:15px"><span class="muted">Fréquence</span><select aria-label="Fréquence" value=${w.freq} onChange=${e => up({freq: e.target.value})} style="width:auto;min-height:34px;height:34px;padding:0 24px 0 8px;font-size:14px;font-weight:600;border-radius:10px"><option value="m1">Chaque mois</option><option value="m2">Tous les 2 mois</option><option value="m3">Tous les 3 mois</option><option value="y1">Chaque année</option><option value="w1">Chaque semaine</option></select></div>`}
         <label style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;font-size:15px"><span class="muted">Libellé</span><input value=${w.name} placeholder=${autoName()} autocomplete="off" onInput=${e => up({name: e.target.value})} style="flex:1;max-width:60%;text-align:right;min-height:38px;font-size:15px;font-weight:600" /></label>
-        ${w.name.trim() && nameSuggest(w.name).length > 0 && html`<div style="display:flex;flex-wrap:wrap;gap:8px;padding-bottom:12px" aria-label="Libellés connus">${nameSuggest(w.name).map(x => html`<button class="dchip" onClick=${() => up({name: x.name, cat: w.cat || (isTr ? null : x.splits?.[0]?.cat || null)})}>${x.splits?.[0]?.cat ? html`<span aria-hidden="true">${catEmoji(x.splits[0].cat)}</span>` : ""}${x.name}</button>`)}</div>`}
+        ${w.name.trim() && nameSuggest(w.name).length > 0 && html`<div style="display:flex;flex-wrap:wrap;gap:8px;padding-bottom:12px" aria-label="Libellés connus">${nameSuggest(w.name).map(x => html`<button class="dchip" onClick=${() => up({name: x.name, cat: w.cat || (isTr ? null : x.splits?.[0]?.cat || null)})}>${x.splits?.[0]?.cat ? html`<span aria-hidden="true"><${CatGlyph} id=${x.splits[0].cat} box=${20} s=${13} /></span>` : ""}${x.name}</button>`)}</div>`}
       </div>
       ${w.type !== "ech" && !w.rep && html`<button class="link" style="font-size:14px;padding:6px;align-self:center" onClick=${() => { const v = r2(inc ? n : -n); close(); setTimeout(() => SHEET.open({type: "op", kind: "tx", acc: w.account, preset: {mode: isTr ? "transfer" : inc ? "income" : "expense", tx: {account: w.account, date, name: (w.name || "").trim() || autoName(), amount: v, splits: [isTr ? {to: w.to, amount: v} : {cat: w.cat, amount: v}]}}}), 40); }}>Plus d'options : ventiler, ajouter une note…</button>`}
       <div style="flex:1"></div><button class="wgo" onClick=${save}>Enregistrer</button>`}
@@ -1522,11 +1526,82 @@ function Sheet({title, close, right, children, left}) {
 const Field = ({label, help, children, id}) => html`<div class="field">${label && html`<label class="lb" for=${id}>${label}</label>`}${children}${help && html`<div class="help">${help}</div>`}</div>`;
 const Toggle = ({on, set, label, sub}) => html`<button type="button" class=${"toggle" + (on ? " on" : "")} role="switch" aria-checked=${on ? "true" : "false"} onClick=${() => set(!on)}><span><span class="t1" style="white-space:normal">${label}</span>${sub && html`<div class="t2" style="white-space:normal">${sub}</div>`}</span><span class="sw"></span></button>`;
 const Seg = ({opts, v, set, cls = ""}) => html`<div class=${"seg " + cls} role="tablist">${opts.map(([k, l]) => html`<button type="button" role="tab" aria-selected=${v === k ? "true" : "false"} class=${v === k ? "on" : ""} onClick=${() => set(k)}>${l}</button>`)}</div>`;
+/* ============ Icônes des catégories (maquette N : pictos au trait, de la couleur de la catégorie) ============ */
+const CAT_IC = {
+  cart: ["Courses", "M3 4h2.5l2 10.5h10.5l2-7.5H6.2 M7.7 19.5a1.3 1.3 0 1 0 2.6 0a1.3 1.3 0 1 0 -2.6 0 M15.7 19.5a1.3 1.3 0 1 0 2.6 0a1.3 1.3 0 1 0 -2.6 0"],
+  coffee: ["Café, restaurant", "M4 8h13v5a6 6 0 0 1-6 6h-1a6 6 0 0 1-6-6z M17 9h1.5a2.5 2.5 0 0 1 0 5H17 M8 2.5v2.5 M12 2.5v2.5"],
+  utensils: ["Repas", "M7 3v8 M5 3v4a2 2 0 0 0 4 0V3 M7 11v10 M17 3c-1.7 0-3 2-3 5s1.3 4 3 4v9"],
+  home: ["Logement", "M3 11l9-8 9 8 M5 9.5V21h14V9.5 M10 21v-6h4v6"],
+  bolt: ["Énergie", "M13 2L4 14h7l-1 8 9-12h-7z"],
+  drop: ["Eau", "M12 3c3 4 6 7.5 6 11a6 6 0 0 1-12 0c0-3.5 3-7 6-11z"],
+  phone: ["Téléphone, internet", "M7 2h10a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z M11 18h2"],
+  screen: ["Abonnement", "M3 5h18v12H3z M8 21h8 M10 8.5v5l4-2.5z"],
+  train: ["Transports", "M6 3h12a2 2 0 0 1 2 2v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V5a2 2 0 0 1 2-2z M4 11h16 M8 21l2-3 M16 21l-2-3"],
+  car: ["Voiture", "M5 16v-5l2-5h10l2 5v5 M3 16h18v3H3z M7 19v2 M17 19v2 M5 11h14"],
+  bike: ["Vélo", "M5.5 17.5a3.5 3.5 0 1 0 0.01 0z M18.5 17.5a3.5 3.5 0 1 0 0.01 0z M5.5 17.5l4-8h6l3 8 M9.5 9.5L12 17.5h1 M14 6h2.5"],
+  plane: ["Avion, voyage", "M10 20l2-6-7-3 1-2 8 1 4-6a1.5 1.5 0 0 1 2.5 1.5L17 12l1 8-2 1-3-7-3 6z"],
+  child: ["Enfants", "M10 11a3.2 3.2 0 1 0 0-6.4a3.2 3.2 0 0 0 0 6.4z M4 21c0-3.6 2.7-6.5 6-6.5s6 2.9 6 6.5 M18 3.5a2.2 2.6 0 1 0 0.01 0z M18 8.7v4"],
+  person: ["Personne", "M12 11a4 4 0 1 0 0-8a4 4 0 0 0 0 8z M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"],
+  people: ["Famille, allocations", "M9 11a3 3 0 1 0 0-6a3 3 0 0 0 0 6z M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6 M17 11a2.5 2.5 0 1 0 0-5 M16.5 14c2.7.3 4.5 2.6 4.5 5.5"],
+  swim: ["Natation", "M2 17c2 1.5 3.5 1.5 5 0s3.5-1.5 5 0 3.5 1.5 5 0 3.5-1.5 5 0 M2 21c2 1.5 3.5 1.5 5 0s3.5-1.5 5 0 3.5 1.5 5 0 3.5-1.5 5 0 M15 9a2.5 2.5 0 1 0 0-5a2.5 2.5 0 0 0 0 5z M6 14l4-5 3 2"],
+  sport: ["Sport", "M6 7v10 M18 7v10 M3 10v4 M21 10v4 M6 12h12"],
+  grad: ["Études", "M2 9l10-5 10 5-10 5z M6 11v5c3 2.5 9 2.5 12 0v-5 M22 9v6"],
+  backpack: ["École", "M6 8a6 6 0 0 1 12 0v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1z M9 21v-5h6v5 M9 6V4a3 3 0 0 1 6 0v2"],
+  cash: ["Espèces", "M2 7h20v10H2z M12 14.5a2.5 2.5 0 1 0 0-5a2.5 2.5 0 0 0 0 5z M5 10v4 M19 10v4"],
+  euro: ["Revenus", "M12 21a9 9 0 1 0 0-18a9 9 0 0 0 0 18z M15.5 8.5a4 4 0 1 0 0 7 M7.5 11h6 M7.5 13.5h6"],
+  piggy: ["Épargne", "M5 11a7 6 0 0 1 13-1h2v4h-2a7 6 0 0 1-3 3v3h-3v-2h-2v2H7v-3.5A6 6 0 0 1 5 11z M15 10h.01"],
+  sparkles: ["Extra", "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"],
+  beach: ["Vacances", "M12 3v2 M4 12a8 8 0 0 1 16 0z M12 12v8 M12 20c0 1 1 1.5 2 1.5"],
+  shield: ["Assurance", "M12 3l8 3v6c0 4.5-3.5 8-8 9c-4.5-1-8-4.5-8-9V6z M9 12l2 2 4-4"],
+  health: ["Santé", "M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"],
+  key: ["Prêt, immobilier", "M8 15a4 4 0 1 0 0-8a4 4 0 0 0 0 8z M11 12h10 M17 12v3 M20 12v2"],
+  trend: ["Intérêts, placements", "M3 17l6-6 4 4 8-8 M15 7h6v6"],
+  bank: ["Banque", "M3 10h18 M12 3l9 5H3z M5 10v8 M9.5 10v8 M14.5 10v8 M19 10v8 M3 21h18"],
+  receipt: ["Impôts, taxes", "M6 2h12v20l-3-2-3 2-3-2-3 2z M9 7h6 M9 11h6 M9 15h4"],
+  building: ["Copropriété", "M4 21V5l8-3 8 3v16 M2 21h20 M9 9h1 M14 9h1 M9 13h1 M14 13h1 M10 21v-4h4v4"],
+  tree: ["Noël", "M12 2l5 7h-3l4 6h-3l4 6H5l4-6H6l4-6H7z"],
+  cake: ["Anniversaire", "M4 21h16 M5 21v-7h14v7 M5 16c2 1.5 4 1.5 7 0s5-1.5 7 0 M12 14v-4 M12 6.5c-1 1-1 2 0 2.5c1-.5 1-1.5 0-2.5"],
+  gift: ["Cadeaux", "M3 9h18v4H3z M5 13v8h14v-8 M12 9v12 M12 9c-2-4-6-4-6-1.5S10 9 12 9z M12 9c2-4 6-4 6-1.5S14 9 12 9z"],
+  shirt: ["Vêtements", "M8 3l-5 3 2 4 3-1.5V21h8V8.5L19 10l2-4-5-3c-.5 1.5-2 2.5-4 2.5S8.5 4.5 8 3z"],
+  bag: ["Shopping", "M5 8h14l-1 13H6z M9 8V6a3 3 0 0 1 6 0v2"],
+  paw: ["Animaux", "M12 14c-3 0-5 2.5-5 4.5 0 1.5 1.5 2.5 3 2l2-.5 2 .5c1.5.5 3-.5 3-2 0-2-2-4.5-5-4.5z M6 10.5a1.5 2 0 1 0 0.01 0z M18 10.5a1.5 2 0 1 0 0.01 0z M9.5 6a1.5 2 0 1 0 0.01 0z M14.5 6a1.5 2 0 1 0 0.01 0z"],
+  scissors: ["Coiffeur, beauté", "M6 9a3 3 0 1 0 0-6a3 3 0 0 0 0 6z M6 21a3 3 0 1 0 0-6a3 3 0 0 0 0 6z M8.5 7.5L20 19 M8.5 16.5L20 5"],
+  tools: ["Travaux", "M14 7a4 4 0 0 0 5 5l-8.5 8.5a2.1 2.1 0 0 1-3-3z M17 4l3 3"],
+  book: ["Culture, presse", "M4 4h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4z M20 4h-6a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h6z"],
+  ticket: ["Sorties, loisirs", "M3 7h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4z M14 7v10"],
+  music: ["Musique", "M9 18V5l11-2v13 M6 21a3 3 0 1 0 0-6a3 3 0 0 0 0 6z M17 19a3 3 0 1 0 0-6a3 3 0 0 0 0 6z"],
+  heart: ["Dons", "M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"],
+  swap: ["Virements", "M4 8h14l-3-3 M20 16H6l3 3"],
+  dots: ["Divers", "M5 12a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0 M10.5 12a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0 M16 12a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0"],
+  tag: ["Étiquette", "M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z M8 8h.01"],
+};
+const CAT_NONE = "M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14 M12 17.5h.01";
+const CAT_GUESS = [
+  [/interet/, "trend"], [/assurance|prevoyance/, "shield"], [/pret|credit|emprunt|immobilier|capital|hypotheque/, "key"],
+  [/courses|alimentation|supermarche|marche|epicerie|monoprix|carrefour|leclerc|franprix/, "cart"], [/cantine|repas|dejeuner/, "utensils"],
+  [/restau|resto|cafe|\bbar\b|brasserie|boulangerie/, "coffee"], [/vetement|habillement/, "shirt"], [/periscolaire|enfant|garde|creche|nounou|bebe/, "child"],
+  [/natation|piscine/, "swim"], [/\bsport|yoga|\bgym|fitness|\bclub\b|\bdanse/, "sport"], [/etude|universite|formation|\bfac\b/, "grad"], [/scolarit|ecole|fourniture|rentree|college|lycee/, "backpack"],
+  [/energie|electricit|\bgaz\b|\bedf\b|engie/, "bolt"], [/\beau\b/, "drop"], [/internet|mobile|telephone|\btel\b|sosh|\bbox\b|forfait|high.?tech/, "phone"],
+  [/abonnement|streaming|netflix|spotify|\btele\b|\btv\b/, "screen"], [/avion|\bvols?\b/, "plane"], [/transport|train|sncf|navigo|metro|\bbus\b|ratp/, "train"],
+  [/voiture|carburant|essence|parking|peage|\bauto\b|garage/, "car"], [/velo/, "bike"], [/vacance|voyage|sejour|hotel|\bete\b|week.?end/, "beach"],
+  [/loyer|logement|habitation|maison|appart|sous.?location|charges/, "home"], [/appel de fonds|copro|syndic/, "building"],
+  [/cash|retrait|espece|liquide/, "cash"], [/salaire|revenu|paie|indemnit|chomage|pension|retraite|\bprime/, "euro"], [/epargne|livret|ldds|economie/, "piggy"],
+  [/\bcaf\b|allocation|famille/, "people"], [/sante|medecin|pharmacie|mutuelle|optique|dentaire|docteur|kine|hopital/, "health"],
+  [/frais bancaire|banque|cotisation|agios/, "bank"], [/impot|taxe|fonciere|amende/, "receipt"], [/noel/, "tree"], [/anniversaire/, "cake"], [/cadeau/, "gift"],
+  [/shopping|achat|amazon|deco/, "bag"], [/animal|animaux|\bchat\b|chien|veto/, "paw"], [/coiff|beaute|esthetique/, "scissors"], [/travaux|bricolage|equipement|reparation/, "tools"],
+  [/culture|presse|livre|journal|lecture|abonnement presse/, "book"], [/cinema|spectacle|concert|sortie|loisir/, "ticket"], [/musique/, "music"],
+  [/\bdons?\b|solidarit|association|caritati/, "heart"], [/virement|transfert/, "swap"], [/extra|plaisir/, "sparkles"], [/divers|autre/, "dots"],
+];
+const guessIc = name => { const n = normN(name); for (const [re, k] of CAT_GUESS) if (re.test(n)) return k; return null; };
+const catIc = id => { const c = cat(id); if (!c) return null; const p = c.parent && cat(c.parent); return (CAT_IC[c.icon] && c.icon) || guessIc(c.name) || (p && ((CAT_IC[p.icon] && p.icon) || guessIc(p.name))) || "tag"; };
+const IcSvg = ({k, s = 20, d}) => html`<svg width=${s} height=${s} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d=${d || (CAT_IC[k] || CAT_IC.tag)[1]} /></svg>`;
+/* Pastille d'icône d'une catégorie : cercle teinté + pictogramme de sa couleur */
+const CatGlyph = ({id, box = 30, s = 17, col, k}) => html`<span class="cic" aria-hidden="true" style=${`--c:${col || (id ? catColor(id) : "#8A93AD")};width:${box}px;height:${box}px`}><${IcSvg} k=${k || (id ? catIc(id) : null)} s=${s} d=${!k && !id ? CAT_NONE : null} /></span>`;
 const AccIcon = ({a, sm}) => html`<span class=${"ic" + (sm ? " sm" : "")} style=${`background:color-mix(in srgb, ${a?.color || "#8A93AD"} 18%, transparent)`}>${a?.emoji || "💳"}</span>`;
 const CatIcon = ({id, sm, t}) => {
   if (t && isTransfer(t) && (t.splits || []).length === 1) return html`<span class=${"ic" + (sm ? " sm" : "")} style="background:var(--surface2);color:var(--muted)"><${Ic} n="swap" s=${sm ? 15 : 18} /></span>`;
   if (t && (t.splits || []).length > 1) return html`<span class=${"ic" + (sm ? " sm" : "")} style="background:var(--surface2)">${t.kind === "loan" ? "🏠" : "✂️"}</span>`;
-  return html`<span class=${"ic" + (sm ? " sm" : "")} style=${`background:color-mix(in srgb, ${catColor(id)} 18%, transparent)`}>${id ? catEmoji(id) : "❔"}</span>`;
+  return html`<span class=${"ic cic" + (sm ? " sm" : "")} style=${`--c:${id ? catColor(id) : "#8A93AD"}`}><${IcSvg} k=${id ? catIc(id) : null} d=${id ? null : CAT_NONE} s=${sm ? 16 : 21} /></span>`;
 };
 function AccSelect({v, set, id, all, none, exclude}) {
   return html`<select id=${id} value=${v || ""} onChange=${e => set(e.target.value)}>
@@ -1543,9 +1618,9 @@ function CatGrid({v, income, onPick}) {
     <div class="searchbox"><${Ic} n="search" s=${18} /><input type="search" placeholder="Chercher une catégorie" value=${q} onInput=${e => setQ(e.target.value)} aria-label="Chercher une catégorie" /></div>
     ${!qq && html`<button type="button" class=${"catbtn" + (!v ? " on" : "")} onClick=${() => onPick(null)}><span class="e">❔</span>sans catégorie</button>`}
     ${tops.map(c => { const showP = !qq || norm(c.name).includes(qq); const chs = kids(c.id).filter(k => showP || norm(k.name).includes(qq)); if (!showP && !chs.length) return null;
-      return html`<div class="field" style="gap:6px"><span class="lb">${c.emoji} ${c.name}</span><div class="catgrid">
-        ${showP && html`<button type="button" class=${"catbtn" + (v === c.id ? " on" : "")} onClick=${() => onPick(c.id)} style=${`background:color-mix(in srgb, ${c.color} 10%, var(--surface))`}><span class="e">${c.emoji}</span>${c.name}</button>`}
-        ${chs.map(k => html`<button type="button" class=${"catbtn" + (v === k.id ? " on" : "")} onClick=${() => onPick(k.id)}><span class="e">${k.emoji || c.emoji}</span>${k.name}</button>`)}
+      return html`<div class="field" style="gap:6px"><span class="lb" style="display:flex;align-items:center;gap:8px"><${CatGlyph} id=${c.id} box=${24} s=${14} />${c.name}</span><div class="catgrid">
+        ${showP && html`<button type="button" class=${"catbtn" + (v === c.id ? " on" : "")} onClick=${() => onPick(c.id)} style=${`background:color-mix(in srgb, ${c.color} 10%, var(--surface))`}><span class="e"><${CatGlyph} id=${c.id} box=${28} s=${16} /></span>${c.name}</button>`}
+        ${chs.map(k => html`<button type="button" class=${"catbtn" + (v === k.id ? " on" : "")} onClick=${() => onPick(k.id)}><span class="e"><${CatGlyph} id=${k.id} box=${28} s=${16} /></span>${k.name}</button>`)}
       </div></div>`; })}
     ${!tops.length && html`<div class="help">Aucune catégorie${qq ? " ne correspond" : ""}. <button type="button" class="link" onClick=${() => SHEET.open({type: "cat"})}>Créer une catégorie</button></div>`}
     ${income !== undefined && !all && html`<button type="button" class="link" style="align-self:flex-start" onClick=${() => setAll(true)}>Afficher aussi les catégories de ${income ? "dépenses" : "revenus"}</button>`}
@@ -2780,7 +2855,7 @@ function FilterSheet({f0, sort0, onApply, close}) {
     <div class="grid2"><${Field} label="Du" id="fl-f"><input id="fl-f" type="date" value=${f.from} onInput=${e => set("from", e.target.value)} /></${Field}><${Field} label="Au" id="fl-t"><input id="fl-t" type="date" value=${f.to} onInput=${e => set("to", e.target.value)} /></${Field}>
       <${Field} label="Montant mini" id="fl-mi"><input id="fl-mi" inputmode="decimal" value=${f.min} onInput=${e => set("min", e.target.value)} /></${Field}><${Field} label="Montant maxi" id="fl-ma"><input id="fl-ma" inputmode="decimal" value=${f.max} onInput=${e => set("max", e.target.value)} /></${Field}></div>
     <div class="field"><span class="lb">Statut</span><div class="chips">${["saisie", "importee", "pointee", "verrouillee", "annulee", "prevue"].map(k => html`<button type="button" class=${"chip" + (f.st.includes(k) ? " on" : "")} onClick=${() => tog("st", k)}>${STATUS[k]}</button>`)}</div></div>
-    <div class="field"><span class="lb">Catégories</span><div class="chips"><button type="button" class=${"chip" + (f.cats.includes("none") ? " on" : "")} onClick=${() => tog("cats", "none")}>❔ sans catégorie</button>${topCats().map(c => html`<button type="button" class=${"chip" + (f.cats.includes(c.id) ? " on" : "")} onClick=${() => tog("cats", c.id)}>${c.emoji} ${c.name}</button>`)}</div></div>
+    <div class="field"><span class="lb">Catégories</span><div class="chips"><button type="button" class=${"chip" + (f.cats.includes("none") ? " on" : "")} onClick=${() => tog("cats", "none")}>❔ sans catégorie</button>${topCats().map(c => html`<button type="button" class=${"chip" + (f.cats.includes(c.id) ? " on" : "")} onClick=${() => tog("cats", c.id)}><${CatGlyph} id=${c.id} box=${20} s=${13} /> ${c.name}</button>`)}</div></div>
     <div class="grid2"><${Field} label="Tiers contient" id="fl-p"><input id="fl-p" value=${f.payee} onInput=${e => set("payee", e.target.value)} /></${Field}><${Field} label="Projet contient" id="fl-j"><input id="fl-j" value=${f.project} onInput=${e => set("project", e.target.value)} /></${Field}></div>
     <div class="field"><span class="lb">Surlignage</span><div class="chips">${HL.map(c => html`<button type="button" aria-label=${c ? "Couleur " + c : "Toutes"} onClick=${() => set("hl", c)} style=${`width:32px;height:32px;border-radius:10px;border:3px solid ${f.hl === c ? "var(--ink)" : "var(--line)"};background:${c || "var(--surface)"}`}></button>`)}</div></div>
     <div class="btns"><button class="btn" onClick=${() => { onApply({}, "dd"); close(); }}>Tout effacer</button><button class="btn pri" onClick=${() => { onApply(f, sort); close(); }}>Appliquer</button></div>
@@ -3226,7 +3301,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
       ${/[+*/]|.-/.test(f.amt) && !isNaN(total) && html`<div class="help">= ${fmt(total)}</div>`}
     </div>
     <${Field} label="Libellé" id="op-name"><input id="op-name" value=${f.name} onInput=${e => onName(e.target.value)} placeholder=${mode === "transfer" ? "Virement" : "Monoprix, loyer…"} autocomplete="off" />
-      ${sugg.length > 0 && html`<div class="chips">${sugg.map(t => html`<button type="button" class="chip" onClick=${() => pickSugg(t)}>${catEmoji(t.splits?.[0]?.cat)} ${t.name}</button>`)}</div>`}</${Field}>
+      ${sugg.length > 0 && html`<div class="chips">${sugg.map(t => html`<button type="button" class="chip" onClick=${() => pickSugg(t)}><${CatGlyph} id=${t.splits?.[0]?.cat} box=${20} s=${13} /> ${t.name}</button>`)}</div>`}</${Field}>
     ${f.more && mode !== "transfer" && showF("payee") && html`<${Field} label="Tiers" id="op-payee"><input id="op-payee" list="dl-payee" value=${f.payee} onInput=${e => set("payee", e.target.value)} placeholder="Facultatif : enseigne, personne, organisme" autocomplete="off" /><datalist id="dl-payee">${suggest("payee").map(x => html`<option value=${x} />`)}</datalist></${Field}>`}
     <div class="grid2">
       <${Field} label=${isSch ? "Prochaine échéance" : "Date"} id="op-date"><input id="op-date" type="date" value=${f.date} onInput=${e => set("date", e.target.value)} /></${Field}>
@@ -3773,7 +3848,7 @@ function Envelopes({b, exp, inc}) {
     <div class="catgrid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">${exp.map(x => { const f = funded(x) || 0, left = r2(f - x.act);
       return html`<button class="card" style="border:0;padding:14px;text-align:left;display:flex;flex-direction:column;gap:6px;position:relative;overflow:hidden" onClick=${() => SHEET.open({type: "fund", line: x.l.id, ps: x.ps, free})}>
         <span style="position:absolute;inset:0 0 auto 0;height:5px;background:${x.l.cat === "__other__" ? "#8A93AD" : catColor(x.l.cat)}"></span>
-        <span style="display:flex;gap:8px;align-items:center"><span style="font-size:20px">${x.l.cat === "__other__" ? "✳️" : catEmoji(x.l.cat)}</span><span class="t1" style="font-size:14px">${lineName(x.l)}</span></span>
+        <span style="display:flex;gap:8px;align-items:center">${x.l.cat === "__other__" ? html`<${CatGlyph} k="dots" box=${28} s=${16} />` : html`<${CatGlyph} id=${x.l.cat} box=${28} s=${16} />`}<span class="t1" style="font-size:14px">${lineName(x.l)}</span></span>
         <span class=${"amt " + (left < 0 ? "bad" : f ? "" : "muted")} style="text-align:left;font-size:22px">${fmt0(left)}</span>
         <span class="t2">${f ? `${fmt0(f)} placés · ${fmt0(x.act)} dépensés` : `rien placé · budget ${fmt0(x.bud)}`}</span>
       </button>`; })}</div>
@@ -4212,7 +4287,7 @@ function RepSheet({id, close}) {
       <${Field} label="Nombre de périodes" id="rp-c"><input id="rp-c" type="number" min="1" max="36" value=${f.count} onInput=${e => set("count", e.target.value)} /></${Field}>
       <${Field} label="Jusqu'à" id="rp-u" help="Vide : la période en cours."><input id="rp-u" type="date" value=${f.until || ""} onInput=${e => set("until", e.target.value)} /></${Field}></div>
     <div class="field"><span class="lb">Comptes</span><div class="chips"><button type="button" class=${"chip" + (!f.accounts.length ? " on" : "")} onClick=${() => set("accounts", [])}>Tous</button>${accList().map(a => html`<button type="button" class=${"chip" + (f.accounts.includes(a.id) ? " on" : "")} onClick=${() => tog("accounts", a.id)}>${a.emoji} ${a.name}</button>`)}</div></div>
-    <div class="field"><span class="lb">Catégories</span><div class="chips"><button type="button" class=${"chip" + (!f.cats.length ? " on" : "")} onClick=${() => set("cats", [])}>Toutes</button>${topCats().map(c => html`<button type="button" class=${"chip" + (f.cats.includes(c.id) ? " on" : "")} onClick=${() => tog("cats", c.id)}>${c.emoji} ${c.name}</button>`)}</div><div class="help">Une catégorie principale inclut ses sous-catégories.</div></div>
+    <div class="field"><span class="lb">Catégories</span><div class="chips"><button type="button" class=${"chip" + (!f.cats.length ? " on" : "")} onClick=${() => set("cats", [])}>Toutes</button>${topCats().map(c => html`<button type="button" class=${"chip" + (f.cats.includes(c.id) ? " on" : "")} onClick=${() => tog("cats", c.id)}><${CatGlyph} id=${c.id} box=${20} s=${13} /> ${c.name}</button>`)}</div><div class="help">Une catégorie principale inclut ses sous-catégories.</div></div>
     <${Field} label="Texte (libellé, tiers, commentaire ou projet)" id="rp-t"><input id="rp-t" value=${f.text} onInput=${e => set("text", e.target.value)} placeholder="Facultatif" /></${Field}>
     <${Toggle} on=${f.totals !== false} set=${v => set("totals", v)} label="Afficher les totaux" />
     <${Toggle} on=${f.avgs !== false} set=${v => set("avgs", v)} label="Afficher les moyennes par période" />
@@ -4314,22 +4389,23 @@ function CatsView() {
   return html`<${Top} title="Catégories" back right=${html`<button class="ibtn" aria-label="Nouvelle catégorie" onClick=${() => SHEET.open({type: "cat"})}><${Ic} n="plus" /></button>`} /><main class="scr">
     <p class="help">Les flèches changent l'ordre. Pour déplacer une sous-catégorie, ouvre-la et choisis une autre catégorie « Dans ».</p>
     ${topCats().map((c, i, arr) => html`<div class="card">
-      <div style="display:flex">${i > 0 ? html`<button class="ibtn plain" style="height:auto;border-radius:0" aria-label=${"Monter " + c.name} onClick=${() => moveCat(arr, i)}>↑</button>` : html`<span style="width:40px"></span>`}<button class="row grow" onClick=${() => SHEET.open({type: "cat", id: c.id})}><span class="ic" style=${`background:color-mix(in srgb, ${c.color} 18%, transparent)`}>${c.emoji}</span><span class="grow"><div class="t1">${c.name}</div><div class="t2">${c.type === "rev" ? "revenus" : c.type === "both" ? "dépenses et revenus" : "dépenses"} · ${kids(c.id).length} sous-catégories</div></span><span class="muted">›</span></button></div>
-      ${kids(c.id).map((k, j, ks) => html`<div style="display:flex;border-top:1px solid var(--line)">${j > 0 ? html`<button class="ibtn plain" style="height:auto;border-radius:0;margin-left:20px" aria-label=${"Monter " + k.name} onClick=${() => moveCat(ks, j)}>↑</button>` : html`<span style="width:60px"></span>`}<button class="row grow" style="border-top:0;padding-left:4px;min-height:48px" onClick=${() => SHEET.open({type: "cat", id: k.id})}><span class="ic sm" style="background:var(--surface2)">${k.emoji || c.emoji}</span><span class="grow t1" style="font-weight:500">${k.name}</span></button></div>`)}
+      <div style="display:flex">${i > 0 ? html`<button class="ibtn plain" style="height:auto;border-radius:0" aria-label=${"Monter " + c.name} onClick=${() => moveCat(arr, i)}>↑</button>` : html`<span style="width:40px"></span>`}<button class="row grow" onClick=${() => SHEET.open({type: "cat", id: c.id})}><${CatIcon} id=${c.id} /><span class="grow"><div class="t1">${c.name}</div><div class="t2">${c.type === "rev" ? "revenus" : c.type === "both" ? "dépenses et revenus" : "dépenses"} · ${kids(c.id).length} sous-catégories</div></span><span class="muted">›</span></button></div>
+      ${kids(c.id).map((k, j, ks) => html`<div style="display:flex;border-top:1px solid var(--line)">${j > 0 ? html`<button class="ibtn plain" style="height:auto;border-radius:0;margin-left:20px" aria-label=${"Monter " + k.name} onClick=${() => moveCat(ks, j)}>↑</button>` : html`<span style="width:60px"></span>`}<button class="row grow" style="border-top:0;padding-left:4px;min-height:48px" onClick=${() => SHEET.open({type: "cat", id: k.id})}><${CatIcon} id=${k.id} sm /><span class="grow t1" style="font-weight:500">${k.name}</span></button></div>`)}
       <button class="row" style="padding-left:30px;min-height:44px;color:var(--accent);font-weight:600" onClick=${() => SHEET.open({type: "cat", parent: c.id})}>+ Sous-catégorie</button>
     </div>`)}
   </main>`;
 }
 function CatSheet({id, parent, close}) {
   const c0 = id ? cat(id) : null;
-  const [f, setF] = useState(() => c0 ? {...c0} : {name: "", emoji: parent ? "" : "🏷️", color: parent ? cat(parent)?.color : COLORS[0], parent: parent || null, type: parent ? cat(parent)?.type : "dep"});
+  const [f, setF] = useState(() => c0 ? {...c0} : {name: "", icon: null, color: parent ? cat(parent)?.color : COLORS[0], parent: parent || null, type: parent ? cat(parent)?.type : "dep"});
   const set = (k, v) => setF(o => ({...o, [k]: v}));
   const used = id ? Object.values(A().tx).filter(t => (t.splits || []).some(s => s.cat === id)).length : 0;
   const save = () => { if (!f.name.trim()) return; Store.put({...f, k: "cat", id: c0?.id || "cat_" + slug(f.name) + "_" + Math.random().toString(36).slice(2, 5), name: f.name.trim().toLowerCase()}); close(); };
   return html`<${Sheet} title=${c0 ? "Catégorie" : "Nouvelle catégorie"} close=${close} right=${html`<button class="link" onClick=${save}>Enregistrer</button>`}>
-    <div class="grid2" style="grid-template-columns:72px 1fr"><${Field} label="Icône" id="ct-e"><input id="ct-e" value=${f.emoji} onInput=${e => set("emoji", e.target.value)} style="text-align:center;font-size:22px" /></${Field}><${Field} label="Nom" id="ct-n"><input id="ct-n" value=${f.name} onInput=${e => set("name", e.target.value)} /></${Field}></div>
+    <div style="display:flex;gap:12px;align-items:flex-end"><${CatGlyph} k=${(CAT_IC[f.icon] && f.icon) || guessIc(f.name) || (f.parent && catIc(f.parent)) || "tag"} col=${f.color || (f.parent && catColor(f.parent)) || "#8A93AD"} box=${52} s=${28} /><div style="flex:1"><${Field} label="Nom" id="ct-n"><input id="ct-n" value=${f.name} onInput=${e => set("name", e.target.value)} /></${Field}></div></div>
+    <${Field} label="Icône" id="ct-ic"><div class="icgrid" id="ct-ic" role="group" aria-label="Icône de la catégorie">${["", ...Object.keys(CAT_IC)].map(k => html`<button type="button" class=${"icpick" + ((f.icon || "") === k ? " on" : "")} aria-pressed=${(f.icon || "") === k} aria-label=${k ? CAT_IC[k][0] : "Automatique, d'après le nom"} title=${k ? CAT_IC[k][0] : "Automatique"} style=${`--c:${f.color || (f.parent && catColor(f.parent)) || "#8A93AD"}`} onClick=${() => set("icon", k || null)}>${k ? html`<${IcSvg} k=${k} s=${22} />` : "Auto"}</button>`)}</div></${Field}>
     <div class="chips">${COLORS.map(c => html`<button type="button" aria-label=${"Couleur " + c} onClick=${() => set("color", c)} style=${`width:30px;height:30px;border-radius:10px;border:3px solid ${f.color === c ? "var(--ink)" : "transparent"};background:${c}`}></button>`)}</div>
-    <${Field} label="Dans" id="ct-p"><select id="ct-p" value=${f.parent || ""} onChange=${e => set("parent", e.target.value || null)}><option value="">Catégorie principale</option>${topCats().filter(c => c.id !== id).map(c => html`<option value=${c.id}>${c.emoji} ${c.name}</option>`)}</select></${Field}>
+    <${Field} label="Dans" id="ct-p"><select id="ct-p" value=${f.parent || ""} onChange=${e => set("parent", e.target.value || null)}><option value="">Catégorie principale</option>${topCats().filter(c => c.id !== id).map(c => html`<option value=${c.id}>${c.name}</option>`)}</select></${Field}>
     ${!f.parent && html`<${Seg} v=${f.type || "dep"} set=${v => set("type", v)} opts=${[["dep", "Dépenses"], ["rev", "Revenus"], ["both", "Les deux"]]} />`}
     <button class="btn pri" onClick=${save}>Enregistrer</button>
     ${c0 && html`<button class="btn danger" onClick=${() => confirmIt("Supprimer cette catégorie ?", used ? `${used} opérations deviendront « sans catégorie ».` : "Elle n'est utilisée par aucune opération.", "Supprimer", async () => { close(); const ops = Object.values(A().tx).filter(t => (t.splits || []).some(s => s.cat === id)).map(t => ["put", {...t, splits: t.splits.map(s => s.cat === id ? {...s, cat: null} : s)}]); ops.push(...kids(id).map(k => ["put", {...k, parent: null}]), ...Object.values(A().bud).filter(b => b.cat === id).map(b => ["del", b]), ["del", c0]); await Store.bulk(ops); })}>Supprimer</button>`}
@@ -4558,6 +4634,15 @@ function icompta2pecule(db, now, onlyPending) {
   const tx = {}; for (const t of db.rows("ICTransaction")) tx[t.ID] = t;
   const sp = {}, bytx = {};
   for (const s of db.rows("ICTransactionSplit").sort((a, b) => (a.index || 0) - (b.index || 0))) { sp[s.ID] = s; (bytx[s.transaction] = bytx[s.transaction] || []).push(s); }
+  /* Opérations dont le montant est porté par l'opération elle-même (« useSumOfSplits » à 0) : iCompta compte ce montant,
+     même si la ligne de catégorie est vide. On le reporte sur les lignes (ou on ajoute une ligne pour l'écart). */
+  for (const t of Object.values(tx)) {
+    if (Number(t.useSumOfSplits) !== 0 || t.amount == null || t.amount === "") continue;
+    const total = F(t.amount), l = bytx[t.ID] = bytx[t.ID] || [], known = l.filter(x => x.amount != null && x.amount !== "");
+    if (!known.length && l.length) { l[0] = {...l[0], amount: String(total)}; sp[l[0].ID] = l[0]; continue; }
+    const diff = Math.round((total - known.reduce((x, y) => x + F(y.amount), 0)) * 100) / 100;
+    if (Math.abs(diff) > 0.004) { const x = {ID: t.ID + "#reste", transaction: t.ID, amount: String(diff), index: l.length}; l.push(x); sp[x.ID] = x; }
+  }
   const items = Object.fromEntries(db.rows("ICBudgetItem").map(r => [r.ID, r]));
   const bips = Object.fromEntries(db.rows("ICBudgetItemPeriod").map(r => [r.ID, r]));
   const B = Object.fromEntries(db.rows("ICBudget").map(r => [r.ID, r]));

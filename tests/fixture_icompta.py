@@ -254,6 +254,11 @@ def build(path):
     for i, d in enumerate(monthly(dt.date(2026, 9, 7))):
         f.transfer(joint, pret, d, "Prêt", "Remboursement", 500, sch=(s_pr, None) if d >= dt.date(2026, 12, 1) else (None, None), occ=8 + i)
 
+    # Opération dont le montant est porté par l'opération (ligne de catégorie vide), comme dans certains fichiers réels
+    tid = uid()
+    f.ins("ICTransaction", ID=tid, account=cour, date="2026-09-20", name="Prime exceptionnelle", amount="150", status=K, occurrence=-1, index=0, useSumOfSplits=0)
+    f.ins("ICTransactionSplit", ID=uid(), transaction=tid, amount=None, category=sal, index=0, ignoredInBudgets=0, ignoredInReports=0, ignoredInAverageBalance=0, refund=0, usesAccountOwners=0)
+    f.tx.append((cour, dt.date(2026, 9, 20), K, [(150, sal)]))
     # Divers
     f.op(cour, dt.date(2026, 11, 8), "Erreur annulée", [(-999, divers)], status=X)
     f.op(cour, dt.date(2026, 11, 6), "Frais bancaires", [(-6.5, divers)], status=C)

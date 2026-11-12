@@ -28,14 +28,14 @@ DATES = ["2026-11-11", "2026-11-30", "2026-12-31", "2027-01-31", "2027-02-28"]
 MOBILE, DESKTOP = {"width": 390, "height": 844}, {"width": 1440, "height": 900}
 BAD_TEXT = re.compile(r"\bNaN\b|undefined|Invalid Date|\[object|\bnull\s?€|Infinity")
 # version installée (données sur l'appareil) : rien ne doit parler de Claude ni d'une synchronisation entre appareils
-STANDALONE_TEXT = re.compile(r"Claude|tous tes appareils|espace personnel")
+STANDALONE_TEXT = re.compile(r"Claude|tous tes appareils|espace personnel|🏷")
 
 sys.path.insert(0, HERE)
 import fixture_icompta  # noqa: E402
 
 # ---------------------------------------------------------------- serveur (avec accès de test aux calculs)
 HOOK = ('window.__dbg = {A, S, Store, Hist, NAV, SHEET, occurrences, balance, amtFor, accList, today, budgets, lineAt, cardNext, cardPending, '
-        'halfBase, halfParts, halfName, glanceState, shownBal, cats};\n')
+        'halfBase, halfParts, halfName, glanceState, shownBal, cats, catIc, guessIc};\n')
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -663,6 +663,45 @@ def rentrees_et_solde_de_depart(br, url):
 
 
 @test
+def icones_categories(br, url):
+    """Icônes des catégories (maquette N) : choisies d'après le nom, modifiables, affichées partout en pictogrammes."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    got = a.js("return Object.fromEntries(D.cats().map(c => [c.name, D.catIc(c.id)]));")
+    want = {"Salaire": "euro", "Loyer": "home", "Courses": "cart", "Loisirs": "ticket", "Cinéma": "ticket", "Assurance": "shield", "Divers": "dots", "Cantine": "utensils"}
+    for k, v in want.items():
+        check(got.get(k) == v, "icône de « %s » : %s (attendu %s)" % (k, got.get(k), v))
+    for name, k in (("Prêt immobilier (Intérêt)", "trend"), ("Prêt immobilier (Assurance)", "shield"), ("Louis - Périscolaire", "child"), ("Natation Louis", "swim"),
+                    ("Restaurants / Cafés", "coffee"), ("Elliott - Études", "grad"), ("Énergie", "bolt"), ("Cash / Retrait", "cash"), ("CAF", "people"), ("Appel de fonds", "building"),
+                    ("Frais bancaires", "bank"), ("Noël", "tree"), ("Anniversaires", "cake"), ("Abonnement", "screen"), ("Transports", "train"), ("Scolarité ", "backpack"), ("Hovelacque", None)):
+        g = a.js("return D.guessIc(arg);", name)
+        check(g == k, "nom « %s » : %s (attendu %s)" % (name, g, k))
+    # l'étape « Pour quoi ? » montre des pictogrammes
+    a.pg.click('[aria-label="Saisir"]')
+    a.wait(300)
+    a.pg.click(".wiz >> text=Dépense")
+    a.pg.click('.wiz button:text-is("5")')
+    a.pg.click(".wgo")
+    a.wait(300)
+    check(a.pg.locator(".wiz .wbig .cic svg").count() >= 6, "pas de pictogrammes à l'étape « Pour quoi ? »")
+    a.pg.keyboard.press("Escape")
+    a.js("try { D.SHEET.close(); } catch (e) {}")
+    # changer l'icône d'une catégorie
+    cid = a.js("return D.cats().find(c => c.name === 'Divers').id;")
+    a.js("D.SHEET.open({type: 'cat', id: arg});", cid)
+    a.wait(400)
+    a.pg.click('.sheet .icpick[aria-label="Cadeaux"]')
+    a.pg.locator('.sheet button:has-text("Enregistrer")').first.click()
+    a.wait(400)
+    check(a.js("return D.catIc(arg);", cid) == "gift", "icône choisie non enregistrée")
+    a.js("D.NAV.push({v: 'cats'});")
+    a.wait(400)
+    check(a.pg.locator("main .cic svg").count() >= 8, "Réglages › Catégories sans pictogrammes")
+    a.no_errors("icônes")
+    a.close()
+
+
+@test
 def valider_echeance(br, url):
     """Valider une échéance à venir (loyer du 5 déc.) : elle devient une opération, l'échéancier passe à janvier, les soldes projetés ne bougent pas."""
     a = App(br, url)
@@ -706,7 +745,10 @@ def echeance_modifiee(br, url):
 def real_truth(path, dates):
     db = sqlite3.connect(path)
     names = {r[0]: r[1].strip() for r in db.execute("select ID, name from ICAccount where class='ICAccount'")}
-    q = 'select sum(s.amount) from ICTransaction t join ICTransactionSplit s on s."transaction"=t.ID where t.account=? and t.date<=? and t.status!="ICTransactionStatus.CanceledStatus"'
+    # montant d'une opération comme iCompta : le sien si « useSumOfSplits » vaut 0, sinon la somme de ses lignes
+    q = ('select sum(case when t.useSumOfSplits = 0 and t.amount is not null and t.amount != "" then t.amount '
+         'else (select coalesce(sum(s.amount), 0) from ICTransactionSplit s where s."transaction" = t.ID) end) '
+         'from ICTransaction t where t.account=? and t.date<=? and t.status!="ICTransactionStatus.CanceledStatus"')
     return {nm: [round(db.execute(q, (aid, d)).fetchone()[0] or 0, 2) for d in dates] for aid, nm in names.items()}
 
 

@@ -34,6 +34,7 @@ reste sur la machine ; rien n'est écrit dans le dépôt (`tests/out/` est ignor
 | `valider_virement` | Virement entre tes comptes : un geste valide (ou dé-valide) les deux côtés |
 | `reorganiser_comptes` | Comptes › Réorganiser : cartes sous leur compte, ↑/↓ entre voisines affichées, l'accueil suit |
 | `rentrees_et_solde_de_depart` | Rentrées du même jour additionnées ; avertissement quand on change le solde de départ (signe) |
+| `icones_categories` | Icônes des catégories choisies d'après le nom, modifiables, pictogrammes à la saisie et dans les réglages |
 | `valider_echeance` | Valider une échéance à venir : opération créée, échéancier avancé, soldes inchangés |
 | `echeance_modifiee` | Modifier une échéance : les prévisions suivent |
 | `sauvegarde_aller_retour` | Télécharger la sauvegarde puis la restaurer sur une app vide : tout est identique |
