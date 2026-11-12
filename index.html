@@ -1018,6 +1018,8 @@ function sides(t) {
 const amtFor = (t, a) => { for (const [x, v] of sides(t)) if (x === a) return v; return 0; };
 const sideSt = (t, a) => t.virtual ? "prevue" : t.st === "annulee" ? "annulee" : (!a || t.account === a) ? (t.st || "saisie") : (t.st2 || "saisie");
 const setSide = (t, a, st) => t.account === a ? {...t, st} : {...t, st2: st};
+/* Valider d'un geste : pour un virement entre tes comptes, les deux côtés à la fois (sauf un côté verrouillé par un relevé) */
+const setBoth = (t, st) => { const k = cur => cur === "verrouillee" ? cur : st; return (t.splits || []).some(x => x.to) ? {...t, st: k(t.st), st2: k(t.st2)} : {...t, st: k(t.st)}; };
 const isTransfer = t => (t.splits || []).some(s => s.to);
 
 const idx = () => memo("idx", () => { const m = {}; for (const t of Object.values(A().tx)) for (const [a, v] of sides(t)) (m[a] || (m[a] = [])).push([t, v]); return m; });
@@ -1576,7 +1578,7 @@ function TxRow({t, a, run, sel, onSel, showAcc, dateCol}) {
   const v = a ? amtFor(t, a) : t.amount;
   const s = sideSt(t, a || t.account);
   const open = () => onSel ? onSel(t) : t.kind === "bud" && t.virtual ? NAV.push({v: "line", id: t.line}) : t.virtual ? SHEET.open({type:"op", kind:"tx", occ:t, acc:a}) : SHEET.open({type:"op", kind:"tx", src:t, acc:a});
-  const toggle = e => { e.stopPropagation(); if (t.virtual) { if (t.kind === "bud") { toast("Prévision de budget : elle se recalcule toute seule"); return; } validateOcc(t); toast("Échéance validée"); return; } if (s === "saisie" || s === "importee") { Store.put(setSide(t, a || t.account, "pointee")); toast("Validée : comptée dans le solde"); } else if (s === "pointee") { Store.put(setSide(t, a || t.account, "saisie")); toast("Repassée en « créée »"); } else if (s === "verrouillee") toast("Opération verrouillée par un relevé"); };
+  const toggle = e => { e.stopPropagation(); if (t.virtual) { if (t.kind === "bud") { toast("Prévision de budget : elle se recalcule toute seule"); return; } validateOcc(t); toast("Échéance validée"); return; } if (s === "saisie" || s === "importee") { Store.put(setBoth(t, "pointee")); toast("Validée : comptée dans le solde"); } else if (s === "pointee") { Store.put(setBoth(t, "saisie")); toast("Repassée en « créée »"); } else if (s === "verrouillee") toast("Opération verrouillée par un relevé"); };
   return html`<div class=${"row" + (t.virtual ? " planned" : "") + (s === "annulee" ? " cancel" : "")} style=${"padding-right:8px" + (t.hl ? `;box-shadow:inset 4px 0 0 ${t.hl};background:color-mix(in srgb, ${t.hl} 7%, transparent)` : "")}>
     ${onSel && html`<span class=${"check" + (sel ? " on" : "")} onClick=${open}>${sel && html`<${Ic} n="check" s=${14} w=${3} />`}</span>`}
     <button class="grow" style="display:flex;align-items:center;gap:12px;background:none;border:0;padding:0;text-align:left;min-width:0" onClick=${open}>
@@ -2717,7 +2719,7 @@ function AccountView({id}) {
     </main>
     ${selMode && sel.size > 0 && html`<div class="selbar"><div>
       <span style="font-weight:700;padding:0 6px">${sel.size}</span>
-      <button class="btn" onClick=${() => batch(x => ["put", setSide(x, id, "pointee")], "# opérations validées")}>Valider</button>
+      <button class="btn" onClick=${() => batch(x => ["put", setBoth(x, "pointee")], "# opérations validées")}>Valider</button>
       <button class="btn" onClick=${() => SHEET.open({type:"bulk", ids:[...sel], acc:id, done: () => { setSel(new Set()); setSelMode(false); }})}>Modifier</button>
       <button class="btn" onClick=${() => SHEET.open({type:"batchMore", ids:[...sel], acc:id, done: () => { setSel(new Set()); setSelMode(false); }})}>Plus…</button>
     </div></div>`}`;
@@ -2834,7 +2836,7 @@ function AllTx({f0, q0}) {
       ${list.length > 400 && html`<p class="help">Les 400 premières sont affichées : affine la recherche ou les filtres.</p>`}
     </main>
     ${selMode && sel.size > 0 && html`<div class="selbar"><div><span style="font-weight:700;padding:0 6px">${sel.size}</span>
-      <button class="btn" onClick=${() => Store.bulk([...sel].map(i => A().tx[i]).filter(t => t && sideSt(t, t.account) !== "verrouillee").map(t => ["put", setSide(t, t.account, "pointee")])).then(() => { setSel(new Set()); toast("Opérations pointées"); })}>Pointer</button>
+      <button class="btn" onClick=${() => Store.bulk([...sel].map(i => A().tx[i]).filter(t => t && sideSt(t, t.account) !== "verrouillee").map(t => ["put", setBoth(t, "pointee")])).then(() => { setSel(new Set()); toast("Opérations pointées"); })}>Pointer</button>
       <button class="btn" onClick=${() => SHEET.open({type: "bulk", ids: [...sel], acc: null, done: () => { setSel(new Set()); setSelMode(false); }})}>Modifier</button>
       <button class="btn" onClick=${() => SHEET.open({type: "batchMore", ids: [...sel], acc: null, done: () => { setSel(new Set()); setSelMode(false); }})}>Plus…</button>
     </div></div>`}`;

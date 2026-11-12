@@ -585,6 +585,27 @@ def previsions_et_themes(br, url):
 
 
 @test
+def valider_virement(br, url):
+    """Valider un virement entre tes comptes d'un seul geste : les deux côtés le sont ; idem pour revenir en « créée »."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    c, j = a.acc_id("Courant"), a.acc_id("Joint")
+    t = a.js("return Object.values(D.A().tx).find(t => t.name === 'Virement au Compte joint' && t.date === '2026-11-29');")
+    check(t and t.get("st") == "saisie" and t.get("st2") == "saisie", "virement de test : %s" % t)
+    vc, vj = a.js("return D.balance(arg, {cleared: true, upTo: '2026-11-30'});", c), a.js("return D.balance(arg, {cleared: true, upTo: '2026-11-30'});", j)
+    a.pick("Joint")
+    a.pg.locator("main .row").filter(has_text="Virement").filter(has_text="29").first.locator("[aria-label^='Statut']").click()
+    a.wait(500)
+    t2 = a.js("return D.A().tx[arg];", t["id"])
+    check(t2["st"] == "pointee" and t2["st2"] == "pointee", "validé depuis le Joint : statuts %s / %s" % (t2["st"], t2["st2"]))
+    check(near(a.js("return D.balance(arg, {cleared: true, upTo: '2026-11-30'});", c), vc - 30) and near(a.js("return D.balance(arg, {cleared: true, upTo: '2026-11-30'});", j), vj + 30), "soldes validés des deux comptes")
+    a.pg.locator("main .row").filter(has_text="Virement").filter(has_text="29").first.locator("[aria-label^='Statut']").click() if a.pg.locator("main .row").filter(has_text="Virement").filter(has_text="29").count() else a.js("D.Store.put({...D.A().tx[arg], st: 'saisie', st2: 'saisie'});", t["id"])
+    a.wait(500)
+    a.no_errors("virement")
+    a.close()
+
+
+@test
 def valider_echeance(br, url):
     """Valider une échéance à venir (loyer du 5 déc.) : elle devient une opération, l'échéancier passe à janvier, les soldes projetés ne bougent pas."""
     a = App(br, url)

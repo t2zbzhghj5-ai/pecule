@@ -31,6 +31,7 @@ reste sur la machine ; rien n'est écrit dans le dépôt (`tests/out/` est ignor
 | `saisie_echeance` | Bouton + › Échéance : création et occurrences |
 | `cinquante_cinquante` | 50/50 ajouté au virement et à l'opération de la partenaire ; décocher ; mois suivant en prévu |
 | `valider_supprimer_annuler` | Valider une opération, la supprimer, annuler |
+| `valider_virement` | Virement entre tes comptes : un geste valide (ou dé-valide) les deux côtés |
 | `valider_echeance` | Valider une échéance à venir : opération créée, échéancier avancé, soldes inchangés |
 | `echeance_modifiee` | Modifier une échéance : les prévisions suivent |
 | `sauvegarde_aller_retour` | Télécharger la sauvegarde puis la restaurer sur une app vide : tout est identique |
