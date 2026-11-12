@@ -165,7 +165,7 @@ def build(path):
     cantine = f.category("Cantine")
     f.parents = {cine: loisirs}
 
-    f.budgets([("Courses", courses, 600, [joint, k2], joint), ("Loisirs", loisirs, 200, [cour, k1], cour)])
+    f.budgets([("Courses", courses, 600, [joint, k2], joint), ("Loisirs", loisirs, 200, [cour, k1], cour), ("Divers", divers, 300, [cour, k1], cour)])
 
     # soldes de départ (validés)
     for a, v in ((cour, 2000), (joint, 500), (livret, 3000), (pret, -20000)):

@@ -1257,7 +1257,7 @@ function bSplits(b) {
       if (t.st === "annulee" || !acc || acc.type === "pret") continue;
       if (af && !af.has(t.account)) continue;
       if (t.id.startsWith("tx_half_")) continue;
-      for (const s of t.splits || []) { if ((s.to && !s.cat) || s.nobud || s.hf || (s.bdg && s.bdg !== b.id && A().bdg[s.bdg])) continue; out.push({d: s.bm ? addMonths(t.date, s.bm) : t.date, cat: s.cat || null, a: s.amount, rf: !!s.refund, t}); }
+      for (const s of t.splits || []) { if ((s.to && !s.cat) || s.nobud || s.hf || bdgElsewhere(s, b.id)) continue; out.push({d: s.bm ? addMonths(t.date, s.bm) : t.date, cat: s.cat || null, a: s.amount, rf: !!s.refund, t}); }
     }
     const hf = halfFrom();
     if (af && hf && af.has(hf)) for (const t of Object.values(A().tx)) { if (!t.half || t.st === "annulee" || !isJointAcc(t.account) || af.has(t.account)) continue;
@@ -1266,6 +1266,12 @@ function bSplits(b) {
     if (af && hf && af.has(hf) && halfJoint()) for (const x of S().halfAdj || []) { if (!x.cat || !(Number(x.amount) > 0)) continue; out.push({d: halfDate(x.k), cat: x.cat, a: -r2(Number(x.amount)), rf: false, t: {id: "adj_" + x.k + x.cat, adj: true, name: x.memo || "Ajout manuel (50/50)", date: halfDate(x.k)}}); }
     return out;
   });
+}
+/* Une part rattachée à un autre budget n'en est exclue que si cet autre budget couvre bien sa catégorie
+   (sinon le rattachement est périmé : catégorie changée après coup, opération dupliquée…) */
+function bdgElsewhere(sp, bid) {
+  if (!sp.bdg || sp.bdg === bid || !A().bdg[sp.bdg]) return false;
+  return memo("bdgc" + sp.bdg + "|" + (sp.cat || ""), () => Object.values(A().bud).some(l => l.budget === sp.bdg && lineMatcher(l)(sp.cat || null)));
 }
 function lineMatcher(l) {
   return memo("lm" + l.id + l.cat, () => {
@@ -1288,7 +1294,7 @@ function lineBudget(l, ps, depth = 0) {
 function linePlanned(l, ps, pe, occ) {
   const af = bAccs(budgetOf(l)), m = lineMatcher(l); let s = 0;
   for (const o of occ) { if (o.kind === "bud" || o.kind === "half" || o.date < ps || o.date > pe) continue; if (af.length && !af.includes(o.account)) continue;
-    for (const sp of o.splits || []) { if ((sp.to && !sp.cat) || sp.nobud || sp.hf || (sp.bdg && sp.bdg !== l.budget && A().bdg[sp.bdg]) || !m(sp.cat)) continue; if (l.income ? sp.amount > 0 : sp.amount < 0) s += l.income ? sp.amount : -sp.amount; } }
+    for (const sp of o.splits || []) { if ((sp.to && !sp.cat) || sp.nobud || sp.hf || bdgElsewhere(sp, l.budget) || !m(sp.cat)) continue; if (l.income ? sp.amount > 0 : sp.amount < 0) s += l.income ? sp.amount : -sp.amount; } }
   return r2(s);
 }
 /* Déjà prévu dans l'échéancier sur la période (opérations rattachées au budget, pas encore passées) */
@@ -3169,7 +3175,8 @@ function SchedImport({close}) {
 /* ============ Feuille opération / échéance ============ */
 const FIELDS = {payee: "Tiers", pay: "Moyen de paiement", shares: "Dépense partagée", comment: "Commentaire"};
 const showF = k => (S().fields || {})[k] !== false;
-const withOpt = (o, x) => { if (x?.bm) o.bm = Number(x.bm); if (x?.nobud) o.nobud = true; if (x?.refund) o.refund = true; if (x?.noRep) o.noRep = true; if (x?.noAvg) o.noAvg = true; if (x?.owner) o.owner = x.owner; if (x?.bdg) o.bdg = x.bdg; return o; };
+const withOpt = (o, x) => { if (x?.bm) o.bm = Number(x.bm); if (x?.nobud) o.nobud = true; if (x?.refund) o.refund = true; if (x?.noRep) o.noRep = true; if (x?.noAvg) o.noAvg = true; if (x?.owner) o.owner = x.owner;
+  if (x?.bdg && Object.values(A().bud).some(l => l.budget === x.bdg && lineMatcher(l)(o.cat || null))) o.bdg = x.bdg; return o; };
 /* Libellés déjà connus (opérations + échéancier), proposés dès la 1re lettre : les plus fréquents d'abord */
 function nameSuggest(v, max = 5) {
   const n = norm(v || "").trim(); if (!n) return [];

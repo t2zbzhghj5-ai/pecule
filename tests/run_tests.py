@@ -701,6 +701,37 @@ def icones_categories(br, url):
     a.close()
 
 
+def rest(a, cat, d="2026-11-15"):
+    return a.js("const l = Object.values(D.A().bud).find(l => D.A().cat[l.cat]?.name === arg[0]); const x = D.lineAt(l, arg[1]); return x && x.rest;", [cat, d])
+
+
+@test
+def budgets_suivent_les_saisies(br, url):
+    """Une dépense par carte consomme le budget de sa catégorie ; changer la catégorie d'une opération change de budget (rattachement périmé ignoré)."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    d0, l0 = rest(a, "Divers"), rest(a, "Loisirs")
+    wizard(a, "Dépense", "20", cat="Divers", acc="Carte Perso")
+    check(near(rest(a, "Divers"), d0 - 20), "dépense par carte (Divers) : reste %s → %s (attendu −20)" % (d0, rest(a, "Divers")))
+    t = a.js("return Object.values(D.A().tx).find(t => t.name === 'Concert');")
+    check(t and t["splits"][0].get("bdg"), "« Concert » importé sans rattachement de budget : %s" % t)
+    a.js("D.SHEET.open({type: 'op', kind: 'tx', src: D.A().tx[arg]});", t["id"])
+    a.wait(500)
+    a.pg.locator(".sheet").get_by_text("Loisirs", exact=False).first.click()
+    a.wait(300)
+    a.pg.locator('.sheet .catbtn:has-text("Divers")').first.click()
+    a.wait(300)
+    a.pg.locator('.sheet button:has-text("Enregistrer")').first.click()
+    a.wait(600)
+    check(near(rest(a, "Divers"), d0 - 20 - 45) and near(rest(a, "Loisirs"), l0 + 45), "changement de catégorie Loisirs → Divers : Divers %s, Loisirs %s" % (rest(a, "Divers"), rest(a, "Loisirs")))
+    # données anciennes : un rattachement périmé déjà enregistré est ignoré
+    a.js("const t = D.A().tx[arg]; D.Store.put({...t, splits: [{...t.splits[0], bdg: Object.values(D.A().bdg).find(b => b.name === 'Loisirs').id}]});", t["id"])
+    a.wait(300)
+    check(near(rest(a, "Divers"), d0 - 20 - 45), "rattachement périmé à Loisirs : Divers %s" % rest(a, "Divers"))
+    a.no_errors("budgets")
+    a.close()
+
+
 @test
 def valider_echeance(br, url):
     """Valider une échéance à venir (loyer du 5 déc.) : elle devient une opération, l'échéancier passe à janvier, les soldes projetés ne bougent pas."""
