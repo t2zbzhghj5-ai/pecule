@@ -11,7 +11,7 @@ python3 tests/run_tests.py --icompta /chemin/fichier.cdb  # en plus : comparaiso
 ```
 
 Aucune donnée personnelle ici : `fixture_icompta.py` fabrique un fichier iCompta **inventé**
-(Courant, Joint, Livret, deux cartes à débit différé, un prêt, échéances, budgets, 50/50 avec « Claire »)
+(Courant, Joint, Livret, trois cartes à débit différé, un prêt, échéances, budgets, 50/50 avec « Claire »)
 à partir de la seule structure des tables (`icompta-schema.sql`). Un vrai fichier passé avec `--icompta`
 reste sur la machine ; rien n'est écrit dans le dépôt (`tests/out/` est ignoré par Git).
 
@@ -32,6 +32,7 @@ reste sur la machine ; rien n'est écrit dans le dépôt (`tests/out/` est ignor
 | `cinquante_cinquante` | 50/50 ajouté au virement et à l'opération de la partenaire ; décocher ; mois suivant en prévu |
 | `valider_supprimer_annuler` | Valider une opération, la supprimer, annuler |
 | `valider_virement` | Virement entre tes comptes : un geste valide (ou dé-valide) les deux côtés |
+| `reorganiser_comptes` | Comptes › Réorganiser : cartes sous leur compte, ↑/↓ entre voisines affichées, l'accueil suit |
 | `valider_echeance` | Valider une échéance à venir : opération créée, échéancier avancé, soldes inchangés |
 | `echeance_modifiee` | Modifier une échéance : les prévisions suivent |
 | `sauvegarde_aller_retour` | Télécharger la sauvegarde puis la restaurer sur une app vide : tout est identique |

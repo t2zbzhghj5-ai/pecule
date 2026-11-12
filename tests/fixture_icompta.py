@@ -152,6 +152,7 @@ def build(path):
     livret = f.account("Livret", "SavingsAccount")
     k1 = f.account("Carte Perso", "CreditCardAccount")
     k2 = f.account("Carte Joint", "CreditCardAccount")
+    k3 = f.account("Carte Claire", "CreditCardAccount")
     pret = f.account("Prêt", "LoanAccount")
 
     sal = f.category("Salaire", expense=0, income=1)
@@ -228,6 +229,7 @@ def build(path):
              (11, 3, "Cinéma Lux", -11, cine), (11, 9, "Concert", -45, loisirs, C)],
         k2: [(9, 10, "Marché", -84.3, courses), (9, 24, "Supermarché", -152.9, courses), (10, 9, "Supermarché", -131.15, courses), (10, 22, "Boulangerie", -18.6, courses),
              (11, 6, "Supermarché", -120.45, courses), (11, 10, "Marché", -36.8, courses, C)],
+        k3: [(10, 14, "Fleuriste", -25, divers), (11, 7, "Pharmacie", -18.3, None, C)],
     }
     for card, lst in buys.items():
         for m, day, name, a, c, *st in lst:
@@ -235,7 +237,8 @@ def build(path):
             f.op(card, d, name, [(a, c)], status=(st[0] if st else None))
     # débits différés : le 4 du mois suivant, montant = achats du cycle (tous statuts sauf annulés)
     link = {k1: (cour, f.schedule(cour, dt.date(2026, 1, 4), "DEBIT DIFFERE", [(0, None)], sid=k1 + "-CreditCardAccount-LinkedTransaction")[0]),
-            k2: (joint, f.schedule(joint, dt.date(2026, 1, 4), "DEBIT DIFFERE JOINT", [(0, None)], sid=k2 + "-CreditCardAccount-LinkedTransaction")[0])}
+            k2: (joint, f.schedule(joint, dt.date(2026, 1, 4), "DEBIT DIFFERE JOINT", [(0, None)], sid=k2 + "-CreditCardAccount-LinkedTransaction")[0]),
+            k3: (joint, f.schedule(joint, dt.date(2026, 1, 4), "DEBIT DIFFERE CLAIRE", [(0, None)], sid=k3 + "-CreditCardAccount-LinkedTransaction")[0])}
     for card, (acc, sch) in link.items():
         nexts[sch] = 14
         for i, d in enumerate(monthly(dt.date(2026, 10, 4))):
@@ -276,7 +279,7 @@ def build(path):
     for s, n in nexts.items():
         f.set_next(s, n)
     f.db.commit()
-    names = {cour: "Courant", joint: "Joint", livret: "Livret", k1: "Carte Perso", k2: "Carte Joint", pret: "Prêt"}
+    names = {cour: "Courant", joint: "Joint", livret: "Livret", k1: "Carte Perso", k2: "Carte Joint", k3: "Carte Claire", pret: "Prêt"}
     return f, names
 
 

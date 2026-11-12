@@ -127,6 +127,9 @@ class App:
         return self.js("return Object.values(D.A().acc).find(a => a.name === arg)?.id || null;", name)
 
     def pick(self, name):
+        if not self.pg.locator(".accpill").count():
+            self.pg.evaluate("location.hash = '#comptes'")
+            self.wait(400)
         self.pg.click(".accpill")
         self.pg.click('.sheet .row:has-text("%s")' % name)
         self.wait(500)
@@ -268,7 +271,7 @@ def cartes_coherence(br, url):
     """Cartes : validé + à valider + prévus = prochain débit ; même montant sur l'accueil et dans le choix du compte."""
     a = App(br, url)
     a.import_ic(FICTIF)
-    check_cards(a, 2)
+    check_cards(a, 3)
     a.close()
 
 
@@ -602,6 +605,39 @@ def valider_virement(br, url):
     a.pg.locator("main .row").filter(has_text="Virement").filter(has_text="29").first.locator("[aria-label^='Statut']").click() if a.pg.locator("main .row").filter(has_text="Virement").filter(has_text="29").count() else a.js("D.Store.put({...D.A().tx[arg], st: 'saisie', st2: 'saisie'});", t["id"])
     a.wait(500)
     a.no_errors("virement")
+    a.close()
+
+
+@test
+def reorganiser_comptes(br, url):
+    """Comptes › Réorganiser : les cartes se rangent sous leur compte ; ↑ échange avec la voisine affichée ; l'accueil suit."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    a.pick("Joint")
+    before = [t.split("\n")[1] for t in a.pg.locator(".dchip").all_inner_texts()]
+    check(len(before) == 2, "cartes sous le Joint : %s" % before)
+    a.pg.evaluate("location.hash = '#mes'")
+    a.wait(400)
+    a.pg.click("text=Réorganiser")
+    a.wait(300)
+    rows = a.pg.locator("main .card .row .t1").all_inner_texts()
+    check(rows.index(before[1]) == rows.index(before[0]) + 1 and rows.index(before[0]) == rows.index("Joint") + 1, "cartes non rangées sous le Joint : %s" % rows)
+    check(a.pg.locator('[aria-label="Monter %s"]' % before[0]).is_disabled(), "la première carte peut encore monter")
+    a.pg.click('[aria-label="Monter %s"]' % before[1])
+    a.wait(500)
+    a.pg.click('[aria-label="Terminer la réorganisation"]')
+    a.pick("Joint")
+    after = [t.split("\n")[1] for t in a.pg.locator(".dchip").all_inner_texts()]
+    check(after == before[::-1], "ordre des cartes sur l'accueil : %s (attendu %s)" % (after, before[::-1]))
+    a.pg.evaluate("location.hash = '#mes'")
+    a.wait(300)
+    a.pg.click("text=Réorganiser")
+    a.wait(300)
+    a.pg.click('[aria-label="Monter Joint"]')
+    a.wait(500)
+    rows = a.pg.locator("main .card .row .t1").all_inner_texts()
+    check(rows[:4] == ["Joint", after[0], after[1], "Courant"], "Joint monté avec ses cartes : %s" % rows[:5])
+    a.no_errors("réorganiser")
     a.close()
 
 

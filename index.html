@@ -53,6 +53,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .dot.off{background:var(--warn)}
 .ibtn{width:40px;height:40px;border-radius:12px;border:0;background:var(--surface);box-shadow:var(--shadow);display:grid;place-items:center;flex:none;color:var(--ink)}
 .ibtn.plain{background:none;box-shadow:none}
+.ibtn:disabled{opacity:.28}
 .scr{padding:4px 16px calc(120px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:22px}
 .sec-h{display:flex;align-items:baseline;justify-content:space-between;margin:0 4px 8px;gap:8px}
 .sec-h h2{font-family:var(--body);font-size:16px;margin:0;letter-spacing:-.01em;font-weight:700;color:var(--ink)}
@@ -2454,15 +2455,26 @@ function AccListView({asTab}) {
   const [edit, setEdit] = useState(false);
   const accs = accList(), per = people();
   const total = r2(accs.filter(a => inTotal(a) && ["courant", "epargne", "especes"].includes(a.type)).reduce((s, a) => s + shownBal(a), 0));
-  const move = async (a, dir) => { const l = accList(true); const i = l.findIndex(x => x.id === a.id), j = i + dir; if (j < 0 || j >= l.length) return; const ops = l.map((x, k) => ({...x, order: k})); [ops[i].order, ops[j].order] = [j, i]; await Store.bulk([["put", ops[i]], ["put", ops[j]]]); };
+  /* Réorganiser comme on le voit : un compte se déplace parmi ceux de son groupe (avec ses cartes), une carte parmi les cartes de son compte */
+  const sibsOf = a => { const vis = accList(), tops = vis.filter(x => !isKid(vis, x)); return isKid(vis, a) ? kidsOf(vis, a.linked) : (accGroups(tops).find(g => g.list.some(x => x.id === a.id))?.list || []); };
+  const move = async (a, dir) => {
+    const vis = accList(), tops = vis.filter(x => !isKid(vis, x)), groups = accGroups(tops), kid = isKid(vis, a), sib = sibsOf(a);
+    const i = sib.findIndex(x => x.id === a.id), j = i + dir; if (i < 0 || j < 0 || j >= sib.length) return;
+    const sw = [...sib]; [sw[i], sw[j]] = [sw[j], sw[i]];
+    const seq = [];
+    for (const g of groups) for (const p of (!kid && g.list.some(x => x.id === a.id) ? sw : g.list)) { seq.push(p); seq.push(...(kid && p.id === a.linked ? sw : kidsOf(vis, p.id))); }
+    for (const x of accList(true)) if (!seq.some(y => y.id === x.id)) seq.push(x);
+    await Store.bulk(seq.map((x, k) => x.order === k ? null : ["put", {...x, order: k}]).filter(Boolean));
+  };
+  const editRow = a => { const sib = sibsOf(a), i = sib.findIndex(x => x.id === a.id); return html`<div class="row"><${AccIcon} a=${a} /><span class="grow t1">${a.name}</span><button class="ibtn plain" aria-label=${"Monter " + a.name} disabled=${i <= 0} onClick=${() => move(a, -1)}>↑</button><button class="ibtn plain" aria-label=${"Descendre " + a.name} disabled=${i < 0 || i >= sib.length - 1} onClick=${() => move(a, 1)}>↓</button></div>`; };
   return html`
     <${Top} title=${asTab ? "Comptes" : "Mes comptes"} sub=${"Disponible " + fmt(total) + " (comptes et épargne)"} back=${!asTab} right=${edit ? html`<button class="ibtn" aria-label="Terminer la réorganisation" onClick=${() => setEdit(false)}><${Ic} n="check" /></button>` : html`<span style="display:flex;gap:6px">${(th => html`<button class="ibtn" aria-label=${THEME_LBL[th] + " (toucher pour changer)"} onClick=${() => Store.put({...S(), k: "set", id: "set_main", theme: THEME_NEXT[th]})}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d=${THEME_ICON[th]} /></svg></button>`)(S().theme || "auto")}<button class="ibtn" aria-label="Réglages" onClick=${() => NAV.push({v: "settings"})}><${Ic} n="gear" /></button></span>`} />
     <main class="scr">
       ${!edit && html`<${QuickEntry} kind="acc" />`}
-      ${edit && html`<div class="help">Monte ou descends les comptes. Pour créer un groupe, ouvre un compte et remplis « Groupe ».</div>`}
-      ${accGroups(edit ? accs : accs.filter(a => !isKid(accs, a))).map(g => { const sum = r2(g.list.reduce((s, a) => s + shownBal(a), 0));
+      ${edit && html`<div class="help">Monte ou descends les comptes ; les cartes se rangent entre elles, sous leur compte. Pour créer un groupe, ouvre un compte et remplis « Groupe ».</div>`}
+      ${accGroups(accs.filter(a => !isKid(accs, a))).map(g => { const sum = r2(g.list.reduce((s, a) => s + shownBal(a), 0));
         return html`<section><div class="sec-h"><h2>${g.label}</h2><span class="amt muted" style="font-size:15px">${fmt(sum)}</span></div>
-        <div class="card">${g.list.map(a => edit ? html`<div class="row"><${AccIcon} a=${a} /><span class="grow t1">${a.name}</span><button class="ibtn plain" aria-label=${"Monter " + a.name} onClick=${() => move(a, -1)}>↑</button><button class="ibtn plain" aria-label=${"Descendre " + a.name} onClick=${() => move(a, 1)}>↓</button></div>` : html`<${AccRowG} a=${a} />${kidsOf(accs, a.id).length > 0 && html`<div class="nest">${kidsOf(accs, a.id).map(c => html`<${AccRowG} a=${c} />`)}</div>`}`)}</div></section>`; })}
+        <div class="card">${g.list.map(a => edit ? html`${editRow(a)}${kidsOf(accs, a.id).length > 0 && html`<div class="nest">${kidsOf(accs, a.id).map(c => editRow(c))}</div>`}` : html`<${AccRowG} a=${a} />${kidsOf(accs, a.id).length > 0 && html`<div class="nest">${kidsOf(accs, a.id).map(c => html`<${AccRowG} a=${c} />`)}</div>`}`)}</div></section>`; })}
       ${per.length > 0 && html`<section><div class="sec-h"><h2>Personnes</h2><button class="link" onClick=${() => NAV.push({v:"people"})}>Gérer</button></div>
         <div class="card">${per.map(p => { const b = personBal(p.id); return html`<button class="row" onClick=${() => NAV.push({v:"person", id:p.id})}>
           <span class="ic" style="background:var(--surface2)">${p.emoji || "🙂"}</span><span class="grow"><div class="t1">${p.name}</div><div class="t2">${b > 0 ? "te doit" : b < 0 ? "tu lui dois" : "à jour"}</div></span>
