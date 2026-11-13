@@ -2442,9 +2442,9 @@ function AccRowG({a}) {
 const THEME_NEXT = {auto: "light", light: "dark", dark: "auto"};
 const THEME_LBL = {auto: "Apparence automatique", light: "Apparence claire", dark: "Apparence sombre"};
 const THEME_ICON = {auto: "M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18zM12 3v18M12 7.5h4.5M12 12h6M12 16.5h4.5", light: "M12 3v2M12 19v2M5.6 5.6L7 7M17 17l1.4 1.4M3 12h2M19 12h2M5.6 18.4L7 17M17 7l1.4-1.4M12 8a4 4 0 1 0 0 8a4 4 0 0 0 0-8z", dark: "M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"};
-function AccPill() {
-  const main = mainAcc(), a = main && A().acc[main];
-  return html`<button class="accpill" onClick=${() => SHEET.open({type: "accPick"})} aria-label=${"Changer de compte, compte affiché : " + (a ? a.name : "aucun")}>
+function AccPill({cur, onPick}) {
+  const main = cur !== undefined ? cur : mainAcc(), a = main && A().acc[main];
+  return html`<button class="accpill" onClick=${() => SHEET.open(onPick ? {type: "accPick", cur: main, onPick} : {type: "accPick"})} aria-label=${"Changer de compte, compte affiché : " + (a ? a.name : "aucun")}>
     <span class="ini">${(a?.name || "?").replace(/^compte\s+/i, "").charAt(0).toUpperCase()}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a ? a.name : "Choisir un compte"}</span>
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none;color:var(--muted)"><path d="M6 9l6 6 6-6" /></svg></button>`;
 }
@@ -2458,8 +2458,8 @@ function HalfSheet({close}) {
     <button class="btn pri" onClick=${save}>Enregistrer</button>
   </${Sheet}>`;
 }
-function AccPickSheet({close}) {
-  const main = mainAcc(), all = accList(), pick = id => { Store.put({...S(), k: "set", id: "set_main", mainAcc: id}); close(); };
+function AccPickSheet({close, cur, onPick}) {
+  const main = cur !== undefined ? cur : mainAcc(), all = accList(), pick = id => { if (onPick) onPick(id); else Store.put({...S(), k: "set", id: "set_main", mainAcc: id}); close(); };
   const accs = [...all.filter(a => a.type !== "pret" && !isKid(all, a)), ...all.filter(a => a.type === "pret")];
   const ini = a => a.name.replace(/^compte\s+/i, "").charAt(0).toUpperCase();
   return html`<${Sheet} title="Choisir un compte" close=${close}>
@@ -3734,9 +3734,8 @@ function Schedules() {
     return out; };
   const accs = accList().filter(a => schs.some(x => inv(x, a.id)) || autoOf(a.id).length);
   const [sel0, setSel0] = useState(SCH_ACC.v || mainAcc());
-  const sel = accs.some(a => a.id === sel0) ? sel0 : accs[0]?.id;
+  const sel = A().acc[sel0] && !A().acc[sel0].hidden ? sel0 : accs[0]?.id;
   const setSel = v => { SCH_ACC.v = v; setSel0(v); };
-  const short = a => a.name.replace(/^compte\s+/i, "").replace(/^./, c => c.toUpperCase());
   const rec = sel ? schs.filter(x => inv(x, sel)) : [];
   const off = x => x.paused || ended(x) || !nextPending(x);
   const isM = x => x.freq?.u === "m" && (Number(x.freq.n) || 1) === 1;
@@ -3761,9 +3760,10 @@ function Schedules() {
   return html`
     <${Top} title="Échéancier" sub="Ce qui revient, mois après mois" right=${html`<button class="ibtn" aria-label="Importer un échéancier" onClick=${() => SHEET.open({type: "schedImport"})}><${Ic} n="import" /></button>`} />
     <main class="scr wide dash" style="gap:16px">
-      <div class="hscroll dash-full" role="tablist" aria-label="Compte" style="padding-top:0">${accs.map(a => html`<button role="tab" aria-selected=${a.id === sel} onClick=${() => setSel(a.id)} style=${"flex:none;height:36px;padding:0 16px;border-radius:18px;font-size:14px;font-weight:600;" + (a.id === sel ? "border:0;background:var(--ink);color:var(--surface)" : "border:1px solid var(--line);background:var(--surface);color:var(--ink)")}>${short(a)}</button>`)}</div>
+      <div class="dash-full" style="display:flex;align-items:center;min-width:0"><${AccPill} cur=${sel || null} onPick=${setSel} /></div>
       ${due.length > 0 && html`<div class="banner dash-full" style="padding:10px 14px;align-items:center"><span class="grow"><b>${due.length} à valider</b></span><button class="link" onClick=${() => confirmIt("Tout valider ?", due.length + " échéances seront enregistrées avec leur montant prévu.", "Tout valider", async () => { for (const o of due) { validateOcc(o); await sleep(80); } toast("Échéances validées"); }, false)}>Tout valider</button></div>`}
-      <div class="dash-l">${sel && html`<section class="card" style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+      ${sel && !rec.length && !auto.length && html`<div class="card dash-full"><div class="empty"><b>Rien de prévu sur ce compte</b>Ajoute une échéance avec le bouton +, ou choisis un autre compte.</div></div>`}
+      <div class="dash-l">${sel && rec.length > 0 && html`<section class="card" style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
         <div class="muted" style="font-size:13px">Chaque mois sur ce compte</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div><div class="muted" style="font-size:12px">Rentrées</div><div style="font-size:20px;font-weight:700;color:var(--pos)">${fmt(incM, true)}</div></div>

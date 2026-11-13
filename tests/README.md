@@ -34,6 +34,7 @@ reste sur la machine ; rien n'est écrit dans le dépôt (`tests/out/` est ignor
 | `valider_virement` | Virement entre tes comptes : un geste valide (ou dé-valide) les deux côtés |
 | `reorganiser_comptes` | Comptes › Réorganiser : cartes sous leur compte, ↑/↓ entre voisines affichées, l'accueil suit |
 | `menus_comptes_dans_l_ordre` | Les menus déroulants de comptes suivent l'ordre de l'écran Comptes (chaque compte suivi de ses cartes), même si l'ordre enregistré est désordonné |
+| `echeancier_choix_du_compte` | Échéancier : même menu « Choisir un compte » que l'accueil (cartes sous leur compte), choix propre à l'échéancier |
 | `rentrees_et_solde_de_depart` | Rentrées du même jour additionnées ; avertissement quand on change le solde de départ (signe) |
 | `icones_categories` | Icônes des catégories choisies d'après le nom, modifiables, pictogrammes à la saisie et dans les réglages |
 | `budgets_suivent_les_saisies` | Dépense par carte → budget de sa catégorie ; changer de catégorie change de budget ; rattachement périmé ignoré |

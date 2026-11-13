@@ -696,6 +696,39 @@ def menus_comptes_dans_l_ordre(br, url):
 
 
 @test
+def echeancier_choix_du_compte(br, url):
+    """Échéancier : même menu « Choisir un compte » que l'accueil (cartes sous leur compte) ; le choix ne change pas le compte de l'accueil."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    a.pick("Courant")
+    main0 = a.js("return D.S().mainAcc;")
+    a.pg.evaluate("location.hash = '#echeancier'")
+    a.wait(500)
+    pill = a.pg.locator('main [aria-label^="Changer de compte"]')
+    check(pill.count() == 1, "pas de menu de compte dans l'échéancier")
+    check(not a.pg.locator('main [role=tablist][aria-label="Compte"]').count(), "les anciennes pastilles de comptes sont encore là")
+    pill.click()
+    a.wait(400)
+    sheet = a.pg.inner_text(".sheet")
+    check("Choisir un compte" in sheet and "Carte Joint" in sheet and "Carte Claire" in sheet, "feuille de choix incomplète : %s" % sheet.replace("\n", " | ")[:300])
+    a.pg.click('.sheet .row:has-text("Joint") >> nth=0')
+    a.wait(500)
+    check("Joint" in a.pg.locator('main [aria-label^="Changer de compte"]').inner_text(), "le menu n'affiche pas le compte choisi")
+    body = a.pg.inner_text("main")
+    check("Virement au Joint" in body or "Virement" in body, "échéances du Joint absentes : %s" % body.replace("\n", " | ")[:300])
+    check(a.js("return D.S().mainAcc;") == main0, "choisir dans l'échéancier a changé le compte de l'accueil")
+    a.pg.screenshot(path=os.path.join(OUT, "echeancier.png"))
+    # une carte peut être choisie aussi
+    a.pg.locator('main [aria-label^="Changer de compte"]').click()
+    a.wait(400)
+    a.pg.click('.sheet .nest .row:has-text("Carte Joint")')
+    a.wait(500)
+    check("Carte Joint" in a.pg.locator('main [aria-label^="Changer de compte"]').inner_text(), "carte non choisie dans l'échéancier")
+    a.no_errors("échéancier, choix du compte")
+    a.close()
+
+
+@test
 def rentrees_et_solde_de_depart(br, url):
     """Deux rentrées le même jour : additionnées sur l'accueil. Changer le signe du solde de départ : avertissement avant d'enregistrer."""
     a = App(br, url)
