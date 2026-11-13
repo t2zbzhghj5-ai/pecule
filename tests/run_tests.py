@@ -35,7 +35,7 @@ import fixture_icompta  # noqa: E402
 
 # ---------------------------------------------------------------- serveur (avec accès de test aux calculs)
 HOOK = ('window.__dbg = {A, S, Store, Hist, NAV, SHEET, occurrences, balance, amtFor, accList, today, budgets, lineAt, cardNext, cardPending, '
-        'halfBase, halfParts, halfName, glanceState, shownBal, cats, catIc, guessIc};\n')
+        'halfBase, halfParts, halfName, halfFrom, halfJoint, glanceState, shownBal, cats, catIc, guessIc};\n')
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -443,6 +443,26 @@ def cinquante_cinquante(br, url):
     dec = a.js("return D.occurrences('2027-01-31').filter(o => o.kind === 'half').map(o => [o.name, o.amount, o.date]);")
     check(sorted(dec) == sorted([["Virement au Joint (50/50)", -25, "2026-12-30"], ["Claire", 25, "2026-12-30"]]), "prévues de décembre : %s" % dec)
     a.no_errors("50/50")
+    a.close()
+
+
+@test
+def cinquante_cinquante_depuis_le_courant(br, url):
+    """50/50 : un livret qui vire parfois vers le joint en fin de mois n'est jamais pris pour le compte d'où part ta moitié."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    j, liv, cour = a.acc_id("Joint"), a.acc_id("Livret"), a.acc_id("Courant")
+    for d in ["2026-08-30", "2026-09-29", "2026-10-30"]:
+        a.js("""const [j, l, d] = arg; D.Store.put({k: 'tx', id: 'tx_liv_' + d, account: l, date: d, name: 'Virement au Joint', amount: -100, splits: [{to: j, amount: -100}], st: 'pointee', st2: 'pointee'});""", [j, liv, d])
+    a.wait(500)
+    check(a.js("return D.halfFrom();") == cour, "ta moitié partirait du compte %s" % a.js("return D.A().acc[D.halfFrom()]?.name;"))
+    a.js("""D.Store.put({k: 'tx', id: 'tx_test_half2', account: arg, date: '2026-11-12', name: 'Cinéma test', amount: -40, splits: [{amount: -40, cat: null}], st: 'saisie', half: true});""", j)
+    a.wait(500)
+    pair = a.js("""const {T, M} = D.halfBase('2026-11'); return [T && T.amount, M && M.amount, T && D.A().acc[T.account].name];""")
+    check(pair == [-50, 50, "Courant"], "la moitié ne s'ajoute pas au virement du Courant : %s" % pair)
+    on_liv = a.js("return D.occurrences('2026-12-31').filter(o => o.kind === 'half' && o.account === arg).map(o => [o.name, o.amount]);", liv)
+    check(not on_liv, "ligne 50/50 sur le livret : %s" % on_liv)
+    a.no_errors("50/50 depuis le courant")
     a.close()
 
 

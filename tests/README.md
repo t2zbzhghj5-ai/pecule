@@ -30,6 +30,7 @@ reste sur la machine ; rien n'est écrit dans le dépôt (`tests/out/` est ignor
 | `saisie_texte_et_suggestions` | Texte collé « Boulangerie 4,20 € hier » ; libellés proposés dès la 1re lettre |
 | `saisie_echeance` | Bouton + › Échéance : création et occurrences |
 | `cinquante_cinquante` | 50/50 ajouté au virement et à l'opération de la partenaire ; décocher ; mois suivant en prévu |
+| `cinquante_cinquante_depuis_le_courant` | 50/50 : un livret qui vire parfois vers le joint en fin de mois n'est jamais pris pour le compte d'où part ta moitié |
 | `valider_supprimer_annuler` | Valider une opération, la supprimer, annuler |
 | `valider_virement` | Virement entre tes comptes : un geste valide (ou dé-valide) les deux côtés |
 | `reorganiser_comptes` | Comptes › Réorganiser : cartes sous leur compte, ↑/↓ entre voisines affichées, l'accueil suit |

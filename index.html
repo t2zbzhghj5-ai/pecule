@@ -778,7 +778,16 @@ function ConfirmSheet({kind, items, close}) {
 
 /* ============ Remboursement 50/50 du compte joint ============ */
 const halfJoint = () => { const D = A(), j = J()?.acc; if (j && D.acc[j]) return j; return accList().find(a => a.type !== "carte" && /joint|commun/i.test(a.name))?.id || null; };
-const halfFrom = () => { const D = A(), f = S().halfFrom; if (f && D.acc[f]) return f; const j = halfJoint(), m = mainAcc(); if (m && m !== j && D.acc[m] && !["carte", "pret"].includes(D.acc[m].type)) return m; return accList().find(a => a.type === "courant" && a.id !== j)?.id || null; };
+/* Compte d'où part ta moitié : le réglage, sinon le compte courant qui fait déjà le virement vers le joint
+   (jamais un livret ou une épargne, même s'il lui arrive de virer vers le joint en fin de mois) */
+const halfFrom = () => { const D = A(), f = S().halfFrom; if (f && D.acc[f]) return f; const j = halfJoint(); if (!j) return null;
+  return memo("halfFrom", () => { const ok = id => id !== j && D.acc[id]?.type === "courant", n = {};
+    for (const t of Object.values(D.tx)) { if (t.st === "annulee" || !ok(t.account)) continue; const sp = t.splits || [];
+      if (!sp.length || !sp.every(x => x.to === j)) continue;
+      const w = sp.some(x => x.hf) ? 100 : t.date === halfDate(ym(t.date)) ? 10 : D.acc[t.account].type === "courant" ? 1 : 0;
+      if (w) n[t.account] = (n[t.account] || 0) + w; }
+    const best = Object.entries(n).sort((a, b) => b[1] - a[1])[0];
+    return best ? best[0] : accList().find(a => a.type === "courant" && a.id !== j)?.id || null; }); };
 const isJointAcc = id => { const j = halfJoint(), a = A().acc[id]; return !!j && !!a && (id === j || (a.type === "carte" && a.linked === j)); };
 const normN = x => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
 const halfGuess = () => memo("halfGuess", () => { const j = halfJoint(); if (!j) return null;
