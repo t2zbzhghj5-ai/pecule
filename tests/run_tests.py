@@ -642,6 +642,60 @@ def reorganiser_comptes(br, url):
 
 
 @test
+def menus_comptes_dans_l_ordre(br, url):
+    """Les menus déroulants de comptes suivent l'ordre de l'écran Comptes (chaque compte suivi de ses cartes), même si l'ordre enregistré est désordonné."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    # ordre enregistré volontairement désordonné : les cartes en fin de liste, mélangées
+    a.js("""const L = Object.values(D.A().acc); const pos = n => ({'Courant': 0, 'Joint': 1, 'Livret': 2, 'Prêt': 3, 'Carte Claire': 4, 'Carte Perso': 5, 'Carte Joint': 6})[n] ?? 9;
+            D.Store.bulk(L.map(x => ['put', {...x, order: pos(x.name)}]));""")
+    a.wait(400)
+    def screen_order():
+        a.pg.evaluate("location.hash = '#mes'")
+        a.wait(400)
+        a.pg.click("text=Réorganiser")
+        a.wait(300)
+        rows = a.pg.locator("main .card .row .t1").all_inner_texts()
+        a.pg.click('[aria-label="Terminer la réorganisation"]')
+        a.wait(200)
+        return rows
+    def menu_order():
+        a.js("D.SHEET.open({type: 'op'});")
+        a.wait(500)
+        opts = a.pg.evaluate("() => [...document.querySelectorAll('#op-acc option')].map(o => o.text.trim())")
+        a.js("D.SHEET.close();")
+        a.wait(300)
+        return opts
+    rows, opts = screen_order(), menu_order()
+    check(len(opts) >= 5, "menu des comptes introuvable : %s" % opts)
+    check([o for o in opts if o in rows] == [r for r in rows if r in opts], "menu %s ≠ écran Comptes %s" % (opts, rows))
+    j = opts.index("Joint")
+    check(opts[j + 1].startswith("Carte") and opts[j + 2].startswith("Carte"), "cartes du Joint pas sous le Joint : %s" % opts)
+    # on inverse les deux cartes du Joint : le menu suit
+    first, second = opts[j + 1], opts[j + 2]
+    a.pg.evaluate("location.hash = '#mes'")
+    a.wait(400)
+    a.pg.click("text=Réorganiser")
+    a.wait(300)
+    a.pg.click('[aria-label="Monter %s"]' % second)
+    a.wait(500)
+    a.pg.click('[aria-label="Terminer la réorganisation"]')
+    a.wait(200)
+    opts2 = menu_order()
+    j2 = opts2.index("Joint")
+    check(opts2[j2 + 1:j2 + 3] == [second, first], "menu après inversion : %s" % opts2)
+    # même ordre dans le menu de l'assistant +
+    a.pg.evaluate("location.hash = '#accueil'")
+    a.wait(300)
+    texts = a.pg.evaluate("() => [...document.querySelectorAll('select')].map(s => [...s.options].map(o => o.text.trim()))")
+    for t in texts:
+        if second in t and first in t:
+            check(t.index(second) < t.index(first), "un menu garde l'ancien ordre : %s" % t)
+    a.no_errors("menus de comptes")
+    a.close()
+
+
+@test
 def rentrees_et_solde_de_depart(br, url):
     """Deux rentrées le même jour : additionnées sur l'accueil. Changer le signe du solde de départ : avertissement avant d'enregistrer."""
     a = App(br, url)

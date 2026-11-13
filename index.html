@@ -997,7 +997,14 @@ const STATUS = {prevue:"Prévue", saisie:"Créée", importee:"Créée (import)",
 const shownBal = a => a.type === "carte" || a.type === "pret" ? balance(a.id) : balance(a.id, {cleared: true});
 const COLORS = ["#F2643D","#2F6FED","#13A38A","#E3579A","#F0A52E","#7B61FF","#D2486E","#5B6B8C","#3BA55C","#0EA5C6","#B7791F","#8A93AD"];
 
-const accList = all => Object.values(A().acc).filter(a => all || !a.hidden).sort((a, b) => (a.order ?? 99) - (b.order ?? 99) || a.name.localeCompare(b.name, "fr"));
+/* Ordre des comptes = celui de l'écran Comptes : par groupe, chaque compte suivi de ses cartes. Tous les menus le suivent. */
+const accList = all => {
+  const raw = Object.values(A().acc).filter(a => all || !a.hidden).sort((a, b) => (a.order ?? 99) - (b.order ?? 99) || a.name.localeCompare(b.name, "fr"));
+  const out = [], seen = new Set(), add = a => { if (!seen.has(a.id)) { seen.add(a.id); out.push(a); } };
+  for (const g of accGroups(raw.filter(x => !isKid(raw, x)))) for (const a of g.list) { add(a); kidsOf(raw, a.id).forEach(add); }
+  raw.forEach(add);
+  return out;
+};
 const accName = id => A().acc[id]?.name || "Compte supprimé";
 const inCash = a => a.inCash != null ? a.inCash : (a.type === "courant" || a.type === "especes");
 const inTotal = a => a.inTotal !== false;
