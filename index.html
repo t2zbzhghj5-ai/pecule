@@ -777,7 +777,11 @@ function ConfirmSheet({kind, items, close}) {
 }
 
 /* ============ Remboursement 50/50 du compte joint ============ */
-const halfJoint = () => { const D = A(), j = J()?.acc; if (j && D.acc[j]) return j; return accList().find(a => a.type !== "carte" && /joint|commun/i.test(a.name))?.id || null; };
+const halfJoint = () => { const D = A(), h = S().halfJoint, j = J()?.acc; if (h && D.acc[h]) return h; if (j && D.acc[j]) return j; return accList().find(a => a.type !== "carte" && /joint|commun/i.test(a.name))?.id || null; };
+/* 50/50 utilisé mais réglages encore devinés : Pécule pose la question une fois (accueil + Vérifications) */
+const halfUsed = () => Object.values(A().tx).some(t => t.half && t.st !== "annulee") || (S().halfAdj || []).length > 0;
+const halfNeedsOk = () => !S().halfOk && !!halfJoint() && halfUsed();
+const halfConfirm = () => { Store.put({...S(), k: "set", id: "set_main", halfOk: true, halfJoint: halfJoint(), halfFrom: halfFrom(), halfName: halfName() === "Partenaire" ? S().halfName || null : halfName()}); toast("Remboursement 50/50 confirmé"); };
 /* Compte d'où part ta moitié : le réglage, sinon le compte courant qui fait déjà le virement vers le joint
    (jamais un livret ou une épargne, même s'il lui arrive de virer vers le joint en fin de mois) */
 const halfFrom = () => { const D = A(), f = S().halfFrom; if (f && D.acc[f]) return f; const j = halfJoint(); if (!j) return null;
@@ -1783,9 +1787,47 @@ function healthChecksAll() {
     if (dups.length) out.push({lvl: "warn", ic: "👯", title: dups.length + " doublon" + (dups.length > 1 ? "s" : "") + " possible" + (dups.length > 1 ? "s" : ""), text: dups.slice(0, 3).map(x => `${x.name} ${fmt(x.amount)} le ${dayShort(x.date)} (${accName(x.account)})`).join(" · "), act: ["Voir", () => NAV.push({v: "allTx", q0: dups[0].name})]});
     const imp = Object.values(D.tx).filter(x => x.st === "importee" && daysBetween(x.date, t) > 10);
     if (imp.length) out.push({lvl: "info", ic: "📥", title: imp.length + " opération" + (imp.length > 1 ? "s" : "") + " importée" + (imp.length > 1 ? "s" : "") + " pas encore pointée" + (imp.length > 1 ? "s" : ""), text: "Vérifie-les et pointe-les, ou verrouille un relevé.", act: ["Voir", () => NAV.push({v: "allTx", f0: {st: ["importee"]}})]});
+    out.push(...dataChecks());
     const order = {bad: 0, warn: 1, info: 2};
     return out.sort((a, b) => order[a.lvl] - order[b.lvl]);
   });
+}
+/* Cohérence des données : ce que Pécule ne devrait jamais contenir (key = identifiant stable pour « Ignorer ») */
+function dataChecks() {
+  const D = A(), t = today(), out = [], openTx = x => SHEET.open({type: "op", kind: "tx", src: x}), live = Object.values(D.tx).filter(x => x.st !== "annulee");
+  const plural = (n, w) => n + " " + w + (n > 1 ? "s" : "");
+  if (halfNeedsOk()) out.push({key: "half-ok", lvl: "warn", ic: "🤝", title: "Remboursement 50/50 à confirmer", text: `Pécule a deviné : ta moitié part du ${accName(halfFrom())} vers le ${accName(halfJoint())}, et sa moitié s'appelle « ${halfName()} ».`, act: ["C'est bon", halfConfirm], act2: ["Changer", () => SHEET.open({type: "half"})]});
+  const hf = halfFrom(), hj = halfJoint();
+  if (hj && hf && halfUsed() && D.acc[hf]?.type !== "courant") out.push({key: "half-from", lvl: "bad", ic: "🤝", title: `Ta moitié 50/50 part du ${accName(hf)}`, text: "Ce n'est pas un compte courant : chaque mois, une ligne « Virement … (50/50) » y apparaît. Choisis le compte qui rembourse vraiment.", act: ["Régler", () => SHEET.open({type: "half"})]});
+  for (const c of Object.values(D.acc)) { if (c.type !== "carte" || c.hidden) continue; const l = c.linked && D.acc[c.linked];
+    if (!l || l.hidden || ["carte", "pret"].includes(l.type)) out.push({key: "card-" + c.id, lvl: "bad", ic: "💳", title: `${c.name} : compte débité introuvable`, text: "Sans compte débité valable, le débit mensuel de cette carte n'est pas calculé.", act: ["Régler", () => SHEET.open({type: "acc", id: c.id})]}); }
+  const nan = live.filter(x => !Number.isFinite(Number(x.amount)) || (x.splits || []).some(sp => !Number.isFinite(Number(sp.amount))));
+  if (nan.length) out.push({key: "nan", lvl: "bad", ic: "⚠️", title: plural(nan.length, "opération") + " au montant illisible", text: nan.slice(0, 3).map(x => `${x.name || "Sans libellé"} (${accName(x.account)}, ${dayShort(x.date)})`).join(" · "), act: ["Ouvrir", () => openTx(nan[0])]});
+  const lost = live.filter(x => !D.acc[x.account] || (x.splits || []).some(sp => sp.to && !D.acc[sp.to]));
+  if (lost.length) out.push({key: "lost", lvl: "bad", ic: "🔗", title: plural(lost.length, "opération") + " liée" + (lost.length > 1 ? "s" : "") + " à un compte supprimé", text: "Elles faussent les soldes : " + lost.slice(0, 3).map(x => `${x.name || "Sans libellé"}, ${fmt(x.amount)} le ${dayShort(x.date)}`).join(" · "), act: ["Ouvrir", () => openTx(lost[0])]});
+  const off = live.filter(x => (x.splits || []).length && Number.isFinite(Number(x.amount)) && Math.abs(x.splits.reduce((a, sp) => a + (Number(sp.amount) || 0), 0) - Number(x.amount)) > 0.005);
+  if (off.length) out.push({key: "split-sum", lvl: "bad", ic: "🧮", title: plural(off.length, "ventilation") + " qui ne tombe" + (off.length > 1 ? "nt" : "") + " pas juste", text: "La somme des lignes diffère du montant de l'opération : " + off.slice(0, 3).map(x => `${x.name || "Sans libellé"}, ${fmt(x.amount)} le ${dayShort(x.date)}`).join(" · "), act: ["Ouvrir", () => openTx(off[0])]});
+  for (const a of accList()) if (a.type === "epargne") { const b = balance(a.id, {upTo: t}); if (b < -0.004) out.push({key: "neg-" + a.id, lvl: "warn", ic: "🌱", title: `${a.name} est à ${fmt(b)}`, text: "Un livret ne peut pas être à découvert : une opération est sans doute sur le mauvais compte, ou de mauvais signe.", act: ["Voir", () => NAV.push({v: "acc", id: a.id})]}); }
+  const stale = []; for (const x of live) for (const sp of x.splits || []) if (sp.bdg && (!D.bdg[sp.bdg] || !Object.values(D.bud).some(l => l.budget === sp.bdg && lineMatcher(l)(sp.cat || null)))) { stale.push(x); break; }
+  if (stale.length) out.push({key: "bdg-stale", lvl: "info", ic: "🎯", title: plural(stale.length, "opération") + " rattachée" + (stale.length > 1 ? "s" : "") + " à un budget qui ne suit pas sa catégorie", text: "Pécule ignore déjà ce rattachement et compte l'opération d'après sa catégorie. « Nettoyer » le retire.", act: ["Nettoyer", () => { Store.bulk(stale.map(x => ["put", {...x, splits: x.splits.map(sp => sp.bdg && (!D.bdg[sp.bdg] || !Object.values(D.bud).some(l => l.budget === sp.bdg && lineMatcher(l)(sp.cat || null))) ? {...sp, bdg: null} : sp)}])); toast("Rattachements nettoyés"); }]});
+  const old = live.filter(x => x.st === "saisie" && x.date < addDays(t, -60) && !x.kind);
+  if (old.length) out.push({key: "old-saisie", lvl: "info", ic: "🕰️", title: plural(old.length, "opération") + " non validée" + (old.length > 1 ? "s" : "") + " depuis plus de deux mois", text: "Si la banque les a passées, valide-les ; sinon elles n'existeront peut-être jamais (à supprimer).", act: ["Voir", () => NAV.push({v: "allTx", f0: {st: ["saisie"]}})]});
+  return out;
+}
+/* Accueil : question 50/50 posée une fois, et incohérences graves (même présentation que le rappel de sauvegarde) */
+function NudgeCard({icon, col = "var(--accent)", title, text, children}) {
+  return html`<div class="card" role="status" style=${`padding:14px 16px;display:flex;flex-direction:column;gap:10px;border:1px solid color-mix(in srgb,${col} 25%,transparent)`}>
+    <div style="display:flex;gap:12px;align-items:flex-start"><span style=${`width:36px;height:36px;border-radius:12px;background:color-mix(in srgb,${col} 12%,transparent);color:${col};display:flex;align-items:center;justify-content:center;flex:none`}><${Ic} n=${icon} s=${19} /></span>
+      <span class="grow"><div style="font-size:15px;font-weight:700">${title}</div><div class="muted" style="font-size:13px;line-height:1.4;margin-top:2px">${text}</div></span></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">${children}</div></div>`;
+}
+function DataNudge() {
+  if (halfNeedsOk()) return html`<${NudgeCard} icon="users" title="Remboursement 50/50 : c'est bien ça ?" text=${html`Ta moitié part du <b>${accName(halfFrom())}</b> vers le ${accName(halfJoint())}, et sa moitié s'appelle « ${halfName()} ».`}>
+    <button class="btn sm" onClick=${() => SHEET.open({type: "half"})}>Changer</button><button class="btn sm pri" onClick=${halfConfirm}>Oui</button></${NudgeCard}>`;
+  const bad = healthChecks().filter(c => c.key && c.lvl === "bad" && c.key !== "half-ok");
+  if (!bad.length) return null;
+  return html`<${NudgeCard} icon="shield" col="var(--neg)" title=${bad.length > 1 ? bad.length + " incohérences dans tes données" : bad[0].title} text=${bad.length > 1 ? bad.map(c => c.title).join(" · ") : bad[0].text}>
+    <button class="btn sm pri" onClick=${() => NAV.push({v: "health"})}>Voir</button></${NudgeCard}>`;
 }
 function HealthView() {
   const list = healthChecks();
@@ -2458,12 +2500,15 @@ function AccPill({cur, onPick}) {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none;color:var(--muted)"><path d="M6 9l6 6 6-6" /></svg></button>`;
 }
 function HalfSheet({close}) {
-  const [n, setN] = useState(halfName() === "Partenaire" ? "" : halfName()), [from, setFrom] = useState(halfFrom() || "");
-  const save = () => { Store.put({...S(), k: "set", id: "set_main", halfName: n.trim() || null, halfFrom: from || null}); close(); toast("Remboursement 50/50 enregistré"); };
+  const [n, setN] = useState(halfName() === "Partenaire" ? "" : halfName()), [from, setFrom] = useState(halfFrom() || ""), [jt, setJt] = useState(halfJoint() || "");
+  const fromBad = from && A().acc[from] && A().acc[from].type !== "courant";
+  const save = () => { Store.put({...S(), k: "set", id: "set_main", halfName: n.trim() || null, halfFrom: from || null, halfJoint: jt || null, halfOk: true}); close(); toast("Remboursement 50/50 enregistré"); };
   return html`<${Sheet} title="Remboursement 50/50" close=${close} right=${html`<button class="link" onClick=${save}>Enregistrer</button>`}>
     <div class="help">Les dépenses cochées « 50/50 » sur le ${halfJoint() ? accName(halfJoint()) : "compte joint"} sont partagées en deux, l'avant-dernier jour du mois : ta moitié s'ajoute au virement vers le joint, l'autre à l'opération de la personne avec qui tu partages. Si ces deux opérations existent déjà ce jour-là, les nouvelles dépenses s'y ajoutent.</div>
     <${Field} label="Prénom" id="hs-n"><input id="hs-n" value=${n} placeholder="Prénom" onInput=${e => setN(e.target.value)} /></${Field}>
-    <${Field} label="Ta moitié part du" id="hs-f"><${AccSelect} id="hs-f" v=${from} set=${setFrom} exclude=${halfJoint()} /></${Field}>
+    <${Field} label="Compte joint" id="hs-j"><${AccSelect} id="hs-j" v=${jt} set=${setJt} /></${Field}>
+    <${Field} label="Ta moitié part du" id="hs-f"><${AccSelect} id="hs-f" v=${from} set=${setFrom} exclude=${jt || halfJoint()} /></${Field}>
+    ${fromBad && html`<div class="banner" role="status" style="padding:10px 14px;font-size:14px">${accName(from)} n'est pas un compte courant : les virements 50/50 partiront de là chaque mois. C'est bien ce que tu veux ?</div>`}
     <button class="btn pri" onClick=${save}>Enregistrer</button>
   </${Sheet}>`;
 }
@@ -2487,7 +2532,7 @@ function Accounts() {
   return html`
     <header class="top" style="align-items:center;gap:8px"><span style="display:flex;align-items:center;gap:6px;min-width:0;flex:1"><${AccPill} /></span><span class="muted" style="font-size:13px;font-weight:500;white-space:nowrap">${(d => d.charAt(0).toUpperCase() + d.slice(1))(P(today()).toLocaleDateString("fr-FR", {weekday: "short", day: "numeric", month: "short"}))}</span><button class="hbtn" style="width:40px;height:40px;font-size:18px;font-weight:700;flex:none" aria-label="Guide de Pécule" onClick=${() => NAV.push({v: "guide"})}>?</button></header>
     <main class="scr wide dash" style="gap:20px">
-      <div class="dash-full"><${BackupNudge} /></div>
+      <div class="dash-full"><${BackupNudge} /><${DataNudge} /></div>
       <div class="dash-l"><${Glance} />
       ${main && html`<${GlanceBudgets} />`}</div>
       <div class="dash-r">${main && html`<${DashOps} id=${main} key=${main} />`}

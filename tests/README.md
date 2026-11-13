@@ -31,6 +31,7 @@ reste sur la machine ; rien n'est écrit dans le dépôt (`tests/out/` est ignor
 | `saisie_echeance` | Bouton + › Échéance : création et occurrences |
 | `cinquante_cinquante` | 50/50 ajouté au virement et à l'opération de la partenaire ; décocher ; mois suivant en prévu |
 | `cinquante_cinquante_depuis_le_courant` | 50/50 : un livret qui vire parfois vers le joint en fin de mois n'est jamais pris pour le compte d'où part ta moitié |
+| `verifications_donnees` | Question 50/50 posée une fois sur l'accueil ; Vérifications : 50/50 sur un livret, carte sans compte débité, opération liée à un compte supprimé, ventilation fausse, livret négatif, budget périmé (« Nettoyer ») ; aucun signalement sur un fichier propre |
 | `valider_supprimer_annuler` | Valider une opération, la supprimer, annuler |
 | `valider_virement` | Virement entre tes comptes : un geste valide (ou dé-valide) les deux côtés |
 | `reorganiser_comptes` | Comptes › Réorganiser : cartes sous leur compte, ↑/↓ entre voisines affichées, l'accueil suit |

@@ -35,7 +35,7 @@ import fixture_icompta  # noqa: E402
 
 # ---------------------------------------------------------------- serveur (avec accès de test aux calculs)
 HOOK = ('window.__dbg = {A, S, Store, Hist, NAV, SHEET, occurrences, balance, amtFor, accList, today, budgets, lineAt, cardNext, cardPending, '
-        'halfBase, halfParts, halfName, halfFrom, halfJoint, glanceState, shownBal, cats, catIc, guessIc};\n')
+        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, glanceState, shownBal, cats, catIc, guessIc};\n')
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -463,6 +463,61 @@ def cinquante_cinquante_depuis_le_courant(br, url):
     on_liv = a.js("return D.occurrences('2026-12-31').filter(o => o.kind === 'half' && o.account === arg).map(o => [o.name, o.amount]);", liv)
     check(not on_liv, "ligne 50/50 sur le livret : %s" % on_liv)
     a.no_errors("50/50 depuis le courant")
+    a.close()
+
+
+@test
+def verifications_donnees(br, url):
+    """Vérifications : question 50/50 posée une fois sur l'accueil, incohérences repérées (50/50 sur un livret, carte sans compte, compte supprimé, ventilation fausse, livret négatif, budget périmé) et nettoyage."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    check(a.js("return D.dataChecks().map(c => c.key);") == [], "fichier propre signalé : %s" % a.js("return D.dataChecks().map(c => c.title);"))
+    j, liv, cour = a.acc_id("Joint"), a.acc_id("Livret"), a.acc_id("Courant")
+    # 1. 50/50 utilisé : Pécule demande confirmation une fois
+    a.js("""D.Store.put({k: 'tx', id: 'tx_v_half', account: arg, date: '2026-11-12', name: 'Cinéma', amount: -40, splits: [{amount: -40, cat: null}], st: 'saisie', half: true});""", j)
+    a.wait(500)
+    a.pg.evaluate("location.hash = '#accueil'")
+    a.wait(400)
+    main = a.pg.inner_text("main")
+    check("Remboursement 50/50" in main and "Courant" in main, "question 50/50 absente de l'accueil")
+    a.pg.screenshot(path=os.path.join(OUT, "accueil-50-50.png"))
+    a.pg.click('main button:has-text("Oui")')
+    a.wait(400)
+    check(a.js("return [D.S().halfOk, D.S().halfFrom] ;") == [True, cour], "confirmation 50/50 non enregistrée : %s" % a.js("return [D.S().halfOk, D.S().halfFrom];"))
+    check("Remboursement 50/50" not in a.pg.inner_text("main"), "la question 50/50 reste affichée")
+    # 2. moitié réglée sur un livret : signalé sur l'accueil et dans la fiche
+    a.js("D.Store.put({...D.S(), halfFrom: arg});", liv)
+    a.wait(400)
+    check("half-from" in a.js("return D.dataChecks().map(c => c.key);"), "50/50 depuis un livret non signalé")
+    check("part du Livret" in a.pg.inner_text("main"), "alerte 50/50 absente de l'accueil")
+    a.js("D.SHEET.open({type: 'half'});")
+    a.wait(400)
+    check("n'est pas un compte courant" in a.pg.inner_text(".sheet"), "pas d'avertissement dans la fiche 50/50")
+    a.js("D.SHEET.close();")
+    a.wait(300)
+    a.js("D.Store.put({...D.S(), halfFrom: arg});", cour)
+    # 3. autres incohérences
+    bud = a.js("return Object.values(D.A().bdg).find(b => /Loisirs/.test(b.name)).id;")
+    a.js("""const [j, l, bud] = arg; D.Store.bulk([
+      ['put', {k: 'acc', id: 'acc_v_card', name: 'Carte orpheline', type: 'carte', linked: 'acc_nope', debitDay: 4, initial: 0, hidden: false, order: 50}],
+      ['put', {k: 'tx', id: 'tx_v_lost', account: j, date: '2026-11-05', name: 'Vers un compte disparu', amount: -10, splits: [{to: 'acc_nope', amount: -10}], st: 'saisie'}],
+      ['put', {k: 'tx', id: 'tx_v_sum', account: j, date: '2026-11-06', name: 'Ventilation fausse', amount: -30, splits: [{amount: -20, cat: null}], st: 'saisie'}],
+      ['put', {k: 'tx', id: 'tx_v_neg', account: l, date: '2026-11-07', name: 'Retrait énorme', amount: -999999, splits: [{amount: -999999, cat: null}], st: 'pointee'}],
+      ['put', {k: 'tx', id: 'tx_v_bdg', account: j, date: '2026-11-08', name: 'Rattachement périmé', amount: -12, splits: [{amount: -12, cat: null, bdg: bud}], st: 'saisie'}]]);""", [j, liv, bud])
+    a.wait(600)
+    keys = a.js("return D.dataChecks().map(c => c.key);")
+    for k in ["card-acc_v_card", "lost", "split-sum", "neg-" + liv, "bdg-stale"]:
+        check(k in keys, "incohérence non repérée : %s (repérées : %s)" % (k, keys))
+    check("incohérences" in a.pg.inner_text("main"), "pas d'alerte d'incohérences sur l'accueil")
+    a.pg.evaluate("location.hash = '#reglages'")
+    a.js("D.NAV.push({v: 'health'});")
+    a.wait(500)
+    a.pg.screenshot(path=os.path.join(OUT, "verifications.png"), full_page=True)
+    a.pg.click('.card:has-text("budget qui ne suit pas") button:has-text("Nettoyer")')
+    a.wait(500)
+    check("bdg-stale" not in a.js("return D.dataChecks().map(c => c.key);"), "« Nettoyer » n'a pas retiré le rattachement")
+    check(a.js("return D.A().tx.tx_v_bdg.splits[0].bdg;") is None, "rattachement toujours présent")
+    a.no_errors("vérifications")
     a.close()
 
 
