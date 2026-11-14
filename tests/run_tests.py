@@ -618,6 +618,17 @@ def compte_joint_prorata(br, url):
       ['put', {k: 'sch', id: 'sch_t_assur', account: cj, name: 'Assurance carte', amount: -120, splits: [{amount: -120, cat: null}], freq: {n: 1, u: 'y'}, next: '2027-03-10', anchor: 10, prorata: true}],
       ['put', {k: 'sch', id: 'sch_t_caf', account: j, name: 'CAF', amount: 100, splits: [{amount: 100, cat: null}], freq: {n: 1, u: 'm'}, next: '2026-12-08', anchor: 8, prorata: true}]]);""", [j, cj])
     a.wait(500)
+    # un virement vers le joint peut aussi être coché : vu du joint, il réduit le total
+    vj = a.js("return Object.values(D.A().sch).find(s => s.name === 'Virement au Joint').id;")
+    a.js("D.SHEET.open({type: 'op', kind: 'sch', src: D.A().sch[arg]});", vj)
+    a.wait(500)
+    check("Au prorata des salaires" in a.pg.inner_text(".sheet"), "pas de case prorata sur un virement vers le joint")
+    a.js("D.SHEET.close();")
+    a.js("D.Store.put({...D.A().sch[arg], prorata: true});", vj)
+    a.wait(300)
+    check(near(a.js("return D.prMonth('2026-12').N;"), 1200 + 600 + 10 - 100 - 2000), "virement coché mal compté : %s" % a.js("return D.prMonth('2026-12').N;"))
+    a.js("D.Store.put({...D.A().sch[arg], prorata: false});", vj)
+    a.wait(300)
     m = a.js("return D.prMonth('2026-12');")
     check(near(m["N"], 1200 + 600 + 10 - 100), "total à partager en décembre : %s (attendu 1710)" % m["N"])
     check(near(m["mine"], 1026) and near(m["hers"], 684), "parts : %s / %s (attendu 1026 / 684)" % (m["mine"], m["hers"]))

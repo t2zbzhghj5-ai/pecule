@@ -881,20 +881,22 @@ const prOn = () => { const p = PR(); return !!p && !!halfJoint() && !!A().acc[p.
 const prIncome = k => { const l = (PR()?.incomes || []).slice().sort((a, b) => a.from.localeCompare(b.from)); let cur = l[0] || {me: 0, partner: 0}; for (const x of l) if (x.from <= k) cur = x; return cur; };
 const prRatio = k => { const i = prIncome(k), tot = (i.me || 0) + (i.partner || 0); return tot ? (i.me || 0) / tot : .5; };
 const prAccs = () => { const j = halfJoint(); return new Set(j ? [j, ...Object.values(A().acc).filter(a => a.type === "carte" && a.linked === j).map(a => a.id)] : []); };
-const prSchOk = acc => prOn() && prAccs().has(acc);
+const prSchOk = (acc, to) => prOn() && (prAccs().has(acc) || (!!to && prAccs().has(to)));
 const prLineOk = bid => { const b = A().bdg[bid]; if (!b || !prOn()) return false; const accs = prAccs(); return bAccs(b).some(x => accs.has(x)); };
 const perMonth = f => { const n = Number(f?.n) || 1; return f?.u === "y" ? 1 / (12 * n) : f?.u === "w" ? 52 / 12 / n : f?.u === "d" ? 365 / 12 / n : 1 / n; };
 function prItems(k) {
   return memo("pri" + k, () => {
     const D = A(), accs = prAccs(), ps = k + "-01", pe = eom(k), out = []; if (!accs.size) return out;
     for (const s of Object.values(D.sch)) {
-      if (!s.prorata || s.paused || !s.next || !accs.has(s.account) || (s.end && s.end < ps)) continue;
+      if (!s.prorata || s.paused || !s.next || (s.end && s.end < ps)) continue;
+      if (!accs.has(s.account) && !(s.splits || []).some(x => x.to && accs.has(x.to))) continue;
+      /* montant vu depuis le joint et ses cartes : dépense = charge ; rentrée ou virement reçu = réduit le total */
       if (s.left != null) { if (s.left <= 0) continue; let d = s.next; for (let i = 1; i < s.left; i++) d = step(d, s.freq, s.anchor); if (d < ps) continue; }
       const monthly = s.freq?.u === "m" && (Number(s.freq.n) || 1) === 1;
       let v;
       if (monthly) { const [y, m] = k.split("-").map(Number), d = `${k}-${pad(Math.min(s.anchor || Number(s.next.slice(8)), dim(y, m)))}`;
-        if ((s.skips || []).includes(d)) continue; v = s.ov?.[d]?.amount ?? s.amount; }
-      else v = r2(s.amount * perMonth(s.freq));
+        if ((s.skips || []).includes(d)) continue; const o = s.ov?.[d] ? {...s, ...s.ov[d]} : s; v = r2([...accs].reduce((a, id) => a + amtFor(o, id), 0)); }
+      else v = r2([...accs].reduce((a, id) => a + amtFor(s, id), 0) * perMonth(s.freq));
       out.push({kind: "sch", id: s.id, name: s.name, acc: s.account, v: r2(-v), smooth: !monthly});
     }
     for (const b of budgets(true)) { if (!bAccs(b).some(x => accs.has(x))) continue;
@@ -3379,7 +3381,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
       if (!f.date) return setErr("Indique la prochaine échéance.");
       const s = {...(base || {}), k: "sch", id: base?.id || uid("sch"), ...common, freq: {n: Math.max(1, Number(f.freq.n) || 1), u: f.freq.u}, next: f.date, anchor: Number(f.date.slice(8)), end: f.end || null, left: f.left === "" || f.left == null ? null : Number(f.left), auto: f.auto, paused: f.paused};
       if (base && base.next !== f.date) s.skips = [];
-      if (mode !== "transfer" && prSchOk(f.account) && f.prorata) s.prorata = true; else delete s.prorata;
+      if (prSchOk(f.account, mode === "transfer" ? f.to : null) && f.prorata) s.prorata = true; else delete s.prorata;
       Store.put(s); close(); toast(base ? "Échéance modifiée" : "Échéance ajoutée"); return;
     }
     if (f.rep && !base && !occ) {
@@ -3453,7 +3455,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
       </div>
       <${Toggle} on=${f.auto} set=${v => set("auto", v)} label="Passer automatiquement" sub="L'opération est créée le jour de l'échéance, sans attendre ta validation." />
       ${base && html`<${Toggle} on=${f.paused} set=${v => set("paused", v)} label="Suspendre" sub="Plus d'occurrences prévues tant que c'est activé." />`}
-      ${mode !== "transfer" && prSchOk(f.account) && html`<${Toggle} on=${!!f.prorata} set=${v => set("prorata", v)} label="Au prorata des salaires" sub=${f.prorata ? `Comptée chaque mois dans ton virement au ${accName(halfJoint())} et la ligne ${(PR().name || "").trim() || "de l'autre personne"} (${Math.round(prRatio(ym(today())) * 100)} / ${100 - Math.round(prRatio(ym(today())) * 100)})` : "Partager cette échéance au prorata de vos salaires"} />`}`
+      ${prSchOk(f.account, mode === "transfer" ? f.to : null) && html`<${Toggle} on=${!!f.prorata} set=${v => set("prorata", v)} label="Au prorata des salaires" sub=${f.prorata ? `Comptée chaque mois dans ton virement au ${accName(halfJoint())} et la ligne ${(PR().name || "").trim() || "de l'autre personne"} (${Math.round(prRatio(ym(today())) * 100)} / ${100 - Math.round(prRatio(ym(today())) * 100)})` : "Partager cette échéance au prorata de vos salaires"} />`}`
     : html`
       ${f.more && mode !== "transfer" && showF("pay") && html`<div class="grid2">
         <${Field} label="Moyen de paiement" id="op-pay"><select id="op-pay" value=${f.pay} onChange=${e => set("pay", e.target.value)}>${Object.entries(PAY).map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select></${Field}>
