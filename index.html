@@ -888,7 +888,7 @@ function prItems(k) {
   return memo("pri" + k, () => {
     const D = A(), accs = prAccs(), ps = k + "-01", pe = eom(k), out = []; if (!accs.size) return out;
     for (const s of Object.values(D.sch)) {
-      if (!s.prorata || s.paused || !s.next || (s.end && s.end < ps)) continue;
+      if (!s.prorata || s.prAuto || s.paused || !s.next || (s.end && s.end < ps)) continue;
       if (!accs.has(s.account) && !(s.splits || []).some(x => x.to && accs.has(x.to))) continue;
       /* montant vu depuis le joint et ses cartes : dépense = charge ; rentrée ou virement reçu = réduit le total */
       if (s.left != null) { if (s.left <= 0) continue; let d = s.next; for (let i = 1; i < s.left; i++) d = step(d, s.freq, s.anchor); if (d < ps) continue; }
@@ -910,16 +910,28 @@ function prMonth(k) {
   return memo("prm" + k, () => { const items = prItems(k), N = r2(items.reduce((a, x) => a + x.v, 0)), r = prRatio(k), mine = r2(Math.max(0, N) * r), hers = r2(Math.max(0, N) - mine);
     return {k, items, N, r, mine, hers}; });
 }
-function prOccs(start, until) {
-  if (!prOn()) return [];
-  const D = A(), p = PR(), j = halfJoint(), out = [], name = (p.name || "Partenaire").trim();
-  for (let k = p.since && p.since > ym(start) ? p.since : ym(start), g = 0; g++ < 240; k = ymAdd(k, 1)) {
-    const [y, m] = k.split("-").map(Number), d = `${k}-${pad(Math.min(Number(p.day) || 1, dim(y, m)))}`; if (d > until) break;
-    const {mine, hers} = prMonth(k);
-    if (mine > 0.004 && !D.tx["tx_pr_" + k]) out.push({virtual: true, kind: "prorata", id: "tx_pr_" + k, date: d, account: p.from, name: "Virement au " + accName(j) + " (prorata)", amount: -mine, splits: [{to: j, amount: -mine}], pay: "virement"});
-    if (hers > 0.004 && !D.tx["tx_prm_" + k]) out.push({virtual: true, kind: "prorata", id: "tx_prm_" + k, date: d, account: j, name: name + " (prorata)", amount: hers, splits: [{amount: hers, cat: null}], pay: "virement"});
+/* Deux vraies échéances mensuelles, visibles dans l'échéancier comme les autres : « Virement au Joint (prorata) » (ton compte courant → joint)
+   et « Marie (prorata) » (sur le joint). Pécule tient leurs montants à jour : montant du prochain mois + montants modifiés (ov) pour les mois suivants.
+   Une occurrence validée devient une opération et ne bouge plus. Désactiver le prorata supprime ces deux échéances. */
+const PR_IDS = {me: "sch_pr_me", her: "sch_pr_her"};
+function prSync() {
+  const D = A(), p = PR(), ops = [];
+  if (!prOn()) { for (const id of Object.values(PR_IDS)) if (D.sch[id]) ops.push(["del", D.sch[id]]); if (ops.length) Store.bulk(ops); return; }
+  const j = halfJoint(), day = Math.min(28, Math.max(1, Number(p.day) || 1)), name = (p.name || "Partenaire").trim();
+  const dateOf = k => { const [y, m] = k.split("-").map(Number); return `${k}-${pad(Math.min(day, dim(y, m)))}`; };
+  const first = (() => { let k = p.since && p.since > ym(today()) ? p.since : ym(today()); if (dateOf(k) < today() && !(p.since && p.since > ym(today()))) k = ymAdd(k, 1); return dateOf(k); })();
+  for (const who of ["me", "her"]) {
+    const id = PR_IDS[who], cur = D.sch[id];
+    let next = cur && cur.next && cur.anchor === day ? cur.next : first; if (next < first && !cur) next = first;
+    const acc = who === "me" ? p.from : j, nm = who === "me" ? "Virement au " + accName(j) + " (prorata)" : name + " (prorata)";
+    const val = k => { const x = prMonth(k); return who === "me" ? -x.mine : x.hers; };
+    const mk = v => who === "me" ? [{to: j, amount: v}] : [{amount: v, cat: null}];
+    const base = r2(val(ym(next))), ov = {};
+    for (let k = ym(next), g = 0; g++ < 36; k = ymAdd(k, 1)) { const v = r2(val(k)); if (Math.abs(v - base) > 0.004) ov[dateOf(k)] = {date: dateOf(k), amount: v, name: nm, account: acc, splits: mk(v)}; }
+    const want = {...(cur || {}), k: "sch", id, prAuto: who, account: acc, name: nm, amount: base, splits: mk(base), freq: {n: 1, u: "m"}, next, anchor: day, end: null, left: null, auto: false, paused: false, pay: "virement", payee: null, ov, comment: "Calculé par Pécule : partage au prorata des salaires"};
+    if (!cur || JSON.stringify({...cur, v: undefined}) !== JSON.stringify({...want, v: undefined})) ops.push(["put", want]);
   }
-  return out;
+  if (ops.length) Store.bulk(ops);
 }
 
 /* ============ Outils ============ */
@@ -1231,7 +1243,6 @@ function occurrences(until) {
       }
     }
     for (const o of halfOccs(start, until)) out.push(o);
-    for (const o of prOccs(start, until)) out.push(o);
     const t = today(), base = out.slice();
     for (const b of budgets(true)) {
       if (b.remaining === false) continue;
@@ -3839,10 +3850,6 @@ function Schedules() {
     for (const c of accList()) if (c.type === "carte" && c.linked === aid) out.push(["Débit " + c.name, "le " + c.debitDay + " de chaque mois, selon les dépenses de la carte"]);
     if (aid === halfFrom() && halfJoint()) out.push(["Remboursement 50/50", "vers " + accName(halfJoint()) + ", l'avant-dernier jour du mois"]);
     if (aid === halfJoint()) out.push(["Part de " + halfName() + " (50/50)", "l'avant-dernier jour du mois"]);
-    if (prOn()) { const nx = prOccs(today(), addDays(today(), 70)).filter(o => o.date >= today()), p = PR(), jr = (Number(p.day) || 1) === 1 ? "1er" : Number(p.day);
-      const mine = nx.find(o => o.id.startsWith("tx_pr_")), hers = nx.find(o => o.id.startsWith("tx_prm_"));
-      if (aid === p.from) out.push(["Virement au " + accName(halfJoint()) + " (prorata)", (mine ? fmt(-mine.amount) + " le " + dayShort(mine.date) + " · " : "") + "le " + jr + " de chaque mois, ta part des charges cochées"]);
-      if (aid === halfJoint()) out.push([(p.name || "").trim() + " (prorata)", (hers ? fmt(hers.amount) + " le " + dayShort(hers.date) + " · " : "") + "le " + jr + " de chaque mois, sa part des charges cochées"]); }
     for (const l of accList()) if (l.type === "pret" && l.loan?.from === aid) out.push([l.name, fmt(l.loan.payment) + " le " + Number(l.loan.first.slice(8)) + " de chaque mois"]);
     if (a?.type === "pret" && a.loan) out.push(["Mensualités", fmt(a.loan.payment) + " par mois"]);
     return out; };
@@ -5194,7 +5201,7 @@ function App() {
 }
 /* 50/50 : les dépenses cochées s'ajoutent au virement et à l'opération de la partenaire du mois */
 let halfT = null;
-Store.sub(() => { if (halfT) return; halfT = setTimeout(() => { halfT = null; try { jointMigrate(); halfSync(); } catch (e) { console.error(e); } }, 60); });
+Store.sub(() => { if (halfT) return; halfT = setTimeout(() => { halfT = null; try { jointMigrate(); halfSync(); prSync(); } catch (e) { console.error(e); } }, 60); });
 render(html`<${App} />`, document.getElementById("app"));
 Store.init();
 if ("serviceWorker" in navigator) { try { navigator.serviceWorker.register("./sw.js"); } catch {} }
