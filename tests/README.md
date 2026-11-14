@@ -34,6 +34,7 @@ reste sur la machine ; rien n'est écrit dans le dépôt (`tests/out/` est ignor
 | `cinquante_cinquante_sans_compte_joint` | Compte joint indiqué explicitement, jamais deviné par son nom : sans compte joint (cas de Marie), rien du 50/50 ; l'interrupteur « Compte joint » de la fiche du compte l'active |
 | `compte_joint_import_et_mise_a_jour` | Import iCompta : réponse à « Un de ces comptes est-il un compte joint ? » enregistrée ; mise à jour : le compte où des dépenses 50/50 sont déjà cochées est marqué joint |
 | `ventilation_part_negative` | Ventilation : part négative (bouton ±), équilibre sur la somme signée, signe conservé à la réouverture |
+| `ventilation_avec_virement` | Ventilation : « + Ajouter un virement » (part vers un autre compte, dépense ou revenu, signe ±), soldes des deux comptes, compte conservé |
 | `verifications_donnees` | Question 50/50 posée une fois sur l'accueil ; Vérifications : 50/50 sur un livret, carte sans compte débité, opération liée à un compte supprimé, ventilation fausse, livret négatif, budget périmé (« Nettoyer ») ; aucun signalement sur un fichier propre |
 | `import_echeances_semaines_et_montant` | Import iCompta : échéance toutes les 4 semaines (unité iCompta 1 = semaine) et montant porté par l'échéance elle-même (« useSumOfSplits » à 0) |
 | `valider_supprimer_annuler` | Valider une opération, la supprimer, annuler |

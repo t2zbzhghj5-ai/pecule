@@ -523,6 +523,54 @@ def compte_joint_import_et_mise_a_jour(br, url):
 
 
 @test
+def ventilation_avec_virement(br, url):
+    """Ventilation : « + Ajouter un virement » ajoute une part vers un autre compte (dépense et revenu, signe ±), soldes des deux comptes justes, compte conservé à la réouverture."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    cour, liv, j = a.acc_id("Courant"), a.acc_id("Livret"), a.acc_id("Joint")
+    b0 = a.js("return [D.balance(arg[0]), D.balance(arg[1])];", [cour, liv])
+    def fill(acc, mode, total, name, parts):
+        a.js("D.SHEET.open({type: 'op', kind: 'tx', acc: arg});", acc)
+        a.wait(500)
+        sh = a.pg.locator(".sheet")
+        sh.locator('[role=tab]:has-text("%s"), button:has-text("%s")' % (mode, mode)).first.click()
+        sh.locator("#op-amt").fill(total)
+        sh.locator("#op-name").fill(name)
+        sh.locator('button:has-text("Plusieurs catégories")').click()
+        a.wait(300)
+        # parts : [(montant, négatif?, compte de virement ou None)] ; la 2e ligne vide de départ est retirée à la fin
+        for k, (v, neg, to) in enumerate(parts):
+            row = 0 if k == 0 else k + 1
+            if k > 0:
+                sh.locator('button:has-text("%s")' % ("+ Ajouter un virement" if to else "+ Ajouter une part")).click()
+                a.wait(200)
+            sh.locator('[aria-label="Montant de la part"]').nth(row).fill(v)
+            if neg:
+                sh.locator('[aria-label="Inverser le signe de la part"]').nth(row).click()
+            if to:
+                sh.locator('[aria-label="Virement vers"]').last.select_option(to)
+        sh.locator('[aria-label="Retirer la part"]').nth(1).click()
+        a.wait(200)
+        a.pg.screenshot(path=os.path.join(OUT, "ventilation-virement-%s.png" % mode))
+        check("Équilibrée" in sh.inner_text(), "%s : ventilation pas équilibrée" % name)
+        sh.locator('button:has-text("Enregistrer")').last.click()
+        a.wait(600)
+        return a.js("return Object.values(D.A().tx).find(x => x.name === arg);", name)
+    t = fill(cour, "Dépense", "50", "Courses et épargne", [("30", False, None), ("20", False, liv)])
+    check(t and t["amount"] == -50 and sorted([sp["amount"], sp.get("to")] for sp in t["splits"]) == sorted([[-30, None], [-20, liv]]), "dépense : %s" % (t and t["splits"]))
+    b1 = a.js("return [D.balance(arg[0]), D.balance(arg[1])];", [cour, liv])
+    check(near(b1[0], b0[0] - 50) and near(b1[1], b0[1] + 20), "soldes après la dépense : %s (avant %s)" % (b1, b0))
+    t2 = fill(j, "Revenu", "100", "Marie ventilée", [("120", False, None), ("20", True, liv)])
+    check(t2 and t2["amount"] == 100 and sorted([sp["amount"], sp.get("to")] for sp in t2["splits"]) == sorted([[120, None], [-20, liv]]), "revenu : %s" % (t2 and t2["splits"]))
+    a.js("D.SHEET.open({type: 'op', kind: 'tx', src: D.A().tx[arg]});", t["id"])
+    a.wait(500)
+    check(a.pg.locator('.sheet [aria-label="Virement vers"]').input_value() == liv, "compte du virement perdu à la réouverture")
+    a.js("D.SHEET.close();")
+    a.no_errors("ventilation avec virement")
+    a.close()
+
+
+@test
 def verifications_donnees(br, url):
     """Vérifications : question 50/50 posée une fois sur l'accueil, incohérences repérées (50/50 sur un livret, carte sans compte, compte supprimé, ventilation fausse, livret négatif, budget périmé) et nettoyage."""
     a = App(br, url)
