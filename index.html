@@ -899,6 +899,9 @@ function prItems(k) {
       else v = r2([...accs].reduce((a, id) => a + amtFor(s, id), 0) * perMonth(s.freq));
       out.push({kind: "sch", id: s.id, name: s.name, acc: s.account, v: r2(-v), smooth: !monthly});
     }
+    for (const l of Object.values(D.acc)) { const L = l.loan; if (l.type !== "pret" || !L?.prorata || !L.payment || !accs.has(L.from)) continue;
+      if (L.first && ym(L.first) > k) continue; if (-balance(l.id, {upTo: ps}) <= 0.004 && L.first && L.first < ps) continue;
+      out.push({kind: "loan", id: l.id, name: "Échéance " + l.name, acc: L.from, v: r2(rateAt(L.pays, ps, L.payment))}); }
     for (const b of budgets(true)) { if (!bAccs(b).some(x => accs.has(x))) continue;
       for (const l of linesOf(b.id)) { if (!l.prorata && !b.prorata) continue; const p = periodAt(l, ps) || periodsOf(l, ps, pe)[0]; if (!p) continue;
         const mo = l.dur?.u === "m" && (Number(l.dur.n) || 1) === 1, a = r2(baseAmt(l, p[0]) * (mo ? 1 : perMonth(l.dur)));
@@ -3540,7 +3543,7 @@ function AccSheet({id, pre, close}) {
     if (isLoan) { const L = f.loan; const pay = calc(L.payment); if (!(pay > 0)) return setErr("Indique la mensualité du prêt, ou calcule-la."); if (!L.from) return setErr("Choisis le compte qui paie le prêt.");
       a.loan = {payment: pay, rate: calc(L.rate || "0") || 0, ins: calc(L.ins || "0") || 0, from: L.from, first: L.first || `${ym(start)}-05`, n: L.n ? Number(L.n) : null, borrowed: L.borrowed ? calc(L.borrowed) : null, catInt: L.catInt || null, catIns: L.catIns || null,
         rates: (L.rates || []).filter(r => r.from && !isNaN(calc(r.rs))).map(r => ({from: r.from, rate: calc(r.rs)})),
-        pays: (L.pays || []).filter(r => r.from && calc(r.rs) > 0).map(r => ({from: r.from, rate: calc(r.rs)}))}; } else delete a.loan;
+        pays: (L.pays || []).filter(r => r.from && calc(r.rs) > 0).map(r => ({from: r.from, rate: calc(r.rs)}))}; ; a.loan.prorata = prSchOk(L.from) && !!L.prorata; } else delete a.loan;
     a.group = (f.group || "").trim() || null; a.owner = f.owner || null; a.resetDay = Number(f.resetDay) || 1;
     a.website = f.website ? (/^https?:\/\//.test(f.website) ? f.website : "https://" + f.website) : null; a.comment = f.comment || null;
     delete a.initialStr; delete a.neg;
@@ -3596,6 +3599,7 @@ function AccSheet({id, pre, close}) {
     ${(() => { const cap = Math.abs(calc(f.initialStr || "0")) || 0, r = (calc(f.loan.rate || "0") || 0) / 1200, n = Number(f.loan.n) || 0; if (!cap || !n) return null; const pay = r ? cap * r / (1 - Math.pow(1 + r, -n)) : cap / n; const ins = calc(f.loan.ins || "0") || 0;
       return html`<button type="button" class="btn sm" onClick=${() => setL("payment", amtStr(r2(pay + ins)))}>Calculer : ${fmt(pay)} + ${fmt(ins)} d'assurance = ${fmt(pay + ins)}</button>`; })()}
     <${Field} label="Payé depuis" id="ac-lfrom"><${AccSelect} id="ac-lfrom" v=${f.loan.from} set=${v => setL("from", v)} none="Choisir…" exclude=${f.id} /></${Field}>
+    ${prSchOk(f.loan.from) && html`<${Toggle} on=${!!f.loan.prorata} set=${v => setL("prorata", v)} label="Au prorata des salaires" sub=${f.loan.prorata ? `La mensualité est comptée chaque mois dans ton virement au ${accName(halfJoint())} et la ligne ${(PR().name || "").trim()}` : "Partager cette mensualité au prorata de vos salaires"} />`}
     <div class="grid2"><${Field} label="Catégorie des intérêts" id="ac-lci"><${CatField} id="ac-lci" v=${f.loan.catInt || findCat("intérêts d'emprunt")} set=${v => setL("catInt", v)} /></${Field}>
       <${Field} label="Catégorie de l'assurance" id="ac-lca"><${CatField} id="ac-lca" v=${f.loan.catIns || findCat("assurance emprunt")} set=${v => setL("catIns", v)} /></${Field}></div>
     <div class="field"><span class="lb">Changements de taux</span>
@@ -3850,7 +3854,6 @@ function Schedules() {
     for (const c of accList()) if (c.type === "carte" && c.linked === aid) out.push(["Débit " + c.name, "le " + c.debitDay + " de chaque mois, selon les dépenses de la carte"]);
     if (aid === halfFrom() && halfJoint()) out.push(["Remboursement 50/50", "vers " + accName(halfJoint()) + ", l'avant-dernier jour du mois"]);
     if (aid === halfJoint()) out.push(["Part de " + halfName() + " (50/50)", "l'avant-dernier jour du mois"]);
-    for (const l of accList()) if (l.type === "pret" && l.loan?.from === aid) out.push([l.name, fmt(l.loan.payment) + " le " + Number(l.loan.first.slice(8)) + " de chaque mois"]);
     if (a?.type === "pret" && a.loan) out.push(["Mensualités", fmt(a.loan.payment) + " par mois"]);
     return out; };
   const accs = accList().filter(a => schs.some(x => inv(x, a.id)) || autoOf(a.id).length);
@@ -3893,7 +3896,9 @@ function Schedules() {
         <div style="font-size:14px;padding-top:10px;border-top:1px solid var(--line)">${nx ? html`Prochaine : <b>${nx.name}</b>, le ${dayShort(npOf(nx))} · ${fmt(amtFor(nx, sel), true)}` : "Aucune échéance à venir"}</div>
       </section>`}
       ${auto.length > 0 && html`<div class="sch-auto"><div class="fgh">Calculé par Pécule</div><div class="card">${auto.map(([n2, d]) => html`<div class="row" style="min-height:56px"><span class="dcirc"><b style="font-size:14px">⚙︎</b></span><span class="grow"><div class="t1">${n2}</div><div class="t2" style="white-space:normal">${d}</div></span></div>`)}</div></div>`}</div>
-      <div class="dash-r">${G.map(([title, l]) => html`<div><div class="fgh">${title}</div><div class="card">${l.map(x => html`<${Row} x=${x} key=${x.id} />`)}</div></div>`)}</div>
+      <div class="dash-r">${sel && (loans => loans.length > 0 && html`<div><div class="fgh">Prêts · calculés par Pécule</div><div class="card">${loans.map(l => { const nx = occurrences(addDays(today(), 70)).find(o => o.kind === "loan" && o.loanId === l.id);
+          return html`<button class="row" onClick=${() => SHEET.open({type: "acc", id: l.id})}><span class="dcirc"><b>${Number((nx?.date || l.loan.first).slice(8))}</b><span>${monthShort(nx?.date || l.loan.first)}</span></span><span class="grow"><div class="t1">Échéance ${l.name}</div><div class="t2">${l.loan.prorata ? "au prorata · " : ""}chaque mois · capital, intérêts et assurance</div></span><span class="amt">${fmt(-(nx ? -nx.amount : rateAt(l.loan.pays, today(), l.loan.payment)))}</span></button>`; })}</div></div>`)(accList().filter(l => l.type === "pret" && l.loan?.payment && l.loan.from === sel))}
+        ${G.map(([title, l]) => html`<div><div class="fgh">${title}</div><div class="card">${l.map(x => html`<${Row} x=${x} key=${x.id} />`)}</div></div>`)}</div>
       ${!accs.length && html`<div class="card dash-full"><div class="empty"><b>Rien de prévu</b>Ajoute ton salaire, ton loyer, tes abonnements… avec le bouton +.</div></div>`}
     </main>`;
 }
