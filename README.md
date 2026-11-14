@@ -2,6 +2,8 @@
 
 Application de comptes personnels, légère et claire, inspirée d'iCompta.
 
+**Ouvrir Pécule : [t2zbzhghj5-ai.github.io/pecule](https://t2zbzhghj5-ai.github.io/pecule/)**
+
 - **Données privées** : tout reste dans le stockage de l'appareil (iPhone, iPad, Mac). Rien n'est envoyé sur internet, aucun compte n'est nécessaire.
 - **Installation sur iPhone** : ouvrir la page dans Safari › Partager › « Sur l'écran d'accueil ».
 - **Hors connexion** : une fois installée, l'app fonctionne sans réseau.
