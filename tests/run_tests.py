@@ -35,7 +35,7 @@ import fixture_icompta  # noqa: E402
 
 # ---------------------------------------------------------------- serveur (avec accès de test aux calculs)
 HOOK = ('window.__dbg = {A, S, Store, Hist, NAV, SHEET, occurrences, balance, amtFor, accList, today, budgets, lineAt, cardNext, cardPending, '
-        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, glanceState, shownBal, cats, catIc, guessIc};\n')
+        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc};\n')
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -567,6 +567,74 @@ def ventilation_avec_virement(br, url):
     check(a.pg.locator('.sheet [aria-label="Virement vers"]').input_value() == liv, "compte du virement perdu à la réouverture")
     a.js("D.SHEET.close();")
     a.no_errors("ventilation avec virement")
+    a.close()
+
+
+@test
+def compte_joint_prorata(br, url):
+    """Prorata des salaires : seuls les éléments cochés (échéances du joint et de ses cartes, enveloppes du joint, rentrées) comptent ; deux lignes par mois (ton virement, la ligne de l'autre) ; annuelle lissée ; ligne validée figée."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    j, cour, cj = a.acc_id("Joint"), a.acc_id("Courant"), a.acc_id("Carte Joint")
+    # réglage par l'écran
+    a.js("D.NAV.push({v: 'joint'});")
+    a.wait(400)
+    a.pg.click('main button:has-text("Configurer")')
+    a.wait(400)
+    sh = a.pg.locator(".sheet")
+    sh.locator("#pr-f").select_option(cour)
+    sh.locator("#pr-n").fill("Claire")
+    sh.locator("#pr-m").fill("3000")
+    sh.locator("#pr-p").fill("2000")
+    check("60 %" in sh.inner_text(), "prorata 60/40 non affiché")
+    sh.locator('button:has-text("Enregistrer")').last.click()
+    a.wait(500)
+    check(a.js("return D.prOn();") is True, "réglage du prorata non enregistré")
+    # cocher le loyer (échéance du joint) par sa fiche
+    loyer = a.js("return Object.values(D.A().sch).find(s => s.name === 'Loyer').id;")
+    a.js("D.SHEET.open({type: 'op', kind: 'sch', src: D.A().sch[arg]});", loyer)
+    a.wait(500)
+    a.pg.locator('.sheet [role=switch]:has-text("Au prorata des salaires")').click()
+    a.wait(200)
+    a.pg.locator('.sheet button:has-text("Enregistrer")').last.click()
+    a.wait(500)
+    check(a.js("return !!D.A().sch[arg].prorata;", loyer), "case « Au prorata » de l'échéance non enregistrée")
+    # cocher l'enveloppe Courses (budget du joint) par sa fiche
+    lid = a.js("return Object.values(D.A().bud).find(l => D.A().cat[l.cat]?.name === 'Courses').id;")
+    a.js("D.SHEET.open({type: 'line', id: arg});", lid)
+    a.wait(500)
+    a.pg.locator('.sheet [role=switch]:has-text("Au prorata des salaires")').click()
+    a.wait(200)
+    a.pg.locator('.sheet button:has-text("Enregistrer")').last.click()
+    a.wait(500)
+    check(a.js("return !!D.A().bud[arg].prorata;", lid), "case « Au prorata » de l'enveloppe non enregistrée")
+    # pas de case pour une échéance hors joint ; une annuelle sur la carte du joint (lissée) et une rentrée du joint
+    epargne = a.js("return Object.values(D.A().sch).find(s => s.name === 'Épargne').id;")
+    a.js("D.SHEET.open({type: 'op', kind: 'sch', src: D.A().sch[arg]});", epargne)
+    a.wait(400)
+    check("Au prorata" not in a.pg.inner_text(".sheet"), "case prorata proposée hors compte joint")
+    a.js("D.SHEET.close();")
+    a.js("""const [j, cj] = arg; D.Store.bulk([
+      ['put', {k: 'sch', id: 'sch_t_assur', account: cj, name: 'Assurance carte', amount: -120, splits: [{amount: -120, cat: null}], freq: {n: 1, u: 'y'}, next: '2027-03-10', anchor: 10, prorata: true}],
+      ['put', {k: 'sch', id: 'sch_t_caf', account: j, name: 'CAF', amount: 100, splits: [{amount: 100, cat: null}], freq: {n: 1, u: 'm'}, next: '2026-12-08', anchor: 8, prorata: true}]]);""", [j, cj])
+    a.wait(500)
+    m = a.js("return D.prMonth('2026-12');")
+    check(near(m["N"], 1200 + 600 + 10 - 100), "total à partager en décembre : %s (attendu 1710)" % m["N"])
+    check(near(m["mine"], 1026) and near(m["hers"], 684), "parts : %s / %s (attendu 1026 / 684)" % (m["mine"], m["hers"]))
+    occ = a.js("return D.occurrences('2026-12-31').filter(o => o.kind === 'prorata' && o.date.startsWith('2026-12')).map(o => [o.account, o.name, o.amount, o.date, (o.splits[0] || {}).to || null]);")
+    check(sorted(occ) == sorted([[cour, "Virement au Joint (prorata)", -1026, "2026-12-01", j], [j, "Claire (prorata)", 684, "2026-12-01", None]]), "lignes de décembre : %s" % occ)
+    # ligne validée : elle ne bouge plus
+    a.js("""const o = D.occurrences('2026-12-31').find(x => x.id === 'tx_prm_2026-12'); const {virtual, ...t} = o; D.Store.put({...t, k: 'tx', st: 'saisie'});""")
+    a.js("D.Store.put({...D.A().sch.sch_t_caf, prorata: false});")
+    a.wait(400)
+    check(a.js("return D.A().tx['tx_prm_2026-12'].amount;") == 684, "ligne validée modifiée")
+    check(not a.js("return D.occurrences('2026-12-31').some(o => o.id === 'tx_prm_2026-12');"), "ligne validée encore prévue")
+    check(near(a.js("return D.prMonth('2026-12').N;"), 1810), "décocher la CAF ne change pas le total")
+    a.js("D.NAV.push({v: 'joint'});")
+    a.wait(400)
+    check("à partager" in a.pg.inner_text("main"), "écran du prorata vide")
+    a.pg.screenshot(path=os.path.join(OUT, "prorata.png"), full_page=True)
+    a.no_errors("prorata")
     a.close()
 
 
