@@ -221,6 +221,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .icpick{height:48px;border-radius:14px;border:1px solid var(--line);background:var(--surface);color:color-mix(in srgb,var(--c) 76%,var(--ink));display:grid;place-items:center;font-size:12px;font-weight:700}
 .icpick.on{border:2px solid var(--c);background:color-mix(in srgb,var(--c) 15%,var(--surface))}
 .split{display:grid;grid-template-columns:1fr 110px 36px;gap:8px;align-items:center}
+.split:has(> .ibtn + input){grid-template-columns:1fr 36px 96px 36px;gap:6px}
 .selbtn{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 12px;min-height:44px}
 .chart{width:100%;height:auto;display:block}
 .chart text{fill:var(--muted);font-family:var(--body);font-size:11px}
@@ -899,6 +900,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const slug = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const norm = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const amtStr = x => x ? String(r2(Math.abs(x))).replace(".", ",") : "";
+/* Part de ventilation : montant dans le sens de l'opération (négatif = part en sens inverse, ex. −10 € de bon d'achat sur un ticket) */
+const partStr = x => x ? String(r2(x)).replace(".", ",") : "";
 
 /* Calculette : accepte 12,5+3*2 */
 function calc(str) {
@@ -3290,7 +3293,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
   const [f, setF] = useState(() => ({
     name: init.name || "", date: isSch ? (preset?.next || init.next || today()) : init.date, account: init.account || defAcc,
     to: tr0 ? sp0[0].to : "", amt: amtStr(init.amount), cat: sp0.length === 1 ? sp0[0].cat || null : null,
-    split: sp0.length > 1, splits: sp0.map(s => ({cat: s.cat || null, to: s.to || "", amt: amtStr(s.amount), memo: s.memo || "", bm: s.bm || 0, nobud: !!s.nobud, refund: !!s.refund, noRep: !!s.noRep, noAvg: !!s.noAvg, owner: s.owner || null, bdg: s.bdg || null})),
+    split: sp0.length > 1, splits: sp0.map(s => ({cat: s.cat || null, to: s.to || "", amt: s.to ? amtStr(s.amount) : partStr(s.amount * (init.amount > 0 ? 1 : -1)), memo: s.memo || "", bm: s.bm || 0, nobud: !!s.nobud, refund: !!s.refund, noRep: !!s.noRep, noAvg: !!s.noAvg, owner: s.owner || null, bdg: s.bdg || null})),
     opt: (s => ({bm: s.bm || 0, nobud: !!s.nobud, refund: !!s.refund, noRep: !!s.noRep, noAvg: !!s.noAvg, owner: s.owner || null, bdg: s.bdg || null}))(sp0[0] || {}), vdate: init.vdate || "", payee: init.payee || "", project: init.project || "", hl: init.hl || "", more: !!(init.vdate || init.project || init.hl || init.payee || init.comment || init.shares?.length || init.repay || init.num || (init.st && init.st !== "saisie" && !(base && base.virtual)) || (sp0[0] && (sp0[0].bm || sp0[0].nobud || sp0[0].refund || sp0[0].noRep))),
     pay: init.pay || "cb", num: init.num || "", comment: init.comment || "", st: init.st || "saisie", st2: init.st2 || "saisie",
     shares: init.shares || [], repay: init.repay || "", half: !!init.half, rep: false, freq: init.freq || {n: 1, u: "m"}, end: init.end || "", left: init.left ?? "",
@@ -3331,7 +3334,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
       amount = -total; splits = [{to: f.to, amount: -total, ...(f.cat ? {cat: f.cat} : {}), ...(f.cat && f.opt?.bdg ? {bdg: f.opt.bdg} : {})}];
     } else if (f.split) {
       splits = f.splits.map(s => { const v = calc(s.amt) || 0; const o = s.to ? {to: s.to, amount: r2(-Math.abs(v)), ...(s.cat ? {cat: s.cat} : {}), ...(s.bdg ? {bdg: s.bdg} : {})} : withOpt({cat: s.cat || null, amount: r2(sg * v)}, s); if (s.memo) o.memo = s.memo; return o; }).filter(s => s.amount);
-      const sum = r2(splits.reduce((a, s) => a + Math.abs(s.amount), 0));
+      const sum = r2(splits.reduce((a, s) => a + (s.to ? Math.abs(s.amount) : sg * s.amount), 0));
       if (Math.abs(sum - total) > 0.004) return setErr(`La ventilation fait ${fmt(sum)} pour un montant de ${fmt(total)}. Écart : ${fmt(total - sum)}.`);
       amount = r2(splits.reduce((a, s) => a + s.amount, 0));
     } else { amount = sg * total; splits = [withOpt({cat: f.cat || null, amount}, f.opt)]; }
@@ -3399,6 +3402,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
       : html`<div class="field"><span class="lb">Ventilation</span>
           ${f.splits.map((s, i) => html`<div class="split">
             ${s.to ? html`<div class="selbtn" style="flex-direction:column;align-items:flex-start;gap:0;justify-content:center"><span class="t1" style="display:flex;gap:6px;align-items:center"><${Ic} n="swap" s=${14} />${s.cat ? catName(s.cat) : accName(s.to)}</span>${(s.memo || s.cat) && html`<span class="t2" style="font-size:12px">${s.memo || "→ " + accName(s.to)}</span>`}</div>` : html`<div style="display:flex;flex-direction:column;gap:2px;min-width:0"><${CatField} v=${s.cat} set=${v => { const n = [...f.splits]; n[i] = {...s, cat: v}; set("splits", n); }} income=${mode === "income"} />${s.memo && html`<span class="t2" style="font-size:12px;padding-left:6px">${s.memo}</span>`}</div>`}
+            ${!s.to && html`<button type="button" class="ibtn plain" aria-label="Inverser le signe de la part" title="Part en négatif" style=${"font-weight:700;font-size:17px" + (String(s.amt).trim().startsWith("-") ? ";color:var(--neg)" : "")} onClick=${() => { const n = [...f.splits], v = String(s.amt || "").trim(); n[i] = {...s, amt: v.startsWith("-") ? v.slice(1) : "-" + v}; set("splits", n); }}>±</button>`}
             <input inputmode="decimal" value=${s.amt} placeholder="0,00" aria-label="Montant de la part" onInput=${e => { const n = [...f.splits]; n[i] = {...s, amt: e.target.value}; set("splits", n); }} style="text-align:right" />
             <button type="button" class="ibtn plain" aria-label="Retirer la part" onClick=${() => { const n = f.splits.filter((_, j) => j !== i); if (n.length <= 1) setF(x => ({...x, split: false, cat: n[0]?.cat || x.cat, opt: n[0] ? {bm: n[0].bm || 0, nobud: !!n[0].nobud, refund: !!n[0].refund, noRep: !!n[0].noRep} : x.opt, splits: n})); else set("splits", n); }}><${Ic} n="x" s=${16} /></button>
           </div>

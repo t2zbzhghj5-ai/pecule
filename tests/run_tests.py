@@ -598,6 +598,42 @@ def import_echeances_semaines_et_montant(br, url):
 
 
 @test
+def ventilation_part_negative(br, url):
+    """Ventilation : une part peut être négative (bouton ±), l'équilibre se fait sur la somme signée, et le signe est conservé à la réouverture."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    j = a.acc_id("Joint")
+    a.js("D.SHEET.open({type: 'op', kind: 'tx', acc: arg, mode: 'income'});", j)
+    a.wait(500)
+    sh = a.pg.locator(".sheet")
+    sh.locator('button:has-text("Revenu"), [role=tab]:has-text("Revenu")').first.click() if sh.locator('button:has-text("Revenu"), [role=tab]:has-text("Revenu")').count() else None
+    a.wait(200)
+    sh.locator("#op-amt").fill("100")
+    sh.locator("#op-name").fill("Marie test")
+    sh.locator('button:has-text("Plusieurs catégories")').click()
+    a.wait(300)
+    parts = sh.locator('[aria-label="Montant de la part"]')
+    parts.nth(0).fill("120")
+    parts.nth(1).fill("20")
+    sh.locator('[aria-label="Inverser le signe de la part"]').nth(1).click()
+    a.wait(200)
+    sh.locator('[aria-label="Montant de la part"]').nth(1).scroll_into_view_if_needed()
+    a.pg.screenshot(path=os.path.join(OUT, "ventilation.png"))
+    check("Équilibrée" in sh.inner_text(), "ventilation 120 / −20 pas équilibrée : %s" % sh.inner_text()[-200:])
+    sh.locator('button:has-text("Enregistrer")').last.click()
+    a.wait(600)
+    t = a.js("return Object.values(D.A().tx).find(x => x.name === 'Marie test');")
+    check(t and t["amount"] == 100 and sorted(sp["amount"] for sp in t["splits"]) == [-20, 120], "opération enregistrée : %s" % (t and [t["amount"], [sp["amount"] for sp in t["splits"]]]))
+    a.js("D.SHEET.open({type: 'op', kind: 'tx', src: D.A().tx[arg]});", t["id"])
+    a.wait(500)
+    vals = a.pg.locator('.sheet [aria-label="Montant de la part"]').evaluate_all("els => els.map(e => e.value)")
+    check(sorted(vals) == ["-20", "120"], "signe perdu à la réouverture : %s" % vals)
+    a.js("D.SHEET.close();")
+    a.no_errors("part négative")
+    a.close()
+
+
+@test
 def valider_supprimer_annuler(br, url):
     """Valider une opération, la supprimer, annuler la suppression."""
     a = App(br, url)
