@@ -34,6 +34,7 @@ reste sur la machine ; rien n'est écrit dans le dépôt (`tests/out/` est ignor
 | `cinquante_cinquante_sans_compte_joint` | Compte joint indiqué explicitement, jamais deviné par son nom : sans compte joint (cas de Marie), rien du 50/50 ; l'interrupteur « Compte joint » de la fiche du compte l'active |
 | `compte_joint_import_et_mise_a_jour` | Import iCompta : réponse à « Un de ces comptes est-il un compte joint ? » enregistrée ; mise à jour : le compte où des dépenses 50/50 sont déjà cochées est marqué joint |
 | `verifications_donnees` | Question 50/50 posée une fois sur l'accueil ; Vérifications : 50/50 sur un livret, carte sans compte débité, opération liée à un compte supprimé, ventilation fausse, livret négatif, budget périmé (« Nettoyer ») ; aucun signalement sur un fichier propre |
+| `import_echeances_semaines_et_montant` | Import iCompta : échéance toutes les 4 semaines (unité iCompta 1 = semaine) et montant porté par l'échéance elle-même (« useSumOfSplits » à 0) |
 | `valider_supprimer_annuler` | Valider une opération, la supprimer, annuler |
 | `valider_virement` | Virement entre tes comptes : un geste valide (ou dé-valide) les deux côtés |
 | `reorganiser_comptes` | Comptes › Réorganiser : cartes sous leur compte, ↑/↓ entre voisines affichées, l'accueil suit |
@@ -47,7 +48,7 @@ reste sur la machine ; rien n'est écrit dans le dépôt (`tests/out/` est ignor
 | `sauvegarde_aller_retour` | Télécharger la sauvegarde puis la restaurer sur une app vide : tout est identique |
 | `restauration_exacte` | Restaurer depuis Réglages : retour exact à l'état sauvegardé |
 | `previsions_et_themes` | Prévisions 12/24/36 mois sur chaque compte ; thèmes |
-| `vrai_fichier_icompta` | (avec `--icompta`) soldes projetés à +13 mois, cartes, budgets du mois, tous les écrans |
+| `vrai_fichier_icompta` | (avec `--icompta`) soldes projetés = iCompta, à la date du fichier et jusqu'à l'horizon où iCompta a créé ses opérations prévues ; cartes (s'il y en a), budgets du mois, tous les écrans |
 
 Les textes interdits dans la version installée (« Claude », « tous tes appareils »…) font aussi échouer les tests d'écrans.
 

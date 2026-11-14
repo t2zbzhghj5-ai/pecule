@@ -288,6 +288,44 @@ def build(path):
     return f, names
 
 
+def build_echeances(path):
+    """Petit fichier fictif : échéance toutes les 4 semaines (unité iCompta 1 = semaine) et échéance dont le montant
+    est porté par l'échéance elle-même (« useSumOfSplits » à 0, ligne de catégorie sans montant), comme chez Elliott."""
+    f = Fixture(path)
+    cour = f.account("Courant", "CheckingAccount")
+    sport = f.category("Sport")
+    f.op(cour, FIRST, "Solde initial", [(500, None)], status=K)
+    # Salle de sport : toutes les 4 semaines depuis le 16 oct. (16/10, 13/11 validées ; 11/12, 8/1… prévues)
+    s1, _ = f.schedule(cour, dt.date(2026, 10, 16), "Salle de sport", [(-29.99, sport)], unit=1)
+    f.db.execute("update ICScheduledTransaction set frequency=4 where ID=?", (s1,))
+    d, k = dt.date(2026, 10, 16), 0
+    while d <= LAST:
+        f.op(cour, d, "Salle de sport", [(-29.99, sport)], status=(K if d <= TODAY else P), sch=(s1 if d > TODAY else None), occ=k)
+        d += dt.timedelta(days=28)
+        k += 1
+    f.set_next(s1, k)
+    # Argent de poche : 220 € le 1er du mois, montant porté par l'échéance (ligne sans montant)
+    s2 = uid()
+    f.ins("ICScheduledTransaction", ID=s2, account=cour, date="2026-10-01", name="Argent de poche", amount="220", frequency=1, frequencyUnit=2,
+          numberOfOccurrences=None, nextOccurrence=0, index=0, useSumOfSplits=0)
+    f.ins("ICScheduledTransactionSplit", ID=uid(), transaction=s2, amount=None, category=None, linkedSplit=None, index=0,
+          ignoredInBudgets=0, ignoredInReports=0, ignoredInAverageBalance=0, refund=0, usesAccountOwners=0)
+    d, k = dt.date(2026, 10, 1), 0
+    while d <= LAST:
+        tid = uid()
+        st = K if d <= TODAY else P
+        f.ins("ICTransaction", ID=tid, account=cour, date=d.isoformat(), name="Argent de poche", amount="220", status=st,
+              scheduledTransaction=(s2 if d > TODAY else None), occurrence=k, index=0, useSumOfSplits=0)
+        f.ins("ICTransactionSplit", ID=uid(), transaction=tid, amount=None, category=None, linkedSplit=None, index=0,
+              ignoredInBudgets=0, ignoredInReports=0, ignoredInAverageBalance=0, refund=0, usesAccountOwners=0)
+        f.tx.append((cour, d, st, [(220, None)]))
+        d = add_months(d, 1, 1)
+        k += 1
+    f.set_next(s2, k)
+    f.db.commit()
+    return f, {cour: "Courant"}
+
+
 def truth(f, names, dates):
     """Solde de chaque compte à chaque date : somme des opérations non annulées (comme iCompta)."""
     out = {}

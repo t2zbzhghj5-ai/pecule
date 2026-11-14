@@ -4685,7 +4685,7 @@ function icompta2pecule(db, now, onlyPending) {
   const end = new Date(Date.UTC(+now.slice(0, 4), +now.slice(5, 7), 0)).toISOString().slice(0, 10);
   /* date de la k-ième occurrence d'une échéance iCompta (unités : 1 jour, 2 mois, 3 an, 4 semaine) */
   const occDate = (d0, k, n, u) => { const y = +d0.slice(0, 4), m = +d0.slice(5, 7) - 1, d = +d0.slice(8, 10);
-    if (u === 1 || u === 4) return new Date(Date.UTC(y, m, d + k * n * (u === 4 ? 7 : 1))).toISOString().slice(0, 10);
+    if (u === 0 || u === 1) return new Date(Date.UTC(y, m, d + k * n * (u === 1 ? 7 : 1))).toISOString().slice(0, 10);
     const mm = m + k * n * (u === 3 ? 12 : 1), last = new Date(Date.UTC(y, mm + 1, 0)).getUTCDate();
     return new Date(Date.UTC(y, mm, Math.min(d, last))).toISOString().slice(0, 10); };
   const ST = {ClearedStatus: "pointee", CreatedStatus: "saisie", LockedStatus: "verrouillee", CanceledStatus: "annulee", PlannedStatus: "prevue"};
@@ -4788,10 +4788,18 @@ function icompta2pecule(db, now, onlyPending) {
   /* échéancier */
   const ssp = {}, byS = {};
   for (const s of db.rows("ICScheduledTransactionSplit").sort((a, b) => (a.index || 0) - (b.index || 0))) { ssp[s.ID] = s; (byS[s.transaction] = byS[s.transaction] || []).push(s); }
+  /* Échéances dont le montant est porté par l'échéance elle-même (« useSumOfSplits » à 0, lignes de catégorie vides) : même règle que pour les opérations */
+  for (const s of db.rows("ICScheduledTransaction")) {
+    if (Number(s.useSumOfSplits) !== 0 || s.amount == null || s.amount === "") continue;
+    const total = F(s.amount), l = byS[s.ID] = byS[s.ID] || [], known = l.filter(x => x.amount != null && x.amount !== "");
+    if (!known.length) { if (l.length) { l[0] = {...l[0], amount: String(total)}; ssp[l[0].ID] = l[0]; } else { const x = {ID: s.ID + "#montant", transaction: s.ID, amount: String(total), index: 0}; l.push(x); ssp[x.ID] = x; } continue; }
+    const diff = Math.round((total - known.reduce((x, y) => x + F(y.amount), 0)) * 100) / 100;
+    if (Math.abs(diff) > 0.004) { const x = {ID: s.ID + "#reste", transaction: s.ID, amount: String(diff), index: l.length}; l.push(x); ssp[x.ID] = x; }
+  }
   const plan = {}, done = {};
   for (const t of Object.values(tx)) if (t.scheduledTransaction) { if (st(t.status) === "prevue") (plan[t.scheduledTransaction] = plan[t.scheduledTransaction] || []).push(t); else done[t.scheduledTransaction] = (done[t.scheduledTransaction] || 0) + 1; }
   Object.values(plan).forEach(v => v.sort((a, b) => a.date.localeCompare(b.date)));
-  const outSch = [], usedS = new Set(), U = {1: "d", 2: "m", 3: "y", 4: "w"};
+  const outSch = [], usedS = new Set(), U = {0: "d", 1: "w", 2: "m", 3: "y"}; /* unités iCompta : 0 jour, 1 semaine, 2 mois, 3 an */
   for (const s of schAll) {
     if (usedS.has(s.ID) || !acc[s.account] || /-(CreditCardAccount|LoanAccount)-/.test(s.ID)) continue;
     if (!s.date) continue;
@@ -4802,7 +4810,7 @@ function icompta2pecule(db, now, onlyPending) {
     if ([...oAcc].some(x => CARDS.has(x) || LOANS.has(x))) continue;
     /* première occurrence après le mois en cours (celles du mois sont reprises comme opérations) ;
        si iCompta n'a pas encore créé une occurrence du mois, on repart d'elle */
-    const fn = Number(s.frequency) || 1, fu = Number(s.frequencyUnit) || 2, nb = Number(s.numberOfOccurrences) || 0;
+    const fn = Number(s.frequency) || 1, fu = s.frequencyUnit == null || s.frequencyUnit === "" || isNaN(Number(s.frequencyUnit)) ? 2 : Number(s.frequencyUnit), nb = Number(s.numberOfOccurrences) || 0;
     let k = 0; while (k < 100000 && occDate(s.date, k, fn, fu) <= end) k++;
     const gen = s.nextOccurrence == null || s.nextOccurrence === "" ? null : Number(s.nextOccurrence);
     if (gen != null && gen < k) k = gen;

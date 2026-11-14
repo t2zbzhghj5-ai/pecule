@@ -83,14 +83,14 @@ def near(a, b, eps=0.005):
 class App:
     """Une page Pécule neuve (données vides), à l'heure de NOW."""
 
-    def __init__(self, browser, url, view=MOBILE, dark=False):
+    def __init__(self, browser, url, view=MOBILE, dark=False, now=None):
         self.ctx = browser.new_context(viewport=view, color_scheme="dark" if dark else "light", service_workers="block", accept_downloads=True)
         self.pg = self.ctx.new_page()
         self.errors = []
         self.pg.on("pageerror", lambda e: self.errors.append("Erreur JS : %s" % e))
         self.pg.on("console", lambda m: m.type == "error" and not self.external(m) and self.errors.append("Console : %s" % m.text))
         self.base = url
-        self.pg.clock.install(time=NOW)
+        self.pg.clock.install(time=now or NOW)
         self.pg.goto(url)
         self.pg.wait_for_timeout(1200)
 
@@ -254,7 +254,7 @@ def budgets_reste(br, url):
 def check_cards(a, n=None):
     cards = a.js("""return D.accList(true).filter(c => c.type === 'carte').map(c => { const n = D.cardNext(c), p = D.cardPending(c.id);
         return {name: c.name, nx: n && n.amt, cut: n && n.cut, val: D.balance(c.id, {cleared: true}), pend: p.amt, enc: D.balance(c.id), atCut: n ? D.balance(c.id, {upTo: n.cut}) : null}; });""")
-    check(cards and (n is None or len(cards) == n), "cartes : %s" % cards)
+    check(n == 0 or cards and (n is None or len(cards) == n), "cartes : %s" % cards)
     occ_cut = {c["name"]: a.js("""const c = D.accList(true).find(x => x.name === arg), n = D.cardNext(c);
         return Math.round((D.balance(c.id, {upTo: n.cut}) + D.occurrences(n.cut).filter(o => o.date <= n.cut).reduce((s, o) => s + D.amtFor(o, c.id), 0)) * 100) / 100;""", c["name"]) for c in cards}
     for c in cards:
@@ -574,6 +574,26 @@ def verifications_donnees(br, url):
     check("bdg-stale" not in a.js("return D.dataChecks().map(c => c.key);"), "« Nettoyer » n'a pas retiré le rattachement")
     check(a.js("return D.A().tx.tx_v_bdg.splits[0].bdg;") is None, "rattachement toujours présent")
     a.no_errors("vérifications")
+    a.close()
+
+
+@test
+def import_echeances_semaines_et_montant(br, url):
+    """Import iCompta : échéance toutes les 4 semaines (unité 1 = semaine) et montant porté par l'échéance (« useSumOfSplits » à 0), cas d'Elliott."""
+    path = os.path.join(OUT, "echeances.cdb")
+    if os.path.exists(path):
+        os.remove(path)
+    f, names = fixture_icompta.build_echeances(path)
+    a = App(br, url)
+    a.import_ic(path)
+    sch = a.js("return Object.fromEntries(Object.values(D.A().sch).map(s => [s.name, [s.amount, s.freq.n + s.freq.u, s.next]]));")
+    check(sch.get("Salle de sport") == [-29.99, "4w", "2026-12-11"], "salle de sport : %s" % sch.get("Salle de sport"))
+    check(sch.get("Argent de poche") == [220, "1m", "2026-12-01"], "argent de poche : %s" % sch.get("Argent de poche"))
+    dates = ["2026-11-30", "2026-12-31", "2027-01-31", "2027-02-28"]
+    want, got = fixture_icompta.truth(f, names, dates)["Courant"], a.projected(dates)["Courant"]
+    for d, x, y in zip(dates, got, want):
+        check(near(x, y), "Courant au %s : Pécule %s, iCompta %s" % (d, x, y))
+    a.no_errors("échéances semaines")
     a.close()
 
 
@@ -1004,15 +1024,29 @@ def real_truth(path, dates):
 def real_test(path):
     def vrai_fichier_icompta(br, url):
         """Vrai fichier iCompta : soldes projetés de chaque compte = iCompta (aujourd'hui → +13 mois)."""
-        dates = [NOW.date().isoformat(), "2026-11-30", "2026-12-31", "2027-01-31", "2027-03-31", "2027-06-30", "2027-12-31"]
+        # « aujourd'hui » = le jour du fichier (dernière opération validée, jamais après la vraie date du jour), au plus tôt la date des tests
+        db = sqlite3.connect(path)
+        last = db.execute('select max(date) from ICTransaction where status in ("ICTransactionStatus.ClearedStatus", "ICTransactionStatus.ReconciledStatus") and date <= ?', (dt.date.today().isoformat(),)).fetchone()[0] or ""
+        now = max(NOW, dt.datetime.fromisoformat(last[:10] + "T10:00")) if last else NOW
+        dates = sorted({now.date().isoformat(), "2026-11-30", "2026-12-31", "2027-01-31", "2027-03-31", "2027-06-30", "2027-12-31"})
+        dates = [d for d in dates if d >= now.date().isoformat()]
+        # iCompta ne crée les opérations prévues que jusqu'à un certain point (parfois quelques mois pour une échéance) :
+        # au-delà, ses soldes « s'arrêtent » alors que Pécule continue. On compare seulement jusqu'à cet horizon.
+        lasts = [r[0] for r in db.execute('select (select max(t.date) from ICTransaction t where t.scheduledTransaction = s.ID) from ICScheduledTransaction s '
+                                          'where s.numberOfOccurrences is null or s.numberOfOccurrences = ""') if r[0]]
+        if lasts:
+            horizon = min(lasts)
+            if any(d > horizon for d in dates):
+                print("      comparaison jusqu'au %s (au-delà, iCompta n'a pas créé toutes ses opérations prévues)" % horizon)
+            dates = [d for d in dates if d <= horizon]
         want = real_truth(path, dates)
-        a = App(br, url)
+        a = App(br, url, now=now)
         a.import_ic(path)
         got = a.projected(dates)
         for acc, v in want.items():
             for d, x, y in zip(dates, got.get(acc, [None] * len(dates)), v):
                 check(near(x, y), "%s au %s : Pécule %s, iCompta %s" % (acc, d, x, y))
-        check_cards(a)
+        check_cards(a, n=0 if not a.js("return D.accList(true).some(c => c.type === 'carte');") else None)
         check_budgets(a, path, until="2026-11-30")
         all_screens(a)
         a.close()
