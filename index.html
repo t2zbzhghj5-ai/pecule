@@ -777,7 +777,19 @@ function ConfirmSheet({kind, items, close}) {
 }
 
 /* ============ Remboursement 50/50 du compte joint ============ */
-const halfJoint = () => { const D = A(), h = S().halfJoint, j = J()?.acc; if (h && D.acc[h]) return h; if (j && D.acc[j]) return j; return accList().find(a => a.type === "courant" && /joint|commun/i.test(a.name))?.id || null; };
+/* Compte joint = un compte courant marqué « Compte joint » (à la création, dans sa fiche ou à l'import iCompta). Jamais deviné d'après son nom. */
+const isJoint = id => { const a = id && A().acc[id]; return !!a && !!a.joint && a.type === "courant" && !a.hidden; };
+const halfJoint = () => { const h = S().halfJoint; if (isJoint(h)) return h; return accList().find(a => isJoint(a.id))?.id || null; };
+/* Une fois, à la mise à jour : marque comme joint le compte où des dépenses 50/50 ont déjà été cochées (ou choisi dans les réglages) */
+function jointMigrate() {
+  const D = A(), st = S(); if (st.jointMig || !Object.keys(D.acc).length) return;
+  if (!Object.values(D.acc).some(a => a.joint)) {
+    const ids = new Set(), add = id => { const a = D.acc[id]; if (!a) return; if (a.type === "carte" && a.linked) return add(a.linked); if (a.type === "courant") ids.add(a.id); };
+    add(st.halfJoint); add(J()?.acc);
+    for (const t of Object.values(D.tx)) if (t.half && t.st !== "annulee") add(t.account);
+    Store.bulk([...[...ids].map(id => ["put", {...D.acc[id], joint: true}]), ["put", {...S(), k: "set", id: "set_main", jointMig: true}]]);
+  } else Store.put({...st, k: "set", id: "set_main", jointMig: true});
+}
 /* 50/50 utilisé mais réglages encore devinés : Pécule pose la question une fois (accueil + Vérifications) */
 const halfUsed = () => Object.values(A().tx).some(t => t.half && t.st !== "annulee") || (S().halfAdj || []).length > 0;
 const halfNeedsOk = () => !S().halfOk && !!halfJoint() && halfUsed();
@@ -1969,7 +1981,7 @@ function JointView() {
 }
 function JointSetup({close}) {
   const j0 = J() || {};
-  const [f, setF] = useState(() => ({acc: j0.acc || accList().find(a => /joint|commun/i.test(a.name))?.id || accList().find(inCash)?.id, partner: j0.partner || "", pname: "", me: amtStr(jIncome(ym(today())).me) || "", pa: amtStr(jIncome(ym(today())).partner) || "", extra: amtStr(j0.extra) || "", from: ym(today())}));
+  const [f, setF] = useState(() => ({acc: j0.acc || halfJoint() || accList().find(inCash)?.id, partner: j0.partner || "", pname: "", me: amtStr(jIncome(ym(today())).me) || "", pa: amtStr(jIncome(ym(today())).partner) || "", extra: amtStr(j0.extra) || "", from: ym(today())}));
   const set = (k, v) => setF(o => ({...o, [k]: v}));
   const [err, setErr] = useState("");
   const save = async () => {
@@ -2161,7 +2173,7 @@ function CashSheet({close}) {
   </${Sheet}>`;
 }
 /* ============ Vue d'ensemble ============ */
-const mainAcc = () => { const id = S().mainAcc; return A().acc[id] && !A().acc[id].hidden ? id : (accList().find(a => /joint|commun/i.test(a.name)) || accList().find(inCash) || accList()[0])?.id; };
+const mainAcc = () => { const id = S().mainAcc; return A().acc[id] && !A().acc[id].hidden ? id : (accList().find(a => isJoint(a.id)) || accList().find(inCash) || accList()[0])?.id; };
 function glanceState(id) {
   return memo("glance" + id, () => {
     const a = A().acc[id], t = today(), k = ym(t), [ps, E] = accPeriod(a);
@@ -2502,11 +2514,14 @@ function AccPill({cur, onPick}) {
 function HalfSheet({close}) {
   const [n, setN] = useState(halfName() === "Partenaire" ? "" : halfName()), [from, setFrom] = useState(halfFrom() || ""), [jt, setJt] = useState(halfJoint() || "");
   const fromBad = from && A().acc[from] && A().acc[from].type !== "courant";
-  const save = () => { Store.put({...S(), k: "set", id: "set_main", halfName: n.trim() || null, halfFrom: from || null, halfJoint: jt || null, halfOk: true}); close(); toast("Remboursement 50/50 enregistré"); };
+  const save = () => { const ops = [["put", {...S(), k: "set", id: "set_main", halfName: n.trim() || null, halfFrom: from || null, halfJoint: jt || null, halfOk: true}]];
+    if (jt && A().acc[jt] && !A().acc[jt].joint) ops.push(["put", {...A().acc[jt], joint: true}]);
+    Store.bulk(ops); close(); toast("Remboursement 50/50 enregistré"); };
+  const courants = accList().filter(a => a.type === "courant");
   return html`<${Sheet} title="Remboursement 50/50" close=${close} right=${html`<button class="link" onClick=${save}>Enregistrer</button>`}>
     <div class="help">Les dépenses cochées « 50/50 » sur le ${halfJoint() ? accName(halfJoint()) : "compte joint"} sont partagées en deux, l'avant-dernier jour du mois : ta moitié s'ajoute au virement vers le joint, l'autre à l'opération de la personne avec qui tu partages. Si ces deux opérations existent déjà ce jour-là, les nouvelles dépenses s'y ajoutent.</div>
     <${Field} label="Prénom" id="hs-n"><input id="hs-n" value=${n} placeholder="Prénom" onInput=${e => setN(e.target.value)} /></${Field}>
-    <${Field} label="Compte joint" id="hs-j"><${AccSelect} id="hs-j" v=${jt} set=${setJt} /></${Field}>
+    <${Field} label="Compte joint" id="hs-j"><select id="hs-j" value=${jt} onChange=${e => setJt(e.target.value)}><option value="">Aucun compte joint</option>${courants.map(a => html`<option value=${a.id}>${a.name}</option>`)}</select></${Field}>
     <${Field} label="Ta moitié part du" id="hs-f"><${AccSelect} id="hs-f" v=${from} set=${setFrom} exclude=${jt || halfJoint()} /></${Field}>
     ${fromBad && html`<div class="banner" role="status" style="padding:10px 14px;font-size:14px">${accName(from)} n'est pas un compte courant : les virements 50/50 partiront de là chaque mois. C'est bien ce que tu veux ?</div>`}
     <button class="btn pri" onClick=${save}>Enregistrer</button>
@@ -2772,7 +2787,7 @@ function AccDash({a, go}) {
   const recent = (idx()[id] || []).map(([x]) => x).filter(x => x.date <= t).sort((p, q) => q.date.localeCompare(p.date)).slice(0, 4);
   const Act = ({ic, l, f}) => html`<button class="qa" onClick=${f}><span class="qa-i">${ic}</span><span>${l}</span></button>`;
   return html`
-    ${(J()?.acc === id || (!J() && /joint|commun/i.test(a.name))) && (() => { const jm = J() ? jointMonth(k) : null, P = jPartner();
+    ${(J()?.acc === id || (!J() && isJoint(id))) && (() => { const jm = J() ? jointMonth(k) : null, P = jPartner();
       return html`<button class="card pad" style="border:0;text-align:left;width:100%;display:flex;gap:12px;align-items:center" onClick=${() => NAV.push({v: "joint"})}><span style="font-size:26px">💑</span><span class="grow"><div class="t1">Partage à deux</div><div class="t2" style="white-space:normal">${jm && P ? (jm.settle > 0.004 ? P.name + " te doit " + fmt(jm.settle) : jm.settle < -0.004 ? "Tu dois " + fmt(-jm.settle) + " à " + P.name : "À l'équilibre") + " ce mois-ci · prorata " + Math.round(jm.r * 100) + "/" + (100 - Math.round(jm.r * 100)) : "Répartir les charges au prorata de vos revenus"}</div></span><span class="muted">›</span></button>`; })()}
     ${a.type === "pret" ? html`<${LoanDash} a=${a} />` : html`
     ${a.type === "carte" && html`<${CardCycle} a=${a} />`}
@@ -3468,7 +3483,7 @@ function AccSheet({id, pre, close}) {
     if (!f.name.trim()) return setErr("Donne un nom au compte.");
     const v = calc(f.initialStr || "0"); if (isNaN(v)) return setErr("Le solde de départ n'est pas un nombre.");
     const initial = isCard || isLoan ? -Math.abs(v) : (f.neg ? -Math.abs(v) : v);
-    const a = {...(a0 || {}), k: "acc", id: a0?.id || uid("acc"), name: f.name.trim(), type: f.type, emoji: f.emoji || "💳", color: f.color, initial: r2(initial), warn: f.warn === "" || f.warn == null ? null : calc(f.warn), inTotal: f.inTotal !== false, inCash: f.inCash ?? null, hidden: !!f.hidden, order: f.order ?? Object.keys(A().acc).length, number: f.number || null};
+    const a = {...(a0 || {}), k: "acc", id: a0?.id || uid("acc"), name: f.name.trim(), type: f.type, emoji: f.emoji || "💳", color: f.color, initial: r2(initial), warn: f.warn === "" || f.warn == null ? null : calc(f.warn), inTotal: f.inTotal !== false, inCash: f.inCash ?? null, hidden: !!f.hidden, order: f.order ?? Object.keys(A().acc).length, number: f.number || null, joint: f.type === "courant" && !!f.joint};
     if (isCard) { const legacy = a0 && !a0.initDebit; a.initDebit = Math.abs(v) > 0.004 ? (f.initDebit || (legacy ? null : debitDates(f.debitDay)[0])) : null; a.debitDay = Number(f.debitDay) || 4; a.closeDay = Number(f.closeDay) || 0; a.linked = f.linked || null; if (!a.linked) return setErr("Choisis le compte sur lequel la carte est débitée."); } else { delete a.debitDay; delete a.linked; delete a.closeDay; }
     if (f.type === "epargne") { a.rates = f.rates.filter(r => r.from && !isNaN(calc(r.rs))).map(r => ({from: r.from, rate: calc(r.rs)})).sort((x, y) => x.from.localeCompare(y.from)); a.rate = a.rates.length ? a.rates[a.rates.length - 1].rate : null; a.intFreq = f.intFreq || "y"; a.intCat = f.intCat || null; } else { delete a.rates; delete a.intFreq; }
     if (isLoan) { const L = f.loan; const pay = calc(L.payment); if (!(pay > 0)) return setErr("Indique la mensualité du prêt, ou calcule-la."); if (!L.from) return setErr("Choisis le compte qui paie le prêt.");
@@ -3498,6 +3513,7 @@ function AccSheet({id, pre, close}) {
     </div>
     <div class="chips" aria-label="Couleur">${COLORS.map(c => html`<button type="button" aria-label=${"Couleur " + c} onClick=${() => set("color", c)} style=${`width:30px;height:30px;border-radius:10px;border:3px solid ${f.color === c ? "var(--ink)" : "transparent"};background:${c}`}></button>`)}</div>
     <${Field} label="Type" id="ac-t"><select id="ac-t" value=${f.type} onChange=${e => set("type", e.target.value)}>${Object.entries(TYPES).map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select></${Field}>
+    ${f.type === "courant" && html`<${Toggle} on=${!!f.joint} set=${v => set("joint", v)} label="Compte joint" sub="Partagé avec une autre personne : Pécule propose alors le remboursement 50/50 sur ce compte et ses cartes" />`}
     ${isCard ? html`<${Field} label="Montant à débiter" id="ac-i" help=${"Tout ce que tu as déjà payé avec cette carte et qui n'est pas encore passé sur " + (f.linked ? accName(f.linked) : "ton compte") + ". N'importe quel montant, 0 si rien."}>
       <input id="ac-i" inputmode="decimal" value=${f.initialStr} onInput=${e => set("initialStr", e.target.value)} placeholder="0,00" /></${Field}>
       ${calc(f.initialStr || "0") > 0 && html`<${Field} label="Sera débité le" id="ac-id"><select id="ac-id" value=${f.initDebit || (a0 && !a0.initDebit ? "" : debitDates(f.debitDay)[0])} onChange=${e => set("initDebit", e.target.value)}>${a0 && !a0.initDebit ? html`<option value="">au premier débit après le ${refDate}</option>` : ""}${[...new Set([...(f.initDebit ? [f.initDebit] : []), ...debitDates(f.debitDay)])].sort().map(d => html`<option value=${d}>${dayLabel(d)} ${d.slice(0, 4)}</option>`)}</select></${Field}>`}`
@@ -4842,7 +4858,7 @@ function obCatDocs() {
 /* Écran d'import iCompta : choisir le fichier, cocher ce qu'on reprend, importer */
 function IcImport({close}) {
   const [r, setR] = useState(null), [err, setErr] = useState(null), [busy, setBusy] = useState(null), [fname, setFname] = useState("");
-  const [opt, setOpt] = useState({sch: true, cat: true, bdg: true, pend: true});
+  const [opt, setOpt] = useState({sch: true, cat: true, bdg: true, pend: true}), [joint, setJoint] = useState([]);
   const [dbf, setDbf] = useState(null);
   useEffect(() => { if (dbf) { try { setR(icompta2pecule(dbf, today(), opt.pend)); } catch (x) { setErr(x && x.message ? x.message : "Lecture impossible."); } } }, [dbf, opt.pend]);
   const had = Object.keys(A().acc).length > 0;
@@ -4854,14 +4870,14 @@ function IcImport({close}) {
     if (had) for (const k of ["acc", "tx", "sch", "bdg", "bud", "cat"]) for (const o of Object.values(A()[k] || {})) ops.push(["del", o]);
     const strip = sp => sp.map(x => { const y = {...x}; if (!opt.cat) delete y.cat; if (!opt.bdg) { delete y.bdg; delete y.bm; } return y; });
     const fixTx = o => ({...o, splits: strip(o.splits || []), ...(o.ov ? {ov: Object.fromEntries(Object.entries(o.ov).map(([k, v]) => [k, {...v, splits: strip(v.splits || [])}]))} : {})});
-    for (const d of r.acc) ops.push(["put", d]);
+    for (const d of r.acc) ops.push(["put", {...d, joint: d.type === "courant" && joint.includes(d.id)}]);
     for (const d of opt.cat ? r.cat : obCatDocs()) ops.push(["put", d]);
     if (opt.bdg) for (const d of [...r.bdg, ...r.bud]) ops.push(["put", d]);
     if (opt.sch) for (const d of r.sch) ops.push(["put", fixTx(d)]);
     for (const d of r.tx) ops.push(["put", fixTx(d)]);
     setBusy([0, ops.length + 1]);
     await Store.bulk(ops, (i, n) => setBusy([i, n + 1]));
-    await Store.put({...S(), k: "set", id: "set_main", start: r.start, cashCards: true, created: S().created || today()});
+    await Store.put({...S(), k: "set", id: "set_main", start: r.start, cashCards: true, created: S().created || today(), jointMig: true, halfJoint: null, halfOk: false});
     toast("Import iCompta terminé"); close();
   };
   const Opt = ({k, label, n, hint}) => html`<button class=${"wbig" + (opt[k] ? " on" : "")} role="switch" aria-checked=${opt[k]} onClick=${() => setOpt(o => ({...o, [k]: !o[k]}))}><span class="grow"><span style="display:block">${label} · ${n}</span><span style="display:block;font-size:12px;font-weight:500;color:var(--muted)">${hint}</span></span><span class=${"wsw" + (opt[k] ? " on" : "")}><i></i></span></button>`;
@@ -4874,10 +4890,13 @@ function IcImport({close}) {
       ${err && html`<div class="banner" role="alert" style="border-color:var(--neg)"><span class="grow"><b>Impossible de lire ce fichier.</b><br />${err}</span></div>`}
       <div class="help">Pécule reprend tes comptes et leurs soldes validés, puis tu choisis : les opérations créées et prévues seulement, ou aussi les validées du mois ; l'échéancier, les catégories et les budgets. Ce qui est validé reste dans iCompta, résumé dans le solde.</div>`}
     ${r && !Array.isArray(busy) && html`
-      <div class="card" style="padding:4px 16px;background:var(--bg);box-shadow:none">
+      <div class="card" style="padding:4px 16px;background:var(--bg);box-shadow:none;flex:none">
         <div class="fgh" style="padding:12px 0 4px">${fname} · ${r.acc.length} comptes</div>
         ${r.acc.map(a => html`<div style="display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--line);font-size:14px"><span><b>${a.name}</b><span class="muted"> · ${TY[a.type]}${a.linked ? " → " + (r.acc.find(x => x.id === a.linked) || {}).name : ""}</span></span><span style="font-weight:600;white-space:nowrap">${fmt(r.shown && r.shown[a.id] != null ? r.shown[a.id] : a.initial)}</span></div>`)}
       </div>
+      ${r.acc.some(a => a.type === "courant") && html`<div style="display:flex;flex-direction:column;gap:8px;flex:none"><div class="fgh" style="padding:4px 0 0" id="ic-joint">Un de ces comptes est-il un compte joint ?</div>
+        <div class="chips" role="group" aria-labelledby="ic-joint"><button type="button" class=${"chip" + (!joint.length ? " on" : "")} aria-pressed=${!joint.length ? "true" : "false"} onClick=${() => setJoint([])}>Aucun</button>${r.acc.filter(a => a.type === "courant").map(a => html`<button type="button" class=${"chip" + (joint.includes(a.id) ? " on" : "")} aria-pressed=${joint.includes(a.id) ? "true" : "false"} onClick=${() => setJoint(l => l.includes(a.id) ? l.filter(x => x !== a.id) : [...l, a.id])}>${a.name}</button>`)}</div>
+        <div class="help" style="margin:0">Partagé avec une autre personne : Pécule proposera le remboursement 50/50 sur ce compte et ses cartes. Modifiable ensuite dans la fiche du compte.</div></div>`}
       <div class="help">Soldes validés à aujourd'hui. ${opt.pend ? r.tx.length + " opérations reprises : les créées, plus le débit des cartes et la mensualité du prêt du mois." : r.tx.length + " opérations reprises : tout le mois en cours et celles non validées."}</div>
       <div style="display:flex;flex-direction:column;gap:10px">
         <${Opt} k="pend" label="Seulement les opérations créées et prévues" n=${r.tx.length} hint=${opt.pend ? "Les validées restent dans iCompta ; les budgets du mois partent de ce qu'il te reste" : "Reprend aussi les opérations validées du mois en cours"} />
@@ -4886,7 +4905,7 @@ function IcImport({close}) {
         <${Opt} k="bdg" label="Budgets" n=${r.bdg.length} hint="Avec leurs montants et périodes" />
       </div>
       ${had && html`<div class="banner" role="alert"><span class="grow">Cet import <b>remplace</b> les comptes et opérations déjà dans Pécule. Pense à télécharger une sauvegarde avant.</span></div>`}
-      <div class="help">À compléter ensuite à la main si besoin : le détail d'un prêt (assurance), le 50/50 d'un compte joint.</div>
+      <div class="help">À compléter ensuite à la main si besoin : le détail d'un prêt (assurance).</div>
       <div style="display:flex;gap:10px"><label class="btn" style="flex:1;display:flex;align-items:center;justify-content:center;cursor:pointer">Autre fichier<input type="file" style="display:none" onChange=${pick} /></label><button class="wgo" style="flex:2" onClick=${run}>Importer</button></div>`}
     ${Array.isArray(busy) && html`<div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:12px;text-align:center"><b>Import en cours… ne ferme pas l'app</b><div style="height:8px;border-radius:4px;background:var(--line);overflow:hidden"><div style=${`height:8px;background:var(--accent);width:${Math.round(busy[0] / busy[1] * 100)}%`}></div></div><span class="muted">${busy[0]} / ${busy[1]}</span></div>`}
   </div></div>`;
@@ -5120,7 +5139,7 @@ function App() {
 }
 /* 50/50 : les dépenses cochées s'ajoutent au virement et à l'opération de la partenaire du mois */
 let halfT = null;
-Store.sub(() => { if (halfT) return; halfT = setTimeout(() => { halfT = null; try { halfSync(); } catch (e) { console.error(e); } }, 60); });
+Store.sub(() => { if (halfT) return; halfT = setTimeout(() => { halfT = null; try { jointMigrate(); halfSync(); } catch (e) { console.error(e); } }, 60); });
 render(html`<${App} />`, document.getElementById("app"));
 Store.init();
 if ("serviceWorker" in navigator) { try { navigator.serviceWorker.register("./sw.js"); } catch {} }

@@ -105,13 +105,19 @@ class App:
     def wait(self, ms=400):
         self.pg.wait_for_timeout(ms)
 
-    def import_ic(self, path, pending=True):
+    def import_ic(self, path, pending=True, joint=None):
         self.pg.click("text=Importer depuis iCompta")
         self.pg.set_input_files(".wiz input[type=file] >> nth=0", path)
         self.wait(2500)
         if not pending:
             self.pg.locator(".wiz").get_by_text("Seulement les opérations créées et prévues").click()
             self.wait(2500)
+        # question « Un de ces comptes est-il un compte joint ? » : le Joint du fichier fictif, aucun sinon
+        if joint is None:
+            joint = ["Joint"] if path == FICTIF else []
+        for n in joint:
+            self.pg.locator('.wiz [role=group][aria-labelledby=ic-joint]').get_by_role("button", name=n, exact=True).click()
+            self.wait(200)
         self.pg.click('.wgo:has-text("Importer")')
         self.wait(4500)
         self.dismiss()
@@ -468,14 +474,11 @@ def cinquante_cinquante_depuis_le_courant(br, url):
 
 @test
 def cinquante_cinquante_sans_compte_joint(br, url):
-    """Sans compte joint (cas de Marie) : aucune option 50/50, aucune question, rien dans les vérifications ; un livret « commun » n'est pas un compte joint."""
+    """Compte joint indiqué explicitement, jamais deviné par son nom : sans compte joint (cas de Marie), rien du 50/50 ; on l'active dans la fiche du compte."""
     a = App(br, url)
-    a.import_ic(FICTIF)
+    a.import_ic(FICTIF, joint=[])
     j = a.acc_id("Joint")
-    # le Joint devient un livret « commun » : plus aucun compte courant joint
-    a.js("D.Store.put({...D.A().acc[arg], name: 'Livret commun', type: 'epargne'});", j)
-    a.wait(400)
-    check(a.js("return D.halfJoint();") is None, "un livret est pris pour le compte joint")
+    check(a.js("return D.halfJoint();") is None, "un compte est pris pour le joint d'après son nom")
     a.js("D.SHEET.open({type: 'op', kind: 'tx', acc: arg});", j)
     a.wait(500)
     check("Remboursement 50/50" not in a.pg.inner_text(".sheet"), "option 50/50 proposée sans compte joint")
@@ -485,7 +488,37 @@ def cinquante_cinquante_sans_compte_joint(br, url):
     a.wait(300)
     check("50/50" not in a.pg.inner_text("main"), "question 50/50 sur l'accueil sans compte joint")
     check(not [k for k in a.js("return D.dataChecks().map(c => c.key);") if k.startswith("half")], "vérification 50/50 sans compte joint")
+    # fiche du compte : interrupteur « Compte joint »
+    a.js("D.SHEET.open({type: 'acc', id: arg});", j)
+    a.wait(500)
+    a.pg.locator('.sheet [role=switch]:has-text("Compte joint")').click()
+    a.wait(200)
+    a.pg.locator('.sheet button.link:has-text("Enregistrer"), .sheet button:has-text("Enregistrer")').first.click()
+    a.wait(500)
+    check(a.js("return D.halfJoint();") == j, "le compte marqué joint n'est pas reconnu")
+    a.js("D.SHEET.open({type: 'op', kind: 'tx', acc: arg});", j)
+    a.wait(500)
+    check("Remboursement 50/50" in a.pg.inner_text(".sheet"), "option 50/50 absente après avoir marqué le compte joint")
+    a.js("D.SHEET.close();")
+    a.wait(300)
     a.no_errors("sans compte joint")
+    a.close()
+
+
+@test
+def compte_joint_import_et_mise_a_jour(br, url):
+    """Import iCompta : la réponse à « compte joint ? » est enregistrée ; mise à jour : le compte où des dépenses 50/50 sont déjà cochées est marqué joint."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    j = a.acc_id("Joint")
+    check(a.js("return Object.values(D.A().acc).filter(x => x.joint).map(x => x.name);") == ["Joint"], "réponse à l'import mal enregistrée : %s" % a.js("return Object.values(D.A().acc).filter(x => x.joint).map(x => x.name);"))
+    # données d'avant la mise à jour : aucun compte marqué, une dépense 50/50 sur la carte du joint
+    cj = a.acc_id("Carte Joint")
+    a.js("""const [j, cj] = arg; D.Store.bulk([['put', {...D.A().acc[j], joint: false}], ['put', {...D.S(), jointMig: false}],
+      ['put', {k: 'tx', id: 'tx_mig_half', account: cj, date: '2026-11-12', name: 'Restaurant', amount: -60, splits: [{amount: -60, cat: null}], st: 'saisie', half: true}]]);""", [j, cj])
+    a.wait(800)
+    check(a.js("return [D.A().acc[arg].joint, D.S().jointMig, D.halfJoint()];", j) == [True, True, j], "migration : %s" % a.js("return [D.A().acc[arg].joint, D.S().jointMig, D.halfJoint()];", j))
+    a.no_errors("compte joint")
     a.close()
 
 

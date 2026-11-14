@@ -31,7 +31,8 @@ reste sur la machine ; rien n'est écrit dans le dépôt (`tests/out/` est ignor
 | `saisie_echeance` | Bouton + › Échéance : création et occurrences |
 | `cinquante_cinquante` | 50/50 ajouté au virement et à l'opération de la partenaire ; décocher ; mois suivant en prévu |
 | `cinquante_cinquante_depuis_le_courant` | 50/50 : un livret qui vire parfois vers le joint en fin de mois n'est jamais pris pour le compte d'où part ta moitié |
-| `cinquante_cinquante_sans_compte_joint` | Sans compte joint (cas de Marie) : aucune option, question ni vérification 50/50 ; un livret « commun » n'est pas un compte joint |
+| `cinquante_cinquante_sans_compte_joint` | Compte joint indiqué explicitement, jamais deviné par son nom : sans compte joint (cas de Marie), rien du 50/50 ; l'interrupteur « Compte joint » de la fiche du compte l'active |
+| `compte_joint_import_et_mise_a_jour` | Import iCompta : réponse à « Un de ces comptes est-il un compte joint ? » enregistrée ; mise à jour : le compte où des dépenses 50/50 sont déjà cochées est marqué joint |
 | `verifications_donnees` | Question 50/50 posée une fois sur l'accueil ; Vérifications : 50/50 sur un livret, carte sans compte débité, opération liée à un compte supprimé, ventilation fausse, livret négatif, budget périmé (« Nettoyer ») ; aucun signalement sur un fichier propre |
 | `valider_supprimer_annuler` | Valider une opération, la supprimer, annuler |
 | `valider_virement` | Virement entre tes comptes : un geste valide (ou dé-valide) les deux côtés |
