@@ -872,54 +872,6 @@ function halfOccs(start, until) {
   return out;
 }
 
-/* ============ Compte joint au prorata des salaires ============
-   Réglage S().prorata = {from: compte courant d'où part ta part, name: prénom, day: jour des lignes, since: "AAAA-MM", incomes: [{from: "AAAA-MM", me, partner}]}.
-   Seuls les éléments cochés « Au prorata » comptent : échéances du joint et de ses cartes (s.prorata), lignes de budget rattachées au joint (l.prorata).
-   Chaque mois : total (dépenses − rentrées cochées) réparti au prorata ; deux lignes prévues dans l'échéancier : ton virement et la ligne de la personne. */
-const PR = () => S().prorata || null;
-const prOn = () => { const p = PR(); return !!p && !!halfJoint() && !!A().acc[p.from] && (p.incomes || []).length > 0; };
-const prIncome = k => { const l = (PR()?.incomes || []).slice().sort((a, b) => a.from.localeCompare(b.from)); let cur = l[0] || {me: 0, partner: 0}; for (const x of l) if (x.from <= k) cur = x; return cur; };
-const prRatio = k => { const i = prIncome(k), tot = (i.me || 0) + (i.partner || 0); return tot ? (i.me || 0) / tot : .5; };
-const prAccs = () => { const j = halfJoint(); return new Set(j ? [j, ...Object.values(A().acc).filter(a => a.type === "carte" && a.linked === j).map(a => a.id)] : []); };
-const prSchOk = acc => prOn() && prAccs().has(acc);
-const prLineOk = bid => { const b = A().bdg[bid]; if (!b || !prOn()) return false; const accs = prAccs(); return bAccs(b).some(x => accs.has(x)); };
-const perMonth = f => { const n = Number(f?.n) || 1; return f?.u === "y" ? 1 / (12 * n) : f?.u === "w" ? 52 / 12 / n : f?.u === "d" ? 365 / 12 / n : 1 / n; };
-function prItems(k) {
-  return memo("pri" + k, () => {
-    const D = A(), accs = prAccs(), ps = k + "-01", pe = eom(k), out = []; if (!accs.size) return out;
-    for (const s of Object.values(D.sch)) {
-      if (!s.prorata || s.paused || !s.next || !accs.has(s.account) || (s.end && s.end < ps)) continue;
-      if (s.left != null) { if (s.left <= 0) continue; let d = s.next; for (let i = 1; i < s.left; i++) d = step(d, s.freq, s.anchor); if (d < ps) continue; }
-      const monthly = s.freq?.u === "m" && (Number(s.freq.n) || 1) === 1;
-      let v;
-      if (monthly) { const [y, m] = k.split("-").map(Number), d = `${k}-${pad(Math.min(s.anchor || Number(s.next.slice(8)), dim(y, m)))}`;
-        if ((s.skips || []).includes(d)) continue; v = s.ov?.[d]?.amount ?? s.amount; }
-      else v = r2(s.amount * perMonth(s.freq));
-      out.push({kind: "sch", id: s.id, name: s.name, acc: s.account, v: r2(-v), smooth: !monthly});
-    }
-    for (const b of budgets(true)) { if (!bAccs(b).some(x => accs.has(x))) continue;
-      for (const l of linesOf(b.id)) { if (!l.prorata) continue; const p = periodAt(l, ps) || periodsOf(l, ps, pe)[0]; if (!p) continue;
-        const mo = l.dur?.u === "m" && (Number(l.dur.n) || 1) === 1, a = r2(baseAmt(l, p[0]) * (mo ? 1 : perMonth(l.dur)));
-        out.push({kind: "bud", id: l.id, name: lineName(l) + " (budget)", v: l.income ? -a : a, smooth: !mo}); } }
-    return out.sort((x, y) => y.v - x.v);
-  });
-}
-function prMonth(k) {
-  return memo("prm" + k, () => { const items = prItems(k), N = r2(items.reduce((a, x) => a + x.v, 0)), r = prRatio(k), mine = r2(Math.max(0, N) * r), hers = r2(Math.max(0, N) - mine);
-    return {k, items, N, r, mine, hers}; });
-}
-function prOccs(start, until) {
-  if (!prOn()) return [];
-  const D = A(), p = PR(), j = halfJoint(), out = [], name = (p.name || "Partenaire").trim();
-  for (let k = p.since && p.since > ym(start) ? p.since : ym(start), g = 0; g++ < 240; k = ymAdd(k, 1)) {
-    const [y, m] = k.split("-").map(Number), d = `${k}-${pad(Math.min(Number(p.day) || 1, dim(y, m)))}`; if (d > until) break;
-    const {mine, hers} = prMonth(k);
-    if (mine > 0.004 && !D.tx["tx_pr_" + k]) out.push({virtual: true, kind: "prorata", id: "tx_pr_" + k, date: d, account: p.from, name: "Virement au " + accName(j) + " (prorata)", amount: -mine, splits: [{to: j, amount: -mine}], pay: "virement"});
-    if (hers > 0.004 && !D.tx["tx_prm_" + k]) out.push({virtual: true, kind: "prorata", id: "tx_prm_" + k, date: d, account: j, name: name + " (prorata)", amount: hers, splits: [{amount: hers, cat: null}], pay: "virement"});
-  }
-  return out;
-}
-
 /* ============ Outils ============ */
 const pad = n => String(n).padStart(2, "0");
 const iso = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -1229,7 +1181,6 @@ function occurrences(until) {
       }
     }
     for (const o of halfOccs(start, until)) out.push(o);
-    for (const o of prOccs(start, until)) out.push(o);
     const t = today(), base = out.slice();
     for (const b of budgets(true)) {
       if (b.remaining === false) continue;
@@ -1380,7 +1331,7 @@ function lineBudget(l, ps, depth = 0) {
 }
 function linePlanned(l, ps, pe, occ) {
   const af = bAccs(budgetOf(l)), m = lineMatcher(l); let s = 0;
-  for (const o of occ) { if (o.kind === "bud" || o.kind === "half" || o.kind === "prorata" || o.date < ps || o.date > pe) continue; if (af.length && !af.includes(o.account)) continue;
+  for (const o of occ) { if (o.kind === "bud" || o.kind === "half" || o.date < ps || o.date > pe) continue; if (af.length && !af.includes(o.account)) continue;
     for (const sp of o.splits || []) { if ((sp.to && !sp.cat) || sp.nobud || sp.hf || bdgElsewhere(sp, l.budget) || !m(sp.cat)) continue; if (l.income ? sp.amount > 0 : sp.amount < 0) s += l.income ? sp.amount : -sp.amount; } }
   return r2(s);
 }
@@ -1986,57 +1937,79 @@ function jointPlan() {
   });
 }
 function JointView() {
-  const j = halfJoint(), [k, setK] = useState(() => PR()?.since && PR().since > ym(today()) ? PR().since : ym(today()));
-  if (!j) return html`<${Top} title="Compte joint au prorata" back /><main class="scr"><div class="card"><div class="empty"><b>Aucun compte joint</b>Indique d'abord ton compte joint : Comptes › le compte › Modifier › « Compte joint ».</div></div></main>`;
-  if (!prOn()) return html`<${Top} title="Compte joint au prorata" back /><main class="scr">
-    <div class="card pad"><div class="t1" style="white-space:normal;font-size:17px">Partager les charges du ${accName(j)} au prorata de vos salaires</div>
-    <p class="help" style="margin:8px 0 14px">Tu coches « Au prorata des salaires » sur les échéances du joint (et de ses cartes) et les budgets du joint que vous partagez. Chaque mois, Pécule fait le total et ajoute deux lignes dans l'échéancier : ton virement depuis ton compte courant, et la ligne de l'autre personne, chacune selon votre part.</p>
+  const j = J(), P = jPartner();
+  const [k, setK] = useState(ym(today()));
+  if (!j || !A().acc[j.acc] || !P) return html`<${Top} title="Compte joint à deux" back /><main class="scr">
+    <div class="card pad"><div class="t1" style="white-space:normal;font-size:17px">Répartir les charges du compte joint au prorata des revenus</div>
+    <p class="help" style="margin:8px 0 14px">Pécule calcule ce que chacun doit verser chaque mois, compare avec ce qui a vraiment été versé, et te dit qui doit combien à l'autre.</p>
     <button class="btn pri" onClick=${() => SHEET.open({type: "jointSetup"})}>Configurer</button></div></main>`;
-  const p = PR(), nm = (p.name || "").trim() || "Partenaire", m = prMonth(k), inc = prIncome(k);
-  return html`<${Top} title="Compte joint au prorata" sub=${accName(j) + " · avec " + nm} back right=${html`<button class="ibtn" aria-label="Réglages du partage" onClick=${() => SHEET.open({type: "jointSetup"})}><${Ic} n="gear" /></button>`} />
+  const m = jointMonth(k), plan = jointPlan(), inc = jIncome(k);
+  const months = []; for (let x = ym(S().start || today()); x <= ym(today()); x = ymAdd(x, 1)) months.push(x);
+  const cumul = r2(months.reduce((s, x) => s + (jointMonth(x)?.settle || 0), 0));
+  const who = v => v > 0.004 ? `${P.name} te doit ${fmt(v)}` : v < -0.004 ? `Tu dois ${fmt(-v)} à ${P.name}` : "Vous êtes à l'équilibre";
+  const myPlanSch = Object.values(A().sch).find(s => s.jointAuto);
+  return html`<${Top} title="Compte joint à deux" sub=${accName(j.acc) + " · avec " + P.name} back right=${html`<button class="ibtn" aria-label="Réglages du partage" onClick=${() => SHEET.open({type: "jointSetup"})}><${Ic} n="gear" /></button>`} />
     <main class="scr">
-      <div class="mnav"><button class="ibtn plain" aria-label="Mois précédent" onClick=${() => setK(ymAdd(k, -1))}><${Ic} n="back" /></button><strong>${monthLabel(k)}</strong><button class="ibtn plain" aria-label="Mois suivant" onClick=${() => setK(ymAdd(k, 1))} style="transform:scaleX(-1)"><${Ic} n="back" /></button></div>
-      <section class="hero">
-        <div class="big" style="font-size:30px">${fmt(Math.max(0, m.N))} à partager</div>
-        <div style="margin-top:14px"><div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700"><span>Toi ${fmt(m.mine)}</span><span>${nm} ${fmt(m.hers)}</span></div>
-          <div style="height:10px;border-radius:99px;background:var(--surface2);overflow:hidden;margin-top:6px"><div style=${`height:100%;width:${m.r * 100}%;background:var(--accent)`}></div></div>
-          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--hero-muted);margin-top:4px"><span>${Math.round(m.r * 100)} % · ${fmt0(inc.me)} net / mois</span><span>${100 - Math.round(m.r * 100)} % · ${fmt0(inc.partner)} net / mois</span></div></div>
-        <div class="hint" style="margin-top:10px">Deux lignes le ${(Number(p.day) || 1) === 1 ? "1er" : Number(p.day)} du mois : ton virement depuis le ${accName(p.from)}, et « ${nm} (prorata) » sur le ${accName(j)}.</div>
+      <section class="hero"><div class="lbl">Depuis ${monthLabel(months[0])}</div><div class="big" style="font-size:32px">${who(cumul)}</div>
+        <div class="hint">Calculé sur les dépenses réelles du joint et de ses cartes, au prorata de vos revenus.</div>
+        <div style="margin-top:14px;position:relative"><div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700"><span>Toi ${Math.round(jRatio(k) * 100)} %</span><span>${P.name} ${100 - Math.round(jRatio(k) * 100)} %</span></div>
+          <div style="height:10px;border-radius:99px;background:var(--surface2);overflow:hidden;margin-top:6px"><div style=${`height:100%;width:${jRatio(k) * 100}%;background:var(--accent)`}></div></div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--hero-muted);margin-top:4px"><span>${fmt0(inc.me)} net / mois</span><span>${fmt0(inc.partner)} net / mois</span></div></div>
       </section>
-      <section class="card"><div class="sec-h" style="margin:12px 16px 4px"><h2>Ce qui est coché</h2><span class="muted" style="font-size:13px">${m.items.length} élément${m.items.length > 1 ? "s" : ""}</span></div>
-        ${m.items.map(x => html`<button class="row" onClick=${() => x.kind === "sch" ? SHEET.open({type: "op", kind: "sch", src: A().sch[x.id]}) : NAV.push({v: "line", id: x.id})}><span class="grow"><div class="t1">${x.name}</div><div class="t2">${x.kind === "sch" ? accName(x.acc) + " · échéance" : "enveloppe du mois"}${x.smooth ? " · lissée sur le mois" : ""}</div></span><span class=${"amt" + (x.v < 0 ? " pos" : "")}>${fmt(-x.v, true)}</span></button>`)}
-        ${!m.items.length && html`<div class="empty">Rien n'est coché pour l'instant.</div>`}</section>
-      <p class="help">Pour ajouter un élément : ouvre une échéance du ${accName(j)} ou d'une de ses cartes, ou une ligne d'un budget du ${accName(j)}, et active « Au prorata des salaires ». Une rentrée cochée réduit le total. Le remboursement 50/50 reste à part.</p>
+
+      ${plan && html`<section class="card pad"><div class="sec-h" style="margin:0 0 8px"><h2>Virements conseillés</h2><span class="muted" style="font-size:13px">${monthLabel(plan.k)}</span></div>
+        <div class="tiles" style="margin-bottom:10px"><div class="tile" style="box-shadow:none;background:var(--surface2)"><div class="k">Toi</div><div class="v">${fmt(plan.me)}</div></div><div class="tile" style="box-shadow:none;background:var(--surface2)"><div class="k">${P.name}</div><div class="v">${fmt(plan.partner)}</div></div></div>
+        <div class="help">Charges prévues ${fmt(plan.N)} par mois${plan.E ? `, dont ${fmt(plan.E)} partagés 50/50` : ""} : échéances du joint, mensualité du prêt et budgets qui le surveillent.</div>
+        <details style="margin-top:8px"><summary class="link" style="cursor:pointer">Voir le détail</summary>${plan.items.map(x => html`<div class="kv"><span>${x.name}</span><span>${fmt(x.v)}</span></div>`)}</details>
+        <button class="btn sm pri" style="margin-top:10px" onClick=${() => SHEET.open({type: "jointTransfer", amount: plan.me})}>${myPlanSch ? "Mettre à jour mon virement mensuel" : "Programmer mon virement mensuel"}</button>
+      </section>`}
+
+      <div class="mnav"><button class="ibtn plain" aria-label="Mois précédent" onClick=${() => setK(ymAdd(k, -1))}><${Ic} n="back" /></button><strong>${monthLabel(k)}</strong><button class="ibtn plain" aria-label="Mois suivant" onClick=${() => setK(ymAdd(k, 1))} style="transform:scaleX(-1)"><${Ic} n="back" /></button></div>
+      ${m && html`<section class="card pad">
+        <div class="kv"><span>Dépenses du joint et de ses cartes</span><span>${fmt(m.C)}</span></div>
+        ${m.R > 0 && html`<div class="kv"><span>Recettes communes (CAF, remboursements…)</span><span class="pos">−${fmt(m.R)}</span></div>`}
+        <div class="kv" style="border-top:1px solid var(--line);padding-top:8px;margin-top:4px"><span><b>Charges à partager</b></span><span>${fmt(m.N)}</span></div>
+        <div class="grid2" style="margin-top:12px">
+          ${[["Toi", m.dm, m.pm, m.em], [P.name, m.dp, m.pp, m.ep]].map(([n, d, p, e]) => html`<div style="background:var(--surface2);border-radius:14px;padding:10px 12px"><div class="t1">${n}</div><div class="kv" style="font-size:13px"><span>Part due</span><span>${fmt(d)}</span></div><div class="kv" style="font-size:13px"><span>Versé</span><span>${fmt(p)}</span></div><div class="kv" style="font-size:13px"><span>Écart</span><span class=${e >= 0 ? "pos" : "bad"}>${fmt(e, true)}</span></div></div>`)}
+        </div>
+        <div class="banner" style="margin-top:12px"><span>⚖️</span><span class="grow"><b>${who(m.settle)}</b> pour ${monthLabel(k)}.<div class="t2" style="white-space:normal">La moitié de la différence entre vos écarts. Le reste ${r2(m.pm + m.pp - m.N) >= 0 ? "reste en réserve sur le joint" : "manque sur le joint"} : ${fmt(Math.abs(r2(m.pm + m.pp - m.N)))}.</div></span></div>
+      </section>
+      ${m.charges.length > 0 && html`<section class="card pad"><div class="sec-h" style="margin:0 0 10px"><h2>Charges du mois</h2></div>
+        <div style="display:flex;flex-direction:column;gap:10px">${m.charges.map(c => html`<div style="display:flex;align-items:center;gap:10px">${c.c === "__loan" ? html`<span class="ic sm" style="background:var(--surface2)">🏠</span>` : html`<${CatIcon} id=${c.c === "none" ? null : c.c} sm />`}<span class="grow t1" style="font-size:14.5px">${c.c === "__loan" ? "prêt (capital)" : c.c === "none" ? "sans catégorie" : catName(c.c)}</span><span class="amt" style="font-size:14.5px">${fmt(c.v)}</span></div>`)}</div></section>`}
+      <section><div class="sec-h"><h2>Versements et recettes</h2></div>
+        <div class="card">${[...m.deposits, ...m.commons.map(x => ({...x, who: "common"}))].sort((a, b) => a.t.date.localeCompare(b.t.date)).map(x => html`<div class="row">
+          <span class="grow"><div class="t1">${x.t.name}</div><div class="t2">${dayLabel(x.t.date)}${x.t.account !== j.acc ? " · depuis " + accName(x.t.account) : ""}</div></span>
+          <span style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="amt pos">${fmt(x.v, true)}</span>
+          <select aria-label="Qui a versé" style="min-height:32px;padding:4px 28px 4px 8px;font-size:13px;width:auto" value=${x.who} onChange=${e => Store.put({...A().tx[x.t.id], jointBy: e.target.value})}><option value="me">De toi</option><option value="partner">De ${P.name}</option><option value="common">Recette commune</option></select></span></div>`)}
+          ${!m.deposits.length && !m.commons.length && html`<div class="empty">Aucun versement sur le joint ce mois-ci.</div>`}</div>
+        <p class="help">Les virements depuis tes comptes comptent pour toi. Une rentrée dont le libellé contient « ${P.name} » compte pour ${P.name}. Les autres rentrées sont des recettes communes, qui réduisent les charges. Corrige avec le menu à droite si besoin.</p></section>`}
     </main>`;
 }
 function JointSetup({close}) {
-  const p0 = PR() || {}, j = halfJoint(), inc = PR() ? prIncome(ym(today())) : jIncome(ym(today())); /* reprend les revenus de l'ancien partage s'il était réglé */
-  const [f, setF] = useState(() => ({from: p0.from || halfFrom() || accList().find(a => a.type === "courant" && a.id !== j)?.id || "", name: p0.name || jPartner()?.name || (halfName() === "Partenaire" ? "" : halfName()), me: amtStr(inc.me) || "", pa: amtStr(inc.partner) || "", since: ym(today()), day: String(p0.day || 1)}));
+  const j0 = J() || {};
+  const [f, setF] = useState(() => ({acc: j0.acc || halfJoint() || accList().find(inCash)?.id, partner: j0.partner || "", pname: "", me: amtStr(jIncome(ym(today())).me) || "", pa: amtStr(jIncome(ym(today())).partner) || "", extra: amtStr(j0.extra) || "", from: ym(today())}));
   const set = (k, v) => setF(o => ({...o, [k]: v}));
   const [err, setErr] = useState("");
-  const save = () => {
-    const me = calc(f.me), pa = calc(f.pa), day = Math.min(28, Math.max(1, Number(f.day) || 1));
-    if (!j) return setErr("Indique d'abord ton compte joint (fiche du compte).");
-    if (!f.from || f.from === j) return setErr("Choisis le compte d'où part ton virement.");
-    if (!f.name.trim()) return setErr("Indique le prénom.");
-    if (!(me >= 0) || !(pa >= 0) || me + pa <= 0) return setErr("Indique les deux salaires nets mensuels.");
-    const incomes = (p0.incomes || []).filter(x => x.from < f.since); incomes.push({from: f.since, me, partner: pa});
-    Store.put({...S(), k: "set", id: "set_main", prorata: {from: f.from, name: f.name.trim(), day, since: p0.since || ymAdd(ym(today()), 1), incomes}}); close(); toast("Partage au prorata enregistré");
+  const save = async () => {
+    const me = calc(f.me), pa = calc(f.pa);
+    if (!(me >= 0) || !(pa >= 0) || me + pa <= 0) return setErr("Indique les deux revenus nets mensuels.");
+    let pid = f.partner; const ops = [];
+    if (!pid) { if (!f.pname.trim()) return setErr("Indique le prénom de la personne avec qui tu partages."); pid = uid("per"); ops.push(["put", {k: "per", id: pid, name: f.pname.trim(), emoji: "🙂"}]); }
+    const incomes = (j0.incomes || []).filter(x => x.from < f.from);
+    incomes.push({from: f.from, me, partner: pa});
+    ops.push(["put", {...S(), k: "set", id: "set_main", joint: {acc: f.acc, partner: pid, incomes, extra: calc(f.extra || "0") || 0}}]);
+    close(); await Store.bulk(ops); toast("Partage enregistré");
   };
-  const stop = () => { Store.put({...S(), k: "set", id: "set_main", prorata: null}); close(); toast("Partage au prorata désactivé"); };
-  const r = (calc(f.me) || 0) + (calc(f.pa) || 0) > 0 ? (calc(f.me) || 0) / ((calc(f.me) || 0) + (calc(f.pa) || 0)) : null;
-  return html`<${Sheet} title="Compte joint au prorata" close=${close} right=${html`<button class="link" onClick=${save}>Enregistrer</button>`}>
-    <p class="help" style="margin-top:0">Compte joint : <b>${j ? accName(j) : "aucun"}</b>. Seules les échéances et enveloppes cochées « Au prorata des salaires » sont partagées.</p>
-    <${Field} label="Ton virement part du" id="pr-f"><select id="pr-f" value=${f.from} onChange=${e => set("from", e.target.value)}><option value="">Choisir…</option>${accList().filter(a => a.type === "courant" && a.id !== j).map(a => html`<option value=${a.id}>${a.name}</option>`)}</select></${Field}>
-    <${Field} label="Prénom" id="pr-n" help="Nom de sa ligne dans l'échéancier."><input id="pr-n" value=${f.name} onInput=${e => set("name", e.target.value)} placeholder="Marie" /></${Field}>
-    <div class="grid2"><${Field} label="Ton salaire net / mois" id="pr-m"><input id="pr-m" inputmode="decimal" value=${f.me} onInput=${e => set("me", e.target.value)} /></${Field}>
-      <${Field} label="Son salaire net / mois" id="pr-p"><input id="pr-p" inputmode="decimal" value=${f.pa} onInput=${e => set("pa", e.target.value)} /></${Field}></div>
-    ${r != null && html`<div class="pill ok" style="align-self:flex-start">Toi ${Math.round(r * 100)} % · ${(f.name || "").trim() || "l'autre"} ${100 - Math.round(r * 100)} %</div>`}
-    <div class="grid2"><${Field} label="Salaires valables à partir de" id="pr-s" help="Quand un salaire change, indique le mois : les mois d'avant gardent l'ancien prorata."><input id="pr-s" type="month" value=${f.since} onInput=${e => set("since", e.target.value)} /></${Field}>
-      <${Field} label="Jour des deux lignes" id="pr-d" help=${PR() ? null : "Les lignes commencent le mois prochain."}><input id="pr-d" type="number" min="1" max="28" inputmode="numeric" value=${f.day} onInput=${e => set("day", e.target.value)} /></${Field}></div>
+  return html`<${Sheet} title="Partage du compte joint" close=${close} right=${html`<button class="link" onClick=${save}>Enregistrer</button>`}>
+    <${Field} label="Compte joint" id="js-a"><${AccSelect} id="js-a" v=${f.acc} set=${v => set("acc", v)} /></${Field}>
+    <${Field} label="Avec" id="js-p">${people().length ? html`<select id="js-p" value=${f.partner} onChange=${e => set("partner", e.target.value)}><option value="">Nouvelle personne…</option>${people().map(p => html`<option value=${p.id}>${p.name}</option>`)}</select>` : ""}
+      ${!f.partner && html`<input aria-label="Prénom" placeholder="Prénom" value=${f.pname} onInput=${e => set("pname", e.target.value)} />`}</${Field}>
+    <div class="grid2"><${Field} label="Ton revenu net / mois" id="js-m"><input id="js-m" inputmode="decimal" value=${f.me} onInput=${e => set("me", e.target.value)} /></${Field}>
+      <${Field} label="Son revenu net / mois" id="js-n"><input id="js-n" inputmode="decimal" value=${f.pa} onInput=${e => set("pa", e.target.value)} /></${Field}></div>
+    <${Field} label="Ces revenus s'appliquent à partir de" id="js-f" help="Change cette date quand un revenu évolue : les mois précédents gardent l'ancien prorata."><input id="js-f" type="month" value=${f.from} onInput=${e => set("from", e.target.value)} /></${Field}>
+    <${Field} label="Montant mensuel partagé 50/50, hors prorata" id="js-e" help="Ex. un petit extra commun. Il est retiré des charges avant le prorata, puis divisé en deux."><input id="js-e" inputmode="decimal" placeholder="0,00" value=${f.extra} onInput=${e => set("extra", e.target.value)} /></${Field}>
     ${err && html`<div class="banner" role="alert">${err}</div>`}
     <button class="btn pri" onClick=${save}>Enregistrer</button>
-    ${PR() && html`<button class="btn danger" onClick=${stop}>Désactiver le partage au prorata</button>`}
   </${Sheet}>`;
 }
 function JointTransfer({amount, close}) {
@@ -2820,8 +2793,8 @@ function AccDash({a, go}) {
   const recent = (idx()[id] || []).map(([x]) => x).filter(x => x.date <= t).sort((p, q) => q.date.localeCompare(p.date)).slice(0, 4);
   const Act = ({ic, l, f}) => html`<button class="qa" onClick=${f}><span class="qa-i">${ic}</span><span>${l}</span></button>`;
   return html`
-    ${isJoint(id) && (() => { const pm = prOn() ? prMonth(ym(today())) : null, nm = (PR()?.name || "").trim() || "l'autre personne";
-      return html`<button class="card pad" style="border:0;text-align:left;width:100%;display:flex;gap:12px;align-items:center" onClick=${() => NAV.push({v: "joint"})}><span class="ic" style="background:var(--surface2);color:var(--accent)"><${Ic} n="users" s=${20} /></span><span class="grow"><div class="t1">Partage au prorata</div><div class="t2" style="white-space:normal">${pm ? `Ce mois-ci : toi ${fmt(pm.mine)} · ${nm} ${fmt(pm.hers)} (${Math.round(pm.r * 100)} / ${100 - Math.round(pm.r * 100)})` : "Partager les charges cochées au prorata de vos salaires"}</div></span><span class="muted">›</span></button>`; })()}
+    ${(J()?.acc === id || (!J() && isJoint(id))) && (() => { const jm = J() ? jointMonth(k) : null, P = jPartner();
+      return html`<button class="card pad" style="border:0;text-align:left;width:100%;display:flex;gap:12px;align-items:center" onClick=${() => NAV.push({v: "joint"})}><span style="font-size:26px">💑</span><span class="grow"><div class="t1">Partage à deux</div><div class="t2" style="white-space:normal">${jm && P ? (jm.settle > 0.004 ? P.name + " te doit " + fmt(jm.settle) : jm.settle < -0.004 ? "Tu dois " + fmt(-jm.settle) + " à " + P.name : "À l'équilibre") + " ce mois-ci · prorata " + Math.round(jm.r * 100) + "/" + (100 - Math.round(jm.r * 100)) : "Répartir les charges au prorata de vos revenus"}</div></span><span class="muted">›</span></button>`; })()}
     ${a.type === "pret" ? html`<${LoanDash} a=${a} />` : html`
     ${a.type === "carte" && html`<${CardCycle} a=${a} />`}
     ${a.type === "epargne" && html`<${SavingsDash} a=${a} />`}
@@ -3323,7 +3296,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
     split: sp0.length > 1, splits: sp0.map(s => ({cat: s.cat || null, to: s.to || "", tr: !!s.to, amt: partStr(s.amount * (init.amount > 0 ? 1 : -1)), memo: s.memo || "", bm: s.bm || 0, nobud: !!s.nobud, refund: !!s.refund, noRep: !!s.noRep, noAvg: !!s.noAvg, owner: s.owner || null, bdg: s.bdg || null})),
     opt: (s => ({bm: s.bm || 0, nobud: !!s.nobud, refund: !!s.refund, noRep: !!s.noRep, noAvg: !!s.noAvg, owner: s.owner || null, bdg: s.bdg || null}))(sp0[0] || {}), vdate: init.vdate || "", payee: init.payee || "", project: init.project || "", hl: init.hl || "", more: !!(init.vdate || init.project || init.hl || init.payee || init.comment || init.shares?.length || init.repay || init.num || (init.st && init.st !== "saisie" && !(base && base.virtual)) || (sp0[0] && (sp0[0].bm || sp0[0].nobud || sp0[0].refund || sp0[0].noRep))),
     pay: init.pay || "cb", num: init.num || "", comment: init.comment || "", st: init.st || "saisie", st2: init.st2 || "saisie",
-    shares: init.shares || [], repay: init.repay || "", half: !!init.half, prorata: !!init.prorata, rep: false, freq: init.freq || {n: 1, u: "m"}, end: init.end || "", left: init.left ?? "",
+    shares: init.shares || [], repay: init.repay || "", half: !!init.half, rep: false, freq: init.freq || {n: 1, u: "m"}, end: init.end || "", left: init.left ?? "",
     auto: !!init.auto, paused: !!init.paused,
   }));
   const [err, setErr] = useState("");
@@ -3379,7 +3352,6 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
       if (!f.date) return setErr("Indique la prochaine échéance.");
       const s = {...(base || {}), k: "sch", id: base?.id || uid("sch"), ...common, freq: {n: Math.max(1, Number(f.freq.n) || 1), u: f.freq.u}, next: f.date, anchor: Number(f.date.slice(8)), end: f.end || null, left: f.left === "" || f.left == null ? null : Number(f.left), auto: f.auto, paused: f.paused};
       if (base && base.next !== f.date) s.skips = [];
-      if (mode !== "transfer" && prSchOk(f.account) && f.prorata) s.prorata = true; else delete s.prorata;
       Store.put(s); close(); toast(base ? "Échéance modifiée" : "Échéance ajoutée"); return;
     }
     if (f.rep && !base && !occ) {
@@ -3452,8 +3424,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
         <${Field} label="Échéances restantes" id="op-left"><input id="op-left" type="number" min="0" inputmode="numeric" placeholder="illimité" value=${f.left} onInput=${e => set("left", e.target.value)} /></${Field}>
       </div>
       <${Toggle} on=${f.auto} set=${v => set("auto", v)} label="Passer automatiquement" sub="L'opération est créée le jour de l'échéance, sans attendre ta validation." />
-      ${base && html`<${Toggle} on=${f.paused} set=${v => set("paused", v)} label="Suspendre" sub="Plus d'occurrences prévues tant que c'est activé." />`}
-      ${mode !== "transfer" && prSchOk(f.account) && html`<${Toggle} on=${!!f.prorata} set=${v => set("prorata", v)} label="Au prorata des salaires" sub=${f.prorata ? `Comptée chaque mois dans ton virement au ${accName(halfJoint())} et la ligne ${(PR().name || "").trim() || "de l'autre personne"} (${Math.round(prRatio(ym(today())) * 100)} / ${100 - Math.round(prRatio(ym(today())) * 100)})` : "Partager cette échéance au prorata de vos salaires"} />`}`
+      ${base && html`<${Toggle} on=${f.paused} set=${v => set("paused", v)} label="Suspendre" sub="Plus d'occurrences prévues tant que c'est activé." />`}`
     : html`
       ${f.more && mode !== "transfer" && showF("pay") && html`<div class="grid2">
         <${Field} label="Moyen de paiement" id="op-pay"><select id="op-pay" value=${f.pay} onChange=${e => set("pay", e.target.value)}>${Object.entries(PAY).map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select></${Field}>
@@ -4133,7 +4104,7 @@ function LineSheet({id, budget, close}) {
   const [err, setErr] = useState("");
   const t = today();
   const avg = f.cat ? avgLine(normLine({...f, id: l0?.id || "tmp", budget: bid, end: f.endOn ? f.end : null}), t) : 0;
-  const build = () => ({...(l0 ? A().bud[l0.id] : {}), k: "bud", id: l0?.id || uid("bud"), budget: bid, cat: f.cat, income: !!f.income, carry: !!f.carry, prorata: prLineOk(bid) && !!f.prorata, start: f.start, end: f.endOn && f.end ? f.end : null, dur: {n: Math.max(1, Number(f.dur.n) || 1), u: f.dur.u}, label: f.label.trim() || null});
+  const build = () => ({...(l0 ? A().bud[l0.id] : {}), k: "bud", id: l0?.id || uid("bud"), budget: bid, cat: f.cat, income: !!f.income, carry: !!f.carry, start: f.start, end: f.endOn && f.end ? f.end : null, dur: {n: Math.max(1, Number(f.dur.n) || 1), u: f.dur.u}, label: f.label.trim() || null});
   const save = () => {
     setErr("");
     if (!f.cat) return setErr("Choisis une catégorie ou « autres catégories ».");
@@ -4165,7 +4136,6 @@ function LineSheet({id, budget, close}) {
     </div>
     <div class="help">À la fin de chaque période, une nouvelle commence et le compteur repart de zéro. Les périodes sont calées sur la date de début : un 1er du mois donne des mois civils.</div>
     <${Field} label="Fin" id="ln-e" help=${f.endOn && f.end ? html`<button type="button" class="link" onClick=${() => { set("end", ""); set("endOn", false); }}>Retirer la date de fin</button>` : "Vide : la ligne continue indéfiniment."}><input id="ln-e" type="date" min=${f.start || null} value=${f.endOn ? f.end || "" : ""} onInput=${e => { set("end", e.target.value); set("endOn", !!e.target.value); }} /></${Field}>
-    ${prLineOk(bid) && html`<${Toggle} on=${!!f.prorata} set=${v => set("prorata", v)} label="Au prorata des salaires" sub=${f.prorata ? `L'enveloppe est comptée chaque mois dans ton virement au ${accName(halfJoint())} et la ligne ${(PR().name || "").trim() || "de l'autre personne"}` : "Partager cette enveloppe au prorata de vos salaires"} />`}
     <${Toggle} on=${!!f.carry} set=${v => set("carry", v)} label="Reporter le reste sur la période suivante" sub="Ce qui n'est pas dépensé s'ajoute à la période d'après, un dépassement s'en retire." />
     <${Field} label="Nom affiché (facultatif)" id="ln-l"><input id="ln-l" value=${f.label} onInput=${e => set("label", e.target.value)} placeholder=${f.cat ? (f.cat === "__other__" ? "autres catégories" : catName(f.cat)) : ""} /></${Field}>
     ${err && html`<div class="banner" role="alert">${err}</div>`}
@@ -4436,7 +4406,7 @@ function Settings() {
     </div>
     ${H("Partage")}
     <div class="card">
-      <${Item} icon="heart" label="Compte joint au prorata" sub=${!halfJoint() ? "Aucun compte joint" : prOn() ? `Toi ${Math.round(prRatio(ym(today())) * 100)} % · ${(PR().name || "").trim() || "l'autre"} ${100 - Math.round(prRatio(ym(today())) * 100)} % · le ${(Number(PR().day) || 1) === 1 ? "1er" : Number(PR().day)} du mois` : "Partager les charges cochées au prorata des salaires"} go=${() => NAV.push({v: "joint"})} />
+      <${Item} icon="heart" label="Compte joint à deux" sub=${J() ? "Prorata " + Math.round(jRatio(ym(today())) * 100) + " / " + (100 - Math.round(jRatio(ym(today())) * 100)) : "Répartir les charges au prorata des revenus"} go=${() => NAV.push({v: "joint"})} />
       <${Item} icon="users" label="Remboursement 50/50" sub=${halfJoint() ? "Avec " + halfName() + (halfFrom() ? " · depuis le " + accName(halfFrom()) : "") : "Aucun compte joint"} go=${() => SHEET.open({type: "half"})} />
       <${Item} icon="users" label="Personnes" sub="Dépenses partagées, qui doit quoi" go=${() => NAV.push({v: "people"})} />
     </div>
