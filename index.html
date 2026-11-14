@@ -1266,7 +1266,10 @@ function periodsOf(l, from, to) {
   });
 }
 const periodAt = (l, d) => (d < l.start || (l.end && d > l.end)) ? null : periodsOf(l, d, d)[0] || null;
-const prevPeriod = (l, ps) => ps <= l.start ? null : periodsOf(l, addDays(ps, -1), addDays(ps, -1))[0] || null;
+/* Période précédente d'une ligne de budget, pour le report. Aucune avant le début des données de Pécule (S().start) :
+   sans ses dépenses (restées dans iCompta), son enveloppe entière serait reportée à tort. */
+const prevPeriod = (l, ps) => { if (ps <= l.start) return null; const pp = periodsOf(l, addDays(ps, -1), addDays(ps, -1))[0] || null;
+  return pp && S().start && pp[1] < S().start ? null : pp; };
 function periodLabel(ps, pe) {
   if (ps.slice(8) === "01" && pe === eom(ym(ps))) return monthLabel(ym(ps));
   if (ps.slice(5) === "01-01" && pe.slice(5) === "12-31" && ps.slice(0, 4) === pe.slice(0, 4)) return "année " + ps.slice(0, 4);

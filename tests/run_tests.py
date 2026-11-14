@@ -35,7 +35,7 @@ import fixture_icompta  # noqa: E402
 
 # ---------------------------------------------------------------- serveur (avec accès de test aux calculs)
 HOOK = ('window.__dbg = {A, S, Store, Hist, NAV, SHEET, occurrences, balance, amtFor, accList, today, budgets, lineAt, cardNext, cardPending, '
-        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, glanceState, shownBal, cats, catIc, guessIc};\n')
+        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, glanceState, shownBal, cats, catIc, guessIc};\n')
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -941,6 +941,24 @@ def icones_categories(br, url):
 
 def rest(a, cat, d="2026-11-15"):
     return a.js("const l = Object.values(D.A().bud).find(l => D.A().cat[l.cat]?.name === arg[0]); const x = D.lineAt(l, arg[1]); return x && x.rest;", [cat, d])
+
+
+@test
+def budgets_report(br, url):
+    """Report du reste : rien n'est reporté depuis les mois d'avant Pécule (dépenses restées dans iCompta) ; un dépassement du mois en cours se reporte."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    lid = a.js("return Object.values(D.A().bud).find(l => D.A().cat[l.cat]?.name === 'Courses').id;")
+    nov0 = a.js("return D.lineBudget(D.A().bud[arg], '2026-11-01');", lid)
+    a.js("D.Store.put({...D.A().bud[arg], carry: true});", lid)
+    a.wait(400)
+    nov1 = a.js("return D.lineBudget(D.A().bud[arg], '2026-11-01');", lid)
+    check(near(nov1, nov0), "novembre gonflé par le report des mois d'avant Pécule : %s au lieu de %s" % (nov1, nov0))
+    rest = a.js("return D.lineBudget(D.A().bud[arg], '2026-11-01') - D.lineActual(D.A().bud[arg], '2026-11-01', '2026-11-30');", lid)
+    dec = a.js("return D.lineBudget(D.A().bud[arg], '2026-12-01');", lid)
+    check(near(dec, 600 + min(0, rest)), "décembre : %s (attendu %s : novembre pas fini, seul un dépassement se reporte)" % (dec, 600 + min(0, rest)))
+    a.no_errors("report des budgets")
+    a.close()
 
 
 @test

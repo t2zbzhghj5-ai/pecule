@@ -42,6 +42,7 @@ reste sur la machine ; rien n'est écrit dans le dépôt (`tests/out/` est ignor
 | `echeancier_choix_du_compte` | Échéancier : même menu « Choisir un compte » que l'accueil (cartes sous leur compte), choix propre à l'échéancier |
 | `rentrees_et_solde_de_depart` | Rentrées du même jour additionnées ; avertissement quand on change le solde de départ (signe) |
 | `icones_categories` | Icônes des catégories choisies d'après le nom, modifiables, pictogrammes à la saisie et dans les réglages |
+| `budgets_report` | Report du reste : rien n'est reporté depuis les mois d'avant Pécule ; un dépassement du mois en cours se reporte |
 | `budgets_suivent_les_saisies` | Dépense par carte → budget de sa catégorie ; changer de catégorie change de budget ; rattachement périmé ignoré |
 | `valider_echeance` | Valider une échéance à venir : opération créée, échéancier avancé, soldes inchangés |
 | `echeance_modifiee` | Modifier une échéance : les prévisions suivent |
