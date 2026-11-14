@@ -898,7 +898,7 @@ function prItems(k) {
       out.push({kind: "sch", id: s.id, name: s.name, acc: s.account, v: r2(-v), smooth: !monthly});
     }
     for (const b of budgets(true)) { if (!bAccs(b).some(x => accs.has(x))) continue;
-      for (const l of linesOf(b.id)) { if (!l.prorata) continue; const p = periodAt(l, ps) || periodsOf(l, ps, pe)[0]; if (!p) continue;
+      for (const l of linesOf(b.id)) { if (!l.prorata && !b.prorata) continue; const p = periodAt(l, ps) || periodsOf(l, ps, pe)[0]; if (!p) continue;
         const mo = l.dur?.u === "m" && (Number(l.dur.n) || 1) === 1, a = r2(baseAmt(l, p[0]) * (mo ? 1 : perMonth(l.dur)));
         out.push({kind: "bud", id: l.id, name: lineName(l) + " (budget)", v: l.income ? -a : a, smooth: !mo}); } }
     return out.sort((x, y) => y.v - x.v);
@@ -3837,6 +3837,10 @@ function Schedules() {
     for (const c of accList()) if (c.type === "carte" && c.linked === aid) out.push(["Débit " + c.name, "le " + c.debitDay + " de chaque mois, selon les dépenses de la carte"]);
     if (aid === halfFrom() && halfJoint()) out.push(["Remboursement 50/50", "vers " + accName(halfJoint()) + ", l'avant-dernier jour du mois"]);
     if (aid === halfJoint()) out.push(["Part de " + halfName() + " (50/50)", "l'avant-dernier jour du mois"]);
+    if (prOn()) { const nx = prOccs(today(), addDays(today(), 70)).filter(o => o.date >= today()), p = PR(), jr = (Number(p.day) || 1) === 1 ? "1er" : Number(p.day);
+      const mine = nx.find(o => o.id.startsWith("tx_pr_")), hers = nx.find(o => o.id.startsWith("tx_prm_"));
+      if (aid === p.from) out.push(["Virement au " + accName(halfJoint()) + " (prorata)", (mine ? fmt(-mine.amount) + " le " + dayShort(mine.date) + " · " : "") + "le " + jr + " de chaque mois, ta part des charges cochées"]);
+      if (aid === halfJoint()) out.push([(p.name || "").trim() + " (prorata)", (hers ? fmt(hers.amount) + " le " + dayShort(hers.date) + " · " : "") + "le " + jr + " de chaque mois, sa part des charges cochées"]); }
     for (const l of accList()) if (l.type === "pret" && l.loan?.from === aid) out.push([l.name, fmt(l.loan.payment) + " le " + Number(l.loan.first.slice(8)) + " de chaque mois"]);
     if (a?.type === "pret" && a.loan) out.push(["Mensualités", fmt(a.loan.payment) + " par mois"]);
     return out; };
@@ -4064,7 +4068,7 @@ function BdgSheet({id, pre, close}) {
   const save = () => {
     if (!f.name.trim()) return setErr("Donne un nom au budget.");
     if (f.start && f.end && f.end < f.start) return setErr("La date de fin est avant le début.");
-    const b = {...(b0 || {}), k: "bdg", id: b0?.id || uid("bdg"), name: f.name.trim(), emoji: f.emoji || "🎯", color: f.color || (b0 ? b0.color || null : BUD_COLORS[budgets(true).length % BUD_COLORS.length]), accounts: f.accounts, noCards: !!f.noCards, hidden: !!f.hidden, remaining: f.remaining !== false, remAcc: null, payWith: f.payWith || null, order: f.order ?? Object.keys(A().bdg).length, start: f.start || null, end: f.end || null};
+    const b = {...(b0 || {}), k: "bdg", id: b0?.id || uid("bdg"), name: f.name.trim(), emoji: f.emoji || "🎯", color: f.color || (b0 ? b0.color || null : BUD_COLORS[budgets(true).length % BUD_COLORS.length]), accounts: f.accounts, noCards: !!f.noCards, hidden: !!f.hidden, prorata: !!f.prorata && prOn() && f.accounts.some(x => prAccs().has(x)), remaining: f.remaining !== false, remAcc: null, payWith: f.payWith || null, order: f.order ?? Object.keys(A().bdg).length, start: f.start || null, end: f.end || null};
     delete b.endOn;
     const ops = [["put", b]];
     if (!b0) { const seen = new Set(); for (const r of rows) { if (!r.cat || seen.has(r.cat)) continue; seen.add(r.cat); const v = calc(r.amt || "0"); const c = cat(r.cat); ops.push(["put", {k: "bud", id: uid("bud"), budget: b.id, cat: r.cat, amount: isNaN(v) ? 0 : Math.abs(v), income: (c?.type || cat(c?.parent)?.type) === "rev", carry: false, start: f.start || ym(today()) + "-01", end: f.end || null, dur: {n: 1, u: dur}, hist: []}]); } }
@@ -4094,6 +4098,7 @@ function BdgSheet({id, pre, close}) {
       <div class="help">Seules les opérations de ces comptes comptent.</div></div>
     ${f.accounts.length > 0 && html`<${Toggle} on=${!f.noCards} set=${v => set("noCards", !v)} label="Inclure les cartes débitées sur ces comptes" sub=${(() => { const c = Object.values(A().acc).filter(a => a.type === "carte" && f.accounts.includes(a.linked) && !f.accounts.includes(a.id)); return c.length ? "Ajoute automatiquement : " + c.map(a => a.name).join(", ") + "." : "Aucune carte à débit différé n'est débitée sur ces comptes."; })()} />`}
     <${Toggle} on=${f.remaining !== false} set=${v => set("remaining", v)} label="Compter le reste comme une dépense prévue" sub=${"Ce qu'il reste à dépenser est déduit de ton solde prévu en fin de période" + ((r => r ? ", sur " + accName(r) : "")(budRemAcc({id: "tmp", accounts: f.accounts, noCards: f.noCards}))) + "."} />
+    ${prOn() && f.accounts.some(x => prAccs().has(x)) && html`<${Toggle} on=${!!f.prorata} set=${v => set("prorata", v)} label="Au prorata des salaires" sub=${f.prorata ? `Toutes les enveloppes de ce budget sont comptées chaque mois dans ton virement au ${accName(halfJoint())} et la ligne ${(PR().name || "").trim()}` : "Partager les enveloppes de ce budget au prorata de vos salaires"} />`}
     ${b0 && html`<${Toggle} on=${!!f.hidden} set=${v => set("hidden", v)} label="Masquer le budget" />`}
     ${err && html`<div class="banner" role="alert">${err}</div>`}
     <button class="btn pri" onClick=${save}>Enregistrer</button>
@@ -4165,7 +4170,8 @@ function LineSheet({id, budget, close}) {
     </div>
     <div class="help">À la fin de chaque période, une nouvelle commence et le compteur repart de zéro. Les périodes sont calées sur la date de début : un 1er du mois donne des mois civils.</div>
     <${Field} label="Fin" id="ln-e" help=${f.endOn && f.end ? html`<button type="button" class="link" onClick=${() => { set("end", ""); set("endOn", false); }}>Retirer la date de fin</button>` : "Vide : la ligne continue indéfiniment."}><input id="ln-e" type="date" min=${f.start || null} value=${f.endOn ? f.end || "" : ""} onInput=${e => { set("end", e.target.value); set("endOn", !!e.target.value); }} /></${Field}>
-    ${prLineOk(bid) && html`<${Toggle} on=${!!f.prorata} set=${v => set("prorata", v)} label="Au prorata des salaires" sub=${f.prorata ? `L'enveloppe est comptée chaque mois dans ton virement au ${accName(halfJoint())} et la ligne ${(PR().name || "").trim() || "de l'autre personne"}` : "Partager cette enveloppe au prorata de vos salaires"} />`}
+    ${prLineOk(bid) && A().bdg[bid]?.prorata && html`<p class="help" style="margin:0">Ce budget est entièrement au prorata des salaires (réglage du budget).</p>`}
+    ${prLineOk(bid) && !A().bdg[bid]?.prorata && html`<${Toggle} on=${!!f.prorata} set=${v => set("prorata", v)} label="Au prorata des salaires" sub=${f.prorata ? `L'enveloppe est comptée chaque mois dans ton virement au ${accName(halfJoint())} et la ligne ${(PR().name || "").trim() || "de l'autre personne"}` : "Partager cette enveloppe au prorata de vos salaires"} />`}
     <${Toggle} on=${!!f.carry} set=${v => set("carry", v)} label="Reporter le reste sur la période suivante" sub="Ce qui n'est pas dépensé s'ajoute à la période d'après, un dépassement s'en retire." />
     <${Field} label="Nom affiché (facultatif)" id="ln-l"><input id="ln-l" value=${f.label} onInput=${e => set("label", e.target.value)} placeholder=${f.cat ? (f.cat === "__other__" ? "autres catégories" : catName(f.cat)) : ""} /></${Field}>
     ${err && html`<div class="banner" role="alert">${err}</div>`}
