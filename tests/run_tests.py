@@ -467,6 +467,29 @@ def cinquante_cinquante_depuis_le_courant(br, url):
 
 
 @test
+def cinquante_cinquante_sans_compte_joint(br, url):
+    """Sans compte joint (cas de Marie) : aucune option 50/50, aucune question, rien dans les vérifications ; un livret « commun » n'est pas un compte joint."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    j = a.acc_id("Joint")
+    # le Joint devient un livret « commun » : plus aucun compte courant joint
+    a.js("D.Store.put({...D.A().acc[arg], name: 'Livret commun', type: 'epargne'});", j)
+    a.wait(400)
+    check(a.js("return D.halfJoint();") is None, "un livret est pris pour le compte joint")
+    a.js("D.SHEET.open({type: 'op', kind: 'tx', acc: arg});", j)
+    a.wait(500)
+    check("Remboursement 50/50" not in a.pg.inner_text(".sheet"), "option 50/50 proposée sans compte joint")
+    a.js("D.SHEET.close();")
+    a.wait(300)
+    a.pg.evaluate("location.hash = '#accueil'")
+    a.wait(300)
+    check("50/50" not in a.pg.inner_text("main"), "question 50/50 sur l'accueil sans compte joint")
+    check(not [k for k in a.js("return D.dataChecks().map(c => c.key);") if k.startswith("half")], "vérification 50/50 sans compte joint")
+    a.no_errors("sans compte joint")
+    a.close()
+
+
+@test
 def verifications_donnees(br, url):
     """Vérifications : question 50/50 posée une fois sur l'accueil, incohérences repérées (50/50 sur un livret, carte sans compte, compte supprimé, ventilation fausse, livret négatif, budget périmé) et nettoyage."""
     a = App(br, url)

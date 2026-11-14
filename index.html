@@ -777,7 +777,7 @@ function ConfirmSheet({kind, items, close}) {
 }
 
 /* ============ Remboursement 50/50 du compte joint ============ */
-const halfJoint = () => { const D = A(), h = S().halfJoint, j = J()?.acc; if (h && D.acc[h]) return h; if (j && D.acc[j]) return j; return accList().find(a => a.type !== "carte" && /joint|commun/i.test(a.name))?.id || null; };
+const halfJoint = () => { const D = A(), h = S().halfJoint, j = J()?.acc; if (h && D.acc[h]) return h; if (j && D.acc[j]) return j; return accList().find(a => a.type === "courant" && /joint|commun/i.test(a.name))?.id || null; };
 /* 50/50 utilisé mais réglages encore devinés : Pécule pose la question une fois (accueil + Vérifications) */
 const halfUsed = () => Object.values(A().tx).some(t => t.half && t.st !== "annulee") || (S().halfAdj || []).length > 0;
 const halfNeedsOk = () => !S().halfOk && !!halfJoint() && halfUsed();
