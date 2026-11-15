@@ -35,7 +35,7 @@ import fixture_icompta  # noqa: E402
 
 # ---------------------------------------------------------------- serveur (avec accès de test aux calculs)
 HOOK = ('window.__dbg = {A, S, Store, Hist, NAV, SHEET, occurrences, balance, amtFor, accList, today, budgets, lineAt, cardNext, cardPending, '
-        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc};\n')
+        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, linesOf, setLineAmount};\n')
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -305,7 +305,7 @@ def all_screens(a):
     sheets = [{"type": "quick"}, {"type": "op", "kind": "tx"}, {"type": "op", "kind": "sch"}, {"type": "op", "kind": "tx", "src": "TX"}, {"type": "op", "kind": "sch", "src": "SCH"},
               {"type": "accPick"}, {"type": "half"}, {"type": "gloss"}, {"type": "icImport"}, {"type": "import"}, {"type": "acc"}, {"type": "accActions", "id": ids["acc"]},
               {"type": "reconcile", "id": ids["acc"]}, {"type": "bdg", "id": ids["bdg"]}, {"type": "bdgActions", "id": ids["bdg"]}, {"type": "line", "budget": ids["bdg"]},
-              {"type": "line", "id": ids["line"]}, {"type": "lineDates", "budget": ids["bdg"]}, {"type": "fillAvg", "budget": ids["bdg"]}, {"type": "cash"}, {"type": "reset", "id": ids["acc"]},
+              {"type": "line", "id": ids["line"]}, {"type": "lineDates", "budget": ids["bdg"]}, {"type": "amt", "line": ids["line"]}, {"type": "bdgLines", "budget": ids["bdg"]}, {"type": "fillAvg", "budget": ids["bdg"]}, {"type": "cash"}, {"type": "reset", "id": ids["acc"]},
               {"type": "sim"}, {"type": "jointSetup"}, {"type": "schedImport"}, {"type": "cat"}, {"type": "cat", "id": ids["cat"]}, {"type": "rule"}, {"type": "per"},
               {"type": "schDetail", "id": ids["sch"], "aid": ids["acc"]}, {"type": "export", "ids": [ids["acc"]]}, {"type": "catpick"}, {"type": "archive", "id": ids["acc"]}]
     for s in sheets:
@@ -1173,6 +1173,92 @@ def icones_categories(br, url):
 
 def rest(a, cat, d="2026-11-15"):
     return a.js("const l = Object.values(D.A().bud).find(l => D.A().cat[l.cat]?.name === arg[0]); const x = D.lineAt(l, arg[1]); return x && x.rest;", [cat, d])
+
+
+@test
+def budgets_enveloppe(br, url):
+    """Budgets façon enveloppe : ce qui reste en premier ; le montant se change d'un geste (ce mois-ci seulement, à partir de ce mois, à partir du mois prochain)."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    a.js("D.Store.put({...D.A().set.set_main, start: '2026-09-01'});")
+    pg.evaluate("location.hash = '#budgets'")
+    a.wait(800)
+    body = a.body()
+    check("Il te reste à dépenser ce mois-ci" in body and "Il reste" in body, "liste des budgets : %s" % body[:300])
+    a.no_errors("liste des budgets")
+    lid = a.js("return Object.values(D.A().bud).find(l => D.A().cat[l.cat]?.name === 'Loisirs').id;")
+    amt = lambda d: a.js("return D.baseAmt(D.A().bud[arg[0]], arg[1]);", [lid, d])
+    habit = a.js("return D.baseAmt({...D.A().bud[arg], ov: {}}, '2026-11-01');", lid)
+    oct0 = amt("2026-10-01")
+
+    def sheet(val, mode):
+        pg.locator(".sheet #am-v").fill(str(val))
+        pg.locator(".sheet [role=radio]", has_text=mode).click()
+        pg.locator(".sheet .btn.pri", has_text="Enregistrer").click()
+        a.wait(500)
+
+    # depuis la liste : le crayon du montant ouvre directement la fenêtre
+    pg.locator('.benv-amt[aria-label*="Loisirs"]').click()
+    a.wait(400)
+    check("À partir de quand ?" in a.body(), "fenêtre du montant absente")
+    a.no_errors("fenêtre du montant")
+    sheet(250, "Ce mois-ci seulement")
+    check(near(amt("2026-11-01"), 250) and near(amt("2026-12-01"), habit) and near(amt("2026-10-01"), oct0), "ce mois-ci seulement : nov. %s, déc. %s (attendu 250 puis %s)" % (amt("2026-11-01"), amt("2026-12-01"), habit))
+    # depuis l'écran du budget : la ligne « Montant »
+    pg.locator('.benv-main', has_text="Loisirs").click()
+    a.wait(600)
+    check("Dépenses de novembre" in a.body() and "Réglages" in a.body(), "écran du budget : %s" % a.body()[:300])
+    a.no_errors("écran du budget")
+    pg.locator(".benv-mrow").click()
+    a.wait(400)
+    check("Revenir à %d" % round(habit) in a.body().replace("\u202f", " ").replace("\xa0", " "), "bouton « Revenir » absent alors que novembre est ajusté")
+    sheet(220, "À partir de ce mois")
+    check(near(amt("2026-11-01"), 220) and near(amt("2027-01-01"), 220) and near(amt("2026-10-01"), oct0), "à partir de ce mois : oct. %s, nov. %s, janv. %s" % (amt("2026-10-01"), amt("2026-11-01"), amt("2027-01-01")))
+    pg.locator(".benv-mrow").click()
+    a.wait(400)
+    sheet(300, "À partir du mois prochain")
+    check(near(amt("2026-11-01"), 220) and near(amt("2026-12-01"), 300) and near(amt("2027-03-01"), 300) and near(amt("2026-10-01"), oct0), "à partir du mois prochain : nov. %s, déc. %s" % (amt("2026-11-01"), amt("2026-12-01")))
+    # même montant que d'habitude, une seule fois : pas d'ajustement inutile
+    pg.locator(".benv-mrow").click()
+    a.wait(400)
+    sheet(220, "Ce mois-ci seulement")
+    check(a.js("return D.A().bud[arg].ov?.['2026-11-01'] == null;", lid), "ajustement inutile gardé")
+    # historique : une barre par mois depuis septembre ; toucher octobre affiche octobre
+    check(pg.locator(".hb").count() == 3, "barres : %d au lieu de 3" % pg.locator(".hb").count())
+    pg.locator('.hb[aria-label^="Octobre"]').click()
+    a.wait(400)
+    check("Octobre · " in a.body() and "Dépenses d'octobre" in a.body(), "toucher octobre : %s" % a.body()[:200])
+    pg.locator("text=Revenir à ce mois-ci").click()
+    a.wait(300)
+    check("Novembre · " in a.body(), "retour à novembre")
+    # reporter le reste
+    pg.locator('.setcard [role=switch]', has_text="Reporter le reste").click()
+    a.wait(300)
+    check(a.js("return !!D.A().bud[arg].carry;", lid), "report non activé")
+    a.no_errors("réglages du budget")
+    a.js("D.NAV.pop();")
+    a.wait(300)
+    # budget à plusieurs catégories : une ligne par catégorie, chacune avec son montant
+    bid = a.js("return D.A().bud[arg].budget;", lid)
+    a.js("D.Store.put({k: 'bud', id: 'bud_t2', budget: arg, cat: '__other__', amount: 50, income: false, carry: false, start: '2026-11-01', end: null, dur: {n: 1, u: 'm'}, hist: []});", bid)
+    a.wait(400)
+    pg.locator('.benv-amt[aria-label*="Loisirs"]').click()
+    a.wait(500)
+    check(pg.locator(".benv-li").count() == 2 and "Catégories" in a.body(), "budget à 2 catégories : %d lignes" % pg.locator(".benv-li").count())
+    pg.locator('.benv-amt[aria-label*="autres catégories"]').click()
+    a.wait(400)
+    sheet(80, "À partir de ce mois")
+    check(near(a.js("return D.baseAmt(D.A().bud.bud_t2, '2026-12-01');"), 80), "montant de la 2e catégorie")
+    a.no_errors("budget à plusieurs catégories")
+    a.js("D.NAV.pop();")
+    a.wait(300)
+    # autre mois : décembre
+    pg.locator('input[type=month]').evaluate("(e) => { e.value = '2026-12'; e.dispatchEvent(new Event('input', {bubbles: true})); }")
+    a.wait(500)
+    check("À dépenser en décembre" in a.body(), "mois de décembre : %s" % a.body()[:200])
+    a.no_errors("budgets en décembre")
+    a.close()
 
 
 @test

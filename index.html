@@ -18,7 +18,7 @@
 :root{
   /* Pécule : épuré et moderne. Fond clair, cartes à trait fin sans ombre, un seul accent indigo, chiffres en gras ; une colonne iPhone, barre d'onglets flottante */
   --bg:#F6F7FB; --surface:#FFFFFF; --surface2:#F2F4F9; --ink:#0B1430; --muted:#6B7491; --line:#E7EAF1;
-  --accent:#3D5AFE; --accent2:#00B8A9; --hero:#3D5AFE; --hero2:#6A7CFF; --hero-ink:#0B1430; --hero-muted:#6B7491; --sun:#FFD25E;
+  --accent:#3D5AFE; --accent2:#00B8A9; --hero:#3D5AFE; --hero2:#6A7CFF; --hero-ink:#0B1430; --hero-muted:#6B7491; --sun:#FFD25E; --bh:#3D5AFE; --bhi:#FFFFFF;
   --pos:#0E9F6E; --neg:#E5484D; --warn:#E08A00;
   --display:"Space Grotesk",Inter,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
   --body:Inter,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
@@ -28,14 +28,14 @@
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --bg:#0F1218; --surface:#181C24; --surface2:#20252F; --ink:#EEF1F6; --muted:#A3ACBB; --line:#252B36;
-    --accent:#7AA2FF; --accent2:#2FD3C3; --hero:#7AA2FF; --hero2:#9DB9FF; --hero-ink:#EEF1F6; --hero-muted:#A3ACBB; --sun:#FFD25E;
+    --accent:#7AA2FF; --accent2:#2FD3C3; --hero:#7AA2FF; --hero2:#9DB9FF; --hero-ink:#EEF1F6; --hero-muted:#A3ACBB; --sun:#FFD25E; --bh:#24346A; --bhi:#EEF1F6;
     --pos:#6EE7A8; --neg:#FF8A80; --warn:#F7B23B; --shadow:0 0 0 1px var(--line); --low:#FF9E6B; --bmix:72%; --segon:#2E3544;
     color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
   --bg:#0F1218; --surface:#181C24; --surface2:#20252F; --ink:#EEF1F6; --muted:#A3ACBB; --line:#252B36;
-  --accent:#7AA2FF; --accent2:#2FD3C3; --hero:#7AA2FF; --hero2:#9DB9FF; --hero-ink:#EEF1F6; --hero-muted:#A3ACBB; --sun:#FFD25E;
+  --accent:#7AA2FF; --accent2:#2FD3C3; --hero:#7AA2FF; --hero2:#9DB9FF; --hero-ink:#EEF1F6; --hero-muted:#A3ACBB; --sun:#FFD25E; --bh:#24346A; --bhi:#EEF1F6;
   --pos:#6EE7A8; --neg:#FF8A80; --warn:#F7B23B; --shadow:0 0 0 1px var(--line); --low:#FF9E6B; --bmix:72%; --segon:#2E3544;
   color-scheme:dark;
 }
@@ -292,6 +292,36 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 }
 @media (max-width: 999.98px){.dash-l,.dash-r{display:contents}.sch-auto{order:2}}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+.bhero{background:var(--bh);color:var(--bhi);border-radius:22px;padding:16px 18px;display:flex;flex-direction:column;gap:8px}
+.bhero .lbl{font-size:13.5px;font-weight:600;opacity:.9}
+.bhero .big{font-family:var(--display);font-size:36px;font-weight:700;letter-spacing:-.02em;line-height:1.05;font-variant-numeric:tabular-nums}
+.bhero .hint{font-size:13.5px;opacity:.92}
+.bhbar{display:block;height:8px;border-radius:8px;background:rgba(255,255,255,.28);overflow:hidden}
+.bhbar i{display:block;height:100%;background:currentColor;border-radius:8px}
+.benv{display:flex;flex-direction:column}
+.benv-main{display:flex;flex-direction:column;gap:10px;padding:14px 16px 6px;border:0;background:none;text-align:left;color:inherit;font:inherit;width:100%}
+.benv-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 6px 4px 0}
+.benv-left{flex:1;min-width:0;text-align:left;border:0;background:none;color:var(--muted);font:inherit;font-size:13px;padding:10px 0 10px 16px;min-height:44px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.benv-amt{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 10px;border:0;border-radius:12px;background:none;color:var(--ink);font:inherit;font-size:13.5px;font-weight:650;white-space:nowrap;flex:none}
+.benv-amt svg,.benv-go svg{color:var(--accent)}
+.benv-li{flex:1;min-width:0;display:flex;align-items:center;gap:12px;padding:12px 4px 12px 14px;border:0;background:none;text-align:left;color:inherit;font:inherit}
+.benv-mrow{display:flex;align-items:center;gap:10px;border:0;border-top:1px solid var(--line);background:none;padding:12px 0 0;min-height:44px;text-align:left;color:inherit;font:inherit;font-size:15px;width:100%}
+.benv-mrow .tag{margin-left:6px}
+.benv-go{display:inline-flex;align-items:center;gap:5px;color:var(--accent);font-weight:600;font-size:14px;white-space:nowrap}
+.setcard .toggle{border:0;border-top:1px solid var(--line);border-radius:0;padding:12px 14px;min-height:60px}
+.setcard > :first-child{border-top:0}
+.hbars{display:flex;gap:6px;align-items:flex-end}
+.hb{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;border:0;background:none;padding:0;color:inherit;font:inherit;min-width:0}
+.hb .hv{position:absolute;left:0;right:0;text-align:center;font-size:11px;line-height:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.hb .hp{position:relative;width:100%;display:flex;align-items:flex-end;justify-content:center}
+.hb .hp i{display:block;width:24px;max-width:72%;border-radius:4px 4px 0 0}
+.hb .hp b{position:absolute;left:-3px;right:-3px;border-top:1.5px dashed var(--muted);opacity:.75}
+.hb .hl{font-size:12px;color:var(--muted);min-height:16px}
+.hb.on .hl,.hb.on .hv{color:var(--ink);font-weight:700}
+.pick{display:flex;align-items:center;gap:12px;min-height:56px;padding:10px 14px;border-radius:14px;border:1px solid var(--line);background:var(--surface);color:inherit;font:inherit;text-align:left;width:100%}
+.pick.on{border:2px solid var(--accent);background:color-mix(in srgb, var(--accent) 9%, var(--surface));padding:9px 13px}
+.pick .rad{width:20px;height:20px;border-radius:50%;border:2px solid var(--muted);flex:none;box-sizing:border-box}
+.pick.on .rad{border:6px solid var(--accent)}
 </style>
 </head>
 <body>
@@ -3911,145 +3941,240 @@ function BudBar({col, pct, over, h = 9, ppct = 0}) {
 }
 const elOf = (ps, pe, t = today()) => Math.min(1, Math.max(0, (daysBetween(ps, t) + 1) / (daysBetween(ps, pe) + 1)));
 const budDot = b => html`<i style=${`width:12px;height:12px;border-radius:50%;background:${budColor(b)};display:inline-block;flex:none`}></i>`;
-function LineRow({x, onClick}) {
-  const {l, bud, act, rest, pct, plan = 0, spent = act} = x;
-  const col = l.income ? "var(--pos)" : budColor(budgetOf(l)), fast = !l.income && pct <= 1 && spent > bud * Math.max(elOf(x.ps, x.pe), .05) * 1.1;
-  return html`<button class="row" style="flex-direction:column;align-items:stretch;gap:0" onClick=${onClick || (() => NAV.push({v: "line", id: l.id, d: x.ps}))}>
-    <span style="display:flex;align-items:center;gap:12px">${l.cat === "__other__" ? html`<span class="ic sm" style="background:var(--surface2)">✳️</span>` : html`<${CatIcon} id=${l.cat} sm />`}
-      <span class="grow" style="min-width:0"><div class="t1">${lineName(l)}</div><div class="t2">${periodLabel(x.ps, x.pe)}${l.carry ? " · avec report" : ""}</div></span>
-      <span class="amt" style="font-size:15px">${fmt0(act)} <span class="muted" style="font-weight:500">/ ${fmt0(bud)}</span></span></span>
-    <span style="margin-top:8px"><${BudBar} col=${col} pct=${pct} over=${!l.income && pct > 1} /></span>
-    <span class="t2" style=${"margin-top:5px;" + (!l.income && rest < 0 ? "color:var(--neg)" : fast ? "color:var(--warn)" : "")}>${l.income ? (rest > 0 ? "Encore " + fmt(rest) + " attendus" : "Objectif atteint") : rest >= 0 ? (fast ? "⚡ " : "") + "Reste " + fmt(rest) : "Dépassé de " + fmt(-rest)}${plan > 0.004 ? " · dont " + fmt(plan) + " prévus" : ""}</span>
-  </button>`;
+/* Maquette P « l'enveloppe » : un budget = une enveloppe. On voit d'abord ce qui reste,
+   le montant se change d'un geste (✎), et on choisit à partir de quand. */
+const DUR_W = {
+  m: {sl: "/ mois", cur: "ce mois-ci", fromCur: "À partir de ce mois", fromNext: "À partir du mois prochain", after: "les mois suivants", last: "des 3 derniers mois", nxt: "au mois suivant", hist: "Les six derniers mois"},
+  y: {sl: "/ an", cur: "cette année", fromCur: "À partir de cette année", fromNext: "À partir de l'année prochaine", after: "les années suivantes", last: "des 3 dernières années", nxt: "à l'année suivante", hist: "Les dernières années"},
+  w: {sl: "/ semaine", cur: "cette semaine", fromCur: "À partir de cette semaine", fromNext: "À partir de la semaine prochaine", after: "les semaines suivantes", last: "des 3 dernières semaines", nxt: "à la semaine suivante", hist: "Les dernières semaines"},
+  d: {sl: "/ jour", cur: "aujourd'hui", fromCur: "À partir d'aujourd'hui", fromNext: "À partir de demain", after: "les jours suivants", last: "des 3 derniers jours", nxt: "au jour suivant", hist: "Les derniers jours"},
+};
+const durWords = dur => (dur?.n || 1) > 1 ? {sl: durLabel(dur), cur: "cette période", fromCur: "À partir de cette période", fromNext: "À partir de la période suivante", after: "les périodes suivantes", last: "des 3 dernières périodes", nxt: "à la période suivante", hist: "Les dernières périodes"} : DUR_W[dur?.u || "m"];
+const capF = s => s ? s[0].toUpperCase() + s.slice(1) : s;
+const deN = s => (/^[aeiouyhéèêàâîôû]/i.test(s) ? "d'" : "de ") + s;
+const isMonthly = l => (l.dur?.n || 1) === 1 && (l.dur?.u || "m") === "m";
+/* Nom court d'une période : « novembre », « 2026 », sinon ses dates */
+function budPer(l, ps, pe) {
+  const n = l.dur?.n || 1, u = l.dur?.u || "m";
+  if (n === 1 && u === "m" && ps.slice(8) === "01") return MOIS[Number(ps.slice(5, 7)) - 1] + (ps.slice(0, 4) !== today().slice(0, 4) ? " " + ps.slice(0, 4) : "");
+  if (n === 1 && u === "y" && ps.slice(5) === "01-01") return ps.slice(0, 4);
+  return periodLabel(ps, pe);
+}
+const perShort = (l, ps) => { const n = l.dur?.n || 1, u = l.dur?.u || "m"; return n === 1 && u === "m" && ps.slice(8) === "01" ? monthShort(ps) : n === 1 && u === "y" ? ps.slice(0, 4) : dayShort(ps); };
+const perOf = (l, ps, pe) => { const n = l.dur?.n || 1, u = l.dur?.u || "m"; return n === 1 && (u === "m" && ps.slice(8) === "01" || u === "y" && ps.slice(5) === "01-01") ? deN(budPer(l, ps, pe)) : "du " + dayShort(ps) + " au " + dayShort(pe); };
+/* Une enveloppe à une date : ses lignes en cours, additionnées (les revenus seulement s'il n'y a que ça) */
+function envAt(lines, d) {
+  const xs = lines.map(l => lineAt(l, d)).filter(Boolean), exp = xs.filter(x => !x.l.income), inc = xs.filter(x => x.l.income), main = exp.length ? exp : inc;
+  const sum = k => r2(main.reduce((s, x) => s + (x[k] || 0), 0)), bud = sum("bud"), act = sum("act");
+  return {xs, exp, inc, main, income: !exp.length && inc.length > 0, bud, act, spent: sum("spent"), plan: sum("plan"), rest: r2(bud - act), base: r2(main.reduce((s, x) => s + baseAmt(x.l, x.ps), 0)), ps: main[0]?.ps, pe: main[0]?.pe, l: main[0]?.l};
+}
+/* Échéances pas encore passées qui comptent dans une ligne (les mêmes que linePlanned) */
+function linePlanOccs(l, ps, pe) {
+  if (l.income) return [];
+  const af = bAccs(budgetOf(l)), m = lineMatcher(l);
+  return occurrences(pe).filter(o => o.kind !== "bud" && o.kind !== "half" && o.kind !== "prorata" && o.date >= ps && o.date <= pe && (!af.length || af.includes(o.account))
+    && (o.splits || []).some(sp => !((sp.to && !sp.cat) || sp.nobud || sp.hf || bdgElsewhere(sp, l.budget) || !m(sp.cat)) && sp.amount < 0));
+}
+const remCol = (rest, bud) => rest < 0 ? "var(--neg)" : bud > 0 && rest / bud < .2 ? "color-mix(in srgb, var(--warn) 78%, var(--ink))" : "var(--ink)";
+const envPr = (b, lines) => prLineOk(b.id) && (!!b.prorata || lines.some(l => l.prorata));
+const lineGlyph = (l, col, box = 30, s = 17) => l && l.cat && l.cat !== "__other__" ? html`<${CatGlyph} id=${l.cat} box=${box} s=${s} col=${col} />` : html`<${CatGlyph} k="dots" box=${box} s=${s} col=${col} />`;
+/* Nouveau montant d'une ligne. once : cette période seulement (ov). from / next : à partir de cette période ou de la suivante (hist),
+   les périodes d'avant gardent leur montant ; les ajustements et changements prévus après la date choisie sont remplacés. */
+function setLineAmount(id, v, mode, ps, pe) {
+  const o = {...A().bud[id]}, l = normLine(o), ov = {...(o.ov || {})};
+  if (mode === "once") { ov[ps] = v; return Store.put({...o, ov}); }
+  const from = mode === "next" ? addDays(pe, 1) : ps, first = baseAmt({...l, ov: {}}, l.start);
+  for (const k of Object.keys(ov)) if (k >= from) delete ov[k];
+  if (from <= l.start) return Store.put({...o, amount: v, hist: [], ov});
+  const hist = (o.hist || []).filter(h => h.from < from);
+  if (!hist.some(h => h.from <= l.start)) hist.unshift({from: l.start, amount: first});
+  return Store.put({...o, amount: v, hist: [...hist, {from, amount: v}], ov});
 }
 function Budgets() {
-  const [showHidden, setSH] = useState(false), [del, setDel] = useState(false);
+  const [showHidden, setSH] = useState(false), [del, setDel] = useState(false), [m, setM] = useState(() => ym(today()));
   useEffect(() => { migrateBudgets(); }, []);
-  const t = today(), list = budgets(true).filter(b => showHidden || !b.hidden);
+  const t = today(), curM = ym(t), d = m === curM ? t : m < curM ? eom(m) : m + "-01";
+  const order = accList(true).map(a => a.id), pos = b => { const own = (b.accounts || []).filter(id => A().acc[id]).map(id => order.indexOf(id)); return own.length ? Math.min(...own) : 1e6; };
+  const list = budgets(true).filter(b => showHidden || !b.hidden).sort((x, y) => pos(x) - pos(y));
+  /* En tête : les enveloppes mensuelles des budgets affichés */
+  let hb = 0, ha = 0, hs = 0, hp = 0;
+  for (const b of budgets(false)) for (const l of linesOf(b.id)) { if (l.income || !isMonthly(l)) continue; const x = lineAt(l, d); if (!x) continue; hb += x.bud; ha += x.act; hs += x.spent; hp += x.plan; }
+  const hr = r2(hb - ha), dl = m === curM ? daysBetween(t, eom(m)) + 1 : 0;
+  const mName = MOIS[Number(m.slice(5)) - 1] + (m.slice(0, 4) !== curM.slice(0, 4) ? " " + m.slice(0, 4) : "");
+  const hLbl = m === curM ? (hr >= 0 ? "Il te reste à dépenser ce mois-ci" : "Dépassement ce mois-ci") : m < curM ? (hr >= 0 ? "Il t'est resté en " + mName : "Dépassement en " + mName) : "À dépenser en " + mName;
+  const sub = m === curM ? (dl > 1 ? `Encore ${dl} jours dans le mois` : "Dernier jour du mois") : m < curM ? "Mois terminé" : "Mois à venir";
+  const card = b => {
+    const lines = linesOf(b.id), e = envAt(lines, d), col = budColor(b), first = e.l || lines[0], w = durWords(first?.dur);
+    if (del) return html`<div class="card" style="padding:12px 16px;display:flex;align-items:center;gap:10px">${budDot(b)}<span class="grow t1">${b.name}</span><button class="btn sm danger" onClick=${() => delBudget(b)}><${Ic} n="trash" s=${16} />Supprimer</button></div>`;
+    const open = () => NAV.push({v: "budget", id: b.id}), one = e.main.length === 1;
+    const edit = () => one ? SHEET.open({type: "amt", line: e.main[0].l.id, d}) : open();
+    const sb = capF(bAccLabel(b)) + (envPr(b, lines) ? " · au prorata" : "");
+    const soon = !e.main.length && lines.filter(l => l.start > d).map(l => l.start).sort()[0];
+    return html`<div class="card benv">
+      <button class="benv-main" onClick=${open}>
+        <span style="display:flex;align-items:center;gap:12px">${lineGlyph(first, col, 38, 19)}
+          <span class="grow" style="min-width:0"><div class="t1">${b.name}${b.hidden ? html`<span class="tag">masqué</span>` : ""}</div><div class="t2">${sb}</div></span>
+          ${e.main.length > 0 && html`<span style="display:flex;flex-direction:column;align-items:flex-end;flex:none"><span class="t2" style="margin:0">${e.income ? "Reçu" : e.rest >= 0 ? "Il reste" : "Dépassé de"}</span><span class="amt" style=${"font-size:22px;letter-spacing:-.01em;color:" + (e.income ? "var(--ink)" : remCol(e.rest, e.bud))}>${fmt0(e.income ? e.act : Math.abs(e.rest))}</span></span>`}</span>
+        ${e.main.length > 0 ? html`<${BudBar} col=${e.income ? "var(--pos)" : col} pct=${e.bud > 0 ? e.spent / e.bud : e.spent > 0 ? 1 : 0} ppct=${e.bud > 0 ? e.plan / e.bud : 0} over=${!e.income && e.act > e.bud + .004} h=${8} />`
+          : html`<span class="t2" style="margin:0">${!lines.length ? "Aucune catégorie pour l'instant" : soon ? "Commence le " + dayShort(soon) + (soon.slice(0, 4) !== t.slice(0, 4) ? " " + soon.slice(0, 4) : "") : "Rien en cours à cette date"}</span>`}
+      </button>
+      ${e.main.length > 0 && html`<div class="benv-foot"><button class="benv-left" onClick=${open}>${e.income ? (e.rest > 0 ? "Encore " + fmt0(e.rest) + " attendus" : "Objectif atteint") : fmt0(e.spent) + " dépensés" + (e.plan > .004 ? " · " + fmt0(e.plan) + " à venir" : "")}</button>
+        <button class="benv-amt" aria-label=${(one ? "Modifier le montant de " : "Voir les montants de ") + b.name + " : " + fmt0(e.base) + " " + w.sl.replace("/ ", "par ")} onClick=${edit}>${fmt0(e.base)} ${w.sl}<${Ic} n="edit" s=${14} /></button></div>`}
+    </div>`;
+  };
   return html`
-    <${Top} title="Budgets" right=${html`${list.length > 0 && html`<button class=${"ibtn" + (del ? " on" : "")} aria-label=${del ? "Terminer" : "Supprimer des budgets"} onClick=${() => setDel(!del)}>${del ? html`<${Ic} n="check" />` : html`<${Ic} n="trash" />`}</button>`}`} />
+    <${Top} title="Budgets" sub=${sub} right=${html`<label class="chip" style="position:relative;display:inline-flex;align-items:center;gap:4px;text-transform:capitalize;font-weight:600">${mName}<span style="display:inline-flex;transform:rotate(-90deg)"><${Ic} n="back" s=${14} /></span>
+        <input type="month" value=${m} onInput=${e => e.target.value && setM(e.target.value)} aria-label="Choisir le mois" style="position:absolute;inset:0;opacity:0;min-height:0;width:100%" /></label>
+      ${list.length > 0 && html`<button class=${"ibtn" + (del ? " on" : "")} aria-label=${del ? "Terminer" : "Supprimer des budgets"} onClick=${() => setDel(!del)}>${del ? html`<${Ic} n="check" />` : html`<${Ic} n="trash" />`}</button>`}`} />
     <main class="scr wide">
+      ${hb > 0 && !del && html`<section class="bhero" aria-label=${hLbl}>
+        <span class="lbl">${hLbl}</span>
+        <span class="big">${fmt0(Math.abs(hr))}</span>
+        <span class="bhbar" aria-hidden="true"><i style=${`width:${Math.min(100, hb > 0 ? ha / hb * 100 : 0)}%`}></i></span>
+        <span class="hint">${fmt0(hs)} dépensés${hp > .004 ? " et " + fmt0(hp) + " à venir" : ""} sur ${fmt0(hb)} prévus${dl > 0 && hr > 0 ? " · environ " + fmt0(hr / dl) + " par jour" : ""}</span>
+      </section>`}
+      ${m !== curM && html`<button class="link" style="align-self:center" onClick=${() => setM(curM)}>Revenir à ce mois-ci</button>`}
+      ${list.length > 0 && html`<div class="bgrid">${list.map(card)}</div>`}
+      ${!list.length && html`<div class="card"><div class="empty"><b>Pas encore de budget</b>Un budget est une enveloppe : un montant par mois (ou par an) pour une ou plusieurs catégories, sur les comptes que tu choisis. Ce qui reste à dépenser alimente ton Cash.<div style="margin-top:14px"><button class="btn pri" onClick=${() => SHEET.open({type: "bdg"})}>Créer un budget</button></div></div></div>`}
+      ${list.length > 0 && !del && html`<p class="help" style="text-align:center">Touche un budget pour voir ses dépenses. Touche le montant ✎ pour le changer.</p>`}
       <${QuickEntry} kind="bdg" acc=${mainAcc()} />
-      ${(() => { const order = accList(true).map(a => a.id), G = [];
-        for (const b of list) { const own = (b.accounts || []).filter(id => A().acc[id]).sort((x, y) => order.indexOf(x) - order.indexOf(y)); const k = own.join(",") || "*"; let g = G.find(x => x.k === k); if (!g) G.push(g = {k, own, l: []}); g.l.push(b); }
-        G.sort((x, y) => (x.k === "*") - (y.k === "*") || order.indexOf(x.own[0]) - order.indexOf(y.own[0]));
-        return G.map(g => html`<section><div class="sec-h" style="align-items:center"><h2 style="display:flex;align-items:center;gap:8px;color:var(--ink);text-transform:none;letter-spacing:-.01em;font-size:16px">${g.own.length ? html`<${AccIcon} a=${A().acc[g.own[0]]} sm />${g.own.map(accName).join(" + ")}` : "Tous les comptes"} <span class="muted" style="font-size:13px;font-weight:600">· ${g.l.length} ${g.l.length > 1 ? "budgets" : "budget"}</span></h2></div>
-          <div class="bgrid">${g.l.map(b => { const rows = linesOf(b.id).map(l => lineAt(l, t)).filter(Boolean); const exp = rows.filter(x => !x.l.income); const tb = exp.reduce((s, x) => s + x.bud, 0), ta = exp.reduce((s, x) => s + x.act, 0), tp = r2(exp.reduce((s, x) => s + (x.plan || 0), 0)), ts = exp.reduce((s, x) => s + (x.spent ?? x.act), 0);
-        if (del) return html`<div class="card" style="padding:12px 16px;display:flex;align-items:center;gap:10px">${budDot(b)}<span class="grow t1">${b.name}</span><button class="btn sm danger" onClick=${() => delBudget(b)}><${Ic} n="trash" s=${16} />Supprimer</button></div>`;
-        return html`<button class="card" style="padding:16px;border:0;text-align:left;width:100%;display:flex;flex-direction:column;gap:6px" onClick=${() => NAV.push({v: "budget", id: b.id})}>
-          <span style="display:flex;align-items:center;gap:10px">${budDot(b)}<span class="grow"><div class="t1">${b.name}${b.hidden ? html`<span class="tag">masqué</span>` : ""}</div><div class="t2">${(n => n + (n > 1 ? " catégories" : " catégorie"))(new Set(linesOf(b.id).map(l => l.cat)).size)}</div></span><span class="muted">›</span></span>
-          ${exp.length > 0 ? html`<span class="amt" style="text-align:left;font-size:24px;margin-top:4px">${fmt0(ta)} <span class="muted" style="font-size:16px;font-weight:500">/ ${fmt0(tb)}</span></span>
-          <${BudBar} col=${budColor(b)} pct=${tb ? ta / tb : 0} over=${ta > tb} />
-          ${(() => { const el = tb ? exp.reduce((s2, x) => s2 + x.bud * elOf(x.ps, x.pe, t), 0) / tb : 0, fast = ta <= tb && ts > tb * Math.max(el, .05) * 1.1; return html`<span class="t2" style=${ta > tb ? "color:var(--neg)" : fast ? "color:var(--warn)" : ""}>${ta <= tb ? (fast ? "⚡ " : "") + "Reste " + fmt(tb - ta) : "Dépassement de " + fmt(ta - tb)}${tp > 0.004 ? " · dont " + fmt(tp) + " prévus" : ""}</span>`; })()}` : html`<span class="t2">${(() => { const fut = linesOf(b.id).filter(l => !l.income && l.start > t).map(l => l.start).sort()[0]; return fut ? "Commence le " + dayShort(fut) + " " + fut.slice(0, 4) : "Rien en cours aujourd'hui."; })()}</span>`}
-        </button>`; })}</div></section>`); })()}
-      ${!list.length && html`<div class="card"><div class="empty"><b>Pas encore de budget</b>Un budget surveille un ou plusieurs comptes. Ses lignes fixent un montant par catégorie et par période : courses par mois, vacances par an, etc. Ce qui reste à dépenser alimente ton Cash.<div style="margin-top:14px"><button class="btn pri" onClick=${() => SHEET.open({type: "bdg"})}>Créer un budget</button></div></div></div>`}
       ${budgets(true).some(b => b.hidden) && html`<button class="link" onClick=${() => setSH(!showHidden)}>${showHidden ? "Cacher les budgets masqués" : "Afficher les budgets masqués"}</button>`}
     </main>`;
 }
 function BudgetView({id}) {
   const b = A().bdg[id];
-  const [d, setD] = useState(today()), [view, setView] = useState("bars"), [gran, setGran] = useState("m");
   if (!b) return html`<${Top} title="Budget" back /><main class="scr"><div class="empty">Ce budget n'existe plus.</div></main>`;
-  const lines = linesOf(id), rows = lines.map(l => ({l, x: lineAt(l, d)}));
-  const active = rows.filter(r => r.x), exp = active.filter(r => !r.l.income).map(r => r.x), inc = active.filter(r => r.l.income).map(r => r.x), off = rows.filter(r => !r.x).map(r => r.l);
-  const tb = r2(exp.reduce((s, x) => s + x.bud, 0)), ta = r2(exp.reduce((s, x) => s + x.act, 0));
-  const shiftM = n => setD(addMonths(d, n));
-  return html`
-    <${Top} title=${html`<span style="display:inline-flex;align-items:center;gap:10px">${budDot(b)}${b.name}</span>`} sub=${bAccLabel(b)} back right=${html`<button class="ibtn" aria-label="Supprimer le budget" onClick=${() => delBudget(b, () => NAV.pop())}><${Ic} n="trash" /></button><button class="ibtn" aria-label="Actions du budget" onClick=${() => SHEET.open({type: "bdgActions", id})}><${Ic} n="more" /></button>`} />
-    <main class="scr">
-      <${Seg} v=${view} set=${setView} opts=${[["bars", "Barres"], ["per", "Périodes"]]} />
-      ${view !== "per" && html`<div class="mnav"><button class="ibtn plain" aria-label="Un mois plus tôt" onClick=${() => shiftM(-1)}><${Ic} n="back" /></button>
-        <label style="display:flex;flex-direction:column;align-items:center;gap:0;position:relative"><span class="t2" style="margin:0">Situation au</span><strong style="text-transform:none">${P(d).toLocaleDateString("fr-FR", {day: "numeric", month: "long", year: "numeric"})}</strong>
-          <input type="date" value=${d} onInput=${e => e.target.value && setD(e.target.value)} aria-label="Date de la situation" style="position:absolute;inset:0;opacity:0;min-height:0" /></label>
-        <button class="ibtn plain" aria-label="Un mois plus tard" onClick=${() => shiftM(1)} style="transform:scaleX(-1)"><${Ic} n="back" /></button></div>
-        ${d !== today() && html`<button class="link" style="align-self:center;margin-top:-12px" onClick=${() => setD(today())}>Revenir à aujourd'hui</button>`}`}
-      ${view === "bars" && html`
-        ${exp.length > 0 && html`<section class="card" style="padding:16px">
-          <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="lb" style="margin:0">Dépensé sur ${fmt0(tb)} budgétés</span><span class=${"pill " + (ta > tb ? "bad" : "ok")}>${tb ? Math.round(ta / tb * 100) : 0} %</span></div>
-          <div class="amt" style="font-size:32px;text-align:left;margin-top:4px">${fmt(ta)}</div>
-          <div style="margin-top:6px"><${BudBar} col=${budColor(b)} pct=${tb ? ta / tb : 0} over=${ta > tb} h=${10} /></div>
-          <div class="t2" style="margin-top:8px">${ta <= tb ? "Il reste " + fmt(tb - ta) + " à dépenser" : "Dépassement de " + fmt(ta - tb)}</div></section>`}
-        ${exp.length > 0 && html`<section><div class="sec-h"><h2>Dépenses</h2></div><div class="card">${exp.map(x => html`<${LineRow} x=${x} />`)}</div></section>`}
-        ${inc.length > 0 && html`<section><div class="sec-h"><h2>Revenus attendus</h2></div><div class="card">${inc.map(x => html`<${LineRow} x=${x} />`)}</div></section>`}
-        ${off.length > 0 && html`<section><div class="sec-h"><h2>Hors période à cette date</h2></div><div class="card">${off.map(l => html`<button class="row planned" onClick=${() => NAV.push({v: "line", id: l.id})}><span class="grow"><div class="t1">${lineName(l)}</div><div class="t2">${l.start > d ? "commence le " + dayShort(l.start) : "terminée le " + dayShort(l.end)}</div></span><span class="muted">›</span></button>`)}</div></section>`}
-        ${!lines.length && html`<div class="card"><div class="empty"><b>Aucune catégorie</b>Ajoute une catégorie, ou toutes les catégories d'un coup.<div class="btns" style="margin-top:14px"><button class="btn" onClick=${() => addMissing(b)}>Toutes les catégories</button><button class="btn pri" onClick=${() => SHEET.open({type: "line", budget: id})}>Ajouter une catégorie</button></div></div></div>`}
-        ${lines.length > 0 && html`<button class="btn" onClick=${() => SHEET.open({type: "line", budget: id})}><${Ic} n="plus" s=${18} />Ajouter une catégorie</button>`}`}
-      ${view === "env" && html`<${Envelopes} b=${b} exp=${exp} inc=${inc} />`}
-      ${view === "per" && html`<${PeriodNav} b=${b} gran=${gran} setGran=${setGran} onPick=${k => { setD(k + "-01" > today() ? k + "-01" : (eom(k) < today() ? eom(k) : today())); setView("bars"); }} />`}
-    </main>`;
-}
-function Envelopes({b, exp, inc}) {
-  const pool = r2(inc.reduce((s, x) => s + x.act, 0));
-  const funded = x => (x.l.funds || {})[x.ps];
-  const used = r2(exp.reduce((s, x) => s + (funded(x) || 0), 0));
-  const free = r2(pool - used);
-  return html`
-    <section class="hero"><div class="lbl">💵 À répartir dans les enveloppes</div><div class="big">${fmt(free)}</div>
-      <div class="hint">${inc.length ? `${fmt(pool)} reçus sur les lignes de revenus, ${fmt(used)} déjà placés.` : "Ajoute une ligne de revenus (ex. salaire) pour savoir combien répartir."}</div></section>
-    <div class="catgrid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">${exp.map(x => { const f = funded(x) || 0, left = r2(f - x.act);
-      return html`<button class="card" style="border:0;padding:14px;text-align:left;display:flex;flex-direction:column;gap:6px;position:relative;overflow:hidden" onClick=${() => SHEET.open({type: "fund", line: x.l.id, ps: x.ps, free})}>
-        <span style="position:absolute;inset:0 0 auto 0;height:5px;background:${x.l.cat === "__other__" ? "#8A93AD" : catColor(x.l.cat)}"></span>
-        <span style="display:flex;gap:8px;align-items:center">${x.l.cat === "__other__" ? html`<${CatGlyph} k="dots" box=${28} s=${16} />` : html`<${CatGlyph} id=${x.l.cat} box=${28} s=${16} />`}<span class="t1" style="font-size:14px">${lineName(x.l)}</span></span>
-        <span class=${"amt " + (left < 0 ? "bad" : f ? "" : "muted")} style="text-align:left;font-size:22px">${fmt0(left)}</span>
-        <span class="t2">${f ? `${fmt0(f)} placés · ${fmt0(x.act)} dépensés` : `rien placé · budget ${fmt0(x.bud)}`}</span>
-      </button>`; })}</div>
-    ${!exp.length && html`<div class="empty">Aucune ligne de dépense en cours à cette date.</div>`}
-    <p class="help">Touche une enveloppe pour y placer de l'argent. Ce qui est placé et pas dépensé reste visible dans l'enveloppe.</p>`;
-}
-function FundSheet({line, ps, free, close}) {
-  const l = lineById(line), x = lineAt(l, ps), cur = (l.funds || {})[ps] || 0;
-  const [v, setV] = useState(amtStr(cur || x.bud));
-  const save = val => { const funds = {...(A().bud[line].funds || {})}; if (val > 0) funds[ps] = val; else delete funds[ps]; Store.put({...A().bud[line], funds}); close(); };
-  return html`<${Sheet} title=${lineName(l)} close=${close} right=${html`<button class="link" onClick=${() => save(calc(v) || 0)}>Placer</button>`}>
-    <div class="help">${periodLabel(x.ps, x.pe)} · budget ${fmt(x.bud)} · dépensé ${fmt(x.act)}</div>
-    <input class="amount-in" inputmode="decimal" value=${v} onInput=${e => setV(e.target.value)} aria-label="Montant placé dans l'enveloppe" />
-    <div class="chips"><button class="chip" onClick=${() => setV(amtStr(x.bud))}>Le budget : ${fmt0(x.bud)}</button><button class="chip" onClick=${() => setV(amtStr(Math.max(0, cur + free)))}>Tout le disponible : ${fmt0(cur + free)}</button><button class="chip" onClick=${() => setV(amtStr(x.act))}>Ce qui est dépensé : ${fmt0(x.act)}</button></div>
-    <button class="btn pri" onClick=${() => save(calc(v) || 0)}>Placer dans l'enveloppe</button>
-    ${cur > 0 && html`<button class="btn" onClick=${() => save(0)}>Vider l'enveloppe</button>`}
-  </${Sheet}>`;
-}
-function PeriodNav({b, gran, setGran, onPick}) {
-  const cur = ym(today()), n = gran === "m" ? 12 : gran === "q" ? 8 : 5, stepM = gran === "m" ? 1 : gran === "q" ? 3 : 12;
-  const align = k => gran === "m" ? k : gran === "q" ? `${k.slice(0, 4)}-${pad(Math.floor((Number(k.slice(5)) - 1) / 3) * 3 + 1)}` : k.slice(0, 4) + "-01";
-  const last = align(cur);
-  const per = Array.from({length: n}, (_, i) => ymAdd(last, -(n - 1 - i) * stepM)).reverse();
-  const lines = linesOf(b.id), sp = bSplits(b);
-  const st0 = ym(S().start || today());
-  const rows = per.filter(k => eom(ymAdd(k, stepM - 1)) >= st0 + "-01").map(k => {
-    const from = k + "-01", to = eom(ymAdd(k, stepM - 1));
-    let dep = 0, rev = 0, all = 0; for (const x of sp) { if (x.d < from || x.d > to) continue; all += x.a; x.a < 0 ? dep -= x.a : rev += x.a; }
-    let bud = 0, act = 0; for (const l of lines) if (!l.income) for (const [ps, pe] of periodsOf(l, from, to)) if (ps >= from && ps <= to) { bud += lineBudget(l, ps); act += lineActual(l, ps, pe); }
-    return {k, label: gran === "m" ? monthLabel(k) : gran === "q" ? "T" + (Math.floor((Number(k.slice(5)) - 1) / 3) + 1) + " " + k.slice(0, 4) : k.slice(0, 4), dep: r2(dep), rev: r2(rev), res: r2(rev - dep), all: r2(all), bud: r2(bud), act: r2(act), fut: from > today()};
-  });
-  return html`<div style="display:flex;gap:8px">${[["m", "Mois"], ["q", "Trimestres"], ["y", "Années"]].map(([k, l]) => html`<button class=${"chip" + (gran === k ? " on" : "")} onClick=${() => setGran(k)}>${l}</button>`)}</div>
-    <div class="card">${rows.map(r => html`<button class=${"row" + (r.fut ? " planned" : "")} style="flex-direction:column;align-items:stretch;gap:6px" onClick=${() => onPick(r.k)}>
-      <span style="display:flex;justify-content:space-between;align-items:baseline"><span class="t1" style="text-transform:capitalize">${r.label}</span><span class=${"amt " + (r.res >= 0 ? "pos" : "bad")}>${fmt(r.res, true)}</span></span>
-      <span class="grid2" style="gap:4px 10px;font-size:12.5px">
-        <span class="kv" style="padding:0"><span class="muted">Budgété</span><span>${fmt0(r.bud)}</span></span>
-        <span class="kv" style="padding:0"><span class="muted">Dans le budget</span><span class=${r.act > r.bud && r.bud ? "bad" : ""}>${fmt0(r.act)}</span></span>
-        <span class="kv" style="padding:0"><span class="muted">Dépenses</span><span>${fmt0(r.dep)}</span></span>
-        <span class="kv" style="padding:0"><span class="muted">Revenus</span><span class="pos">${fmt0(r.rev)}</span></span>
-      </span></button>`)}</div>
-    <p class="help">Touche une période pour revoir où tu en étais.</p>`;
+  return html`<${EnvDetail} key=${id} b=${b} lines=${linesOf(id)} />`;
 }
 function LineView({id, d}) {
   const l = lineById(id);
   if (!l) return html`<${Top} title="Ligne" back /><main class="scr"><div class="empty">Cette ligne n'existe plus.</div></main>`;
-  const b = budgetOf(l), t = today();
-  const all = periodsOf(l, l.start, addMonths(t, 3)).slice(-24).reverse();
-  const avg = avgLine(l, t);
-  return html`<${Top} title=${lineName(l)} sub=${b.name + " · " + fmt(baseAmt(l, (periodAt(l, t) || [l.start])[0])) + " " + durLabel(l.dur)} back right=${html`<button class="ibtn" aria-label="Modifier la ligne" onClick=${() => SHEET.open({type: "line", id})}><${Ic} n="edit" /></button>`} />
+  return html`<${EnvDetail} key=${id} b=${budgetOf(l)} lines=${[l]} line=${l} d0=${d} />`;
+}
+/* Barres des dernières périodes : dépensé, et le montant prévu en pointillés. Touche une barre pour revoir cette période. */
+function HistBars({bars, sel, col, income, onPick}) {
+  const H = 84, max = Math.max(1, ...bars.map(x => Math.max(x.bud, x.act)));
+  return html`<div class="hbars" role="group" aria-label="Historique">${bars.map(x => { const on = x.ps === sel, over = !income && x.act > x.bud + .004;
+    return html`<button class=${"hb" + (on ? " on" : "")} aria-pressed=${on ? "true" : "false"} aria-label=${capF(x.name) + " : " + fmt0(x.act) + (income ? " reçus" : " dépensés") + " sur " + fmt0(x.bud)} onClick=${() => onPick(x)}>
+      <span class="hp" style=${`height:${H + 16}px`}><i style=${`height:${Math.max(2, x.act / max * H)}px;background:${over ? "var(--neg)" : on ? col : `color-mix(in srgb, ${col} 38%, var(--surface2))`}`}></i>${x.bud > 0 && html`<b style=${`bottom:${x.bud / max * H}px`}></b>`}<span class="hv" style=${`bottom:${Math.max(2, x.act / max * H) + 3}px`}>${Math.round(x.act)}</span></span>
+      <span class="hl">${x.short}</span></button>`; })}</div>`;
+}
+function EnvDetail({b, lines, line, d0}) {
+  const t = today();
+  const [d, setD] = useState(() => { const p = d0 && lines[0] && periodAt(lines[0], d0); return !p || (p[0] <= t && p[1] >= t) ? t : p[1] < t ? p[1] : p[0]; });
+  const [all, setAll] = useState(false);
+  const e = envAt(lines, d), ref = e.l || lines[0], w = durWords(ref?.dur), col = e.income ? "var(--pos)" : budColor(b);
+  const cur = !!e.ps && e.ps <= t && e.pe >= t, single = e.main.length === 1, x1 = single ? e.main[0] : null;
+  const pr = envPr(b, lines), off = lines.filter(l => !periodAt(l, d));
+  /* Dépenses de la période : opérations passées et échéances à venir */
+  const txs = [], seen = new Set();
+  for (const x of e.main) { for (const tx of lineTxs(x.l, x.ps, x.pe)) if (!seen.has(tx.id)) { seen.add(tx.id); txs.push(tx); }
+    for (const o of linePlanOccs(x.l, x.ps, x.pe)) if (!seen.has(o.id)) { seen.add(o.id); txs.push(o); } }
+  txs.sort((p, q) => q.date.localeCompare(p.date));
+  /* Les six dernières périodes, jusqu'à celle d'aujourd'hui (ou celle affichée si elle est après) */
+  const bars = [];
+  if (ref) { let p = periodAt(ref, t) || periodsOf(ref, ref.start, t).slice(-1)[0] || null; if (e.ps && (!p || e.ps > p[0])) p = [e.ps, e.pe];
+    while (p && bars.length < 6) { const s = envAt(lines, p[0]); if (s.main.length) bars.unshift({ps: p[0], pe: p[1], bud: s.bud, act: s.act, name: budPer(ref, p[0], p[1]), short: perShort(ref, p[0])}); p = prevPeriod(ref, p[0]); } }
+  const pick = x => setD(x.ps <= t && x.pe >= t ? t : x.pe < t ? x.pe : x.ps);
+  const dl = cur ? daysBetween(t, e.pe) + 1 : 0, carry = x1 ? r2(x1.bud - baseAmt(x1.l, x1.ps)) : 0;
+  const heroTxt = !e.ps ? "" : e.income ? (e.rest > 0 ? `Encore ${fmt(e.rest)} attendus` : "Objectif atteint")
+    : e.ps > t ? (e.plan > .004 ? fmt(e.plan) + " déjà prévus" : "Pas encore commencé")
+    : fmt(e.spent) + " dépensés" + (e.plan > .004 ? " · " + fmt(e.plan) + " à venir" : "") + (cur && e.rest > 0 && dl > 0 ? ` · environ ${fmt0(e.rest / dl)} par jour jusqu'au ${e.pe.slice(0, 7) === t.slice(0, 7) ? P(e.pe).getDate() : dayShort(e.pe)}` : "");
+  const amtRow = x => html`<button class="benv-amt" aria-label=${"Modifier le montant de " + lineName(x.l) + " : " + fmt0(baseAmt(x.l, x.ps)) + " " + durLabel(x.l.dur)} onClick=${() => SHEET.open({type: "amt", line: x.l.id, d})}>${fmt0(baseAmt(x.l, x.ps))}<${Ic} n="edit" s=${14} /></button>`;
+  const lineRows = xs => html`<div class="card">${xs.map(x => html`<div class="row" style="padding:0 6px 0 0;gap:0">
+    <button class="benv-li" onClick=${() => NAV.push({v: "line", id: x.l.id, d: x.ps})}>${lineGlyph(x.l, x.l.income ? "var(--pos)" : budColor(b))}
+      <span class="grow" style="min-width:0;display:flex;flex-direction:column;gap:5px"><span><div class="t1">${capF(lineName(x.l))}</div><div class="t2" style=${!x.l.income && x.rest < 0 ? "color:var(--neg)" : ""}>${fmt0(x.act)} ${x.l.income ? "reçus" : "dépensés"} · ${x.l.income ? (x.rest > 0 ? "encore " + fmt0(x.rest) : "atteint") : x.rest >= 0 ? "reste " + fmt0(x.rest) : "dépassé de " + fmt0(-x.rest)}</div></span>
+      <${BudBar} col=${x.l.income ? "var(--pos)" : budColor(b)} pct=${x.bud > 0 ? x.spent / x.bud : x.spent > 0 ? 1 : 0} ppct=${x.bud > 0 ? x.plan / x.bud : 0} over=${!x.l.income && x.act > x.bud + .004} h=${6} /></span></button>
+    ${amtRow(x)}</div>`)}</div>`;
+  /* Réglages */
+  const tgt = line ? [line] : lines.filter(l => !l.income), carryOn = tgt.length > 0 && tgt.every(l => l.carry);
+  const setCarry = v => Store.bulk(tgt.map(l => ["put", {...A().bud[l.id], carry: v}]));
+  const prAll = !!b.prorata || (lines.length > 0 && lines.every(l => l.prorata)), prSome = lines.filter(l => l.prorata);
+  const setPr = v => Store.bulk([["put", {...A().bdg[b.id], prorata: v}], ...(v ? [] : prSome.map(l => ["put", {...A().bud[l.id], prorata: false}]))]);
+  const prWho = `ton virement au ${accName(halfJoint())} et la ligne ${deN((PR()?.name || "").trim() || "l'autre personne")}`;
+  const catAct = () => line || lines.length === 1 ? SHEET.open({type: "line", id: (line || lines[0]).id}) : lines.length ? SHEET.open({type: "bdgLines", budget: b.id}) : SHEET.open({type: "line", budget: b.id});
+  return html`
+    <${Top} title=${line ? lineName(line) : b.name} sub=${line ? b.name : capF(bAccLabel(b)) + (pr ? " · au prorata" : "")} back right=${line
+      ? html`<button class="ibtn" aria-label="Modifier la ligne" onClick=${() => SHEET.open({type: "line", id: line.id})}><${Ic} n="edit" /></button>`
+      : html`<button class="ibtn" aria-label="Actions du budget" onClick=${() => SHEET.open({type: "bdgActions", id: b.id})}><${Ic} n="more" /></button>`} />
     <main class="scr">
-      <div class="tiles"><div class="tile"><div class="k">Depuis le</div><div class="v" style="font-size:18px">${dayShort(l.start)} ${l.start.slice(0, 4)}</div></div><div class="tile"><div class="k">${l.end ? "Jusqu'au" : "Fin"}</div><div class="v" style="font-size:18px">${l.end ? dayShort(l.end) + " " + l.end.slice(0, 4) : "sans fin"}</div></div>
-        <div class="tile" style="grid-column:1/-1"><div class="k">Moyenne des 3 périodes précédentes</div><div class="v">${fmt(avg)}</div></div></div>
-      <div class="card">${all.map(([ps, pe]) => { const bud = lineBudget(l, ps), pl = pe >= t ? linePlan(l, ps, pe) : 0, act = r2(lineActual(l, ps, pe) + pl), ov = l.ov && l.ov[ps] != null, cur = ps <= t && pe >= t, frozen = pe < t;
-        return html`<div class=${"row" + (ps > t ? " planned" : "")} style="flex-direction:column;align-items:stretch;gap:6px">
-          <span style="display:flex;align-items:center;gap:8px"><span class="grow t1" style=${cur ? "color:var(--accent)" : ""}>${periodLabel(ps, pe)}${cur ? html`<span class="tag">en cours</span>` : frozen ? html`<span class="tag">figée</span>` : ""}${ov ? html`<span class="tag">montant ajusté</span>` : ""}</span>
-            <button class="btn sm" aria-label="Ajuster le montant de cette période" onClick=${() => SHEET.open({type: "ovr", line: id, ps})}><${Ic} n="edit" s=${14} />${fmt0(bud)}</button></span>
-          <span class="progress" style="margin:0"><i style=${`width:${Math.min(100, bud > 0 ? act / bud * 100 : act > 0 ? 100 : 0)}%;background:${l.income ? "var(--pos)" : act > bud ? "var(--neg)" : catColor(l.cat)}`}></i></span>
-          <span style="display:flex;justify-content:space-between" class="t2"><span>${l.income ? "Reçu" : "Dépensé"} ${fmt(act)}${pl > 0.004 ? " (dont " + fmt(pl) + " prévus)" : ""} · ${act <= bud ? "reste " + fmt(bud - act) : "dépassé de " + fmt(act - bud)}</span><button class="link" style="font-size:13px;padding:0" onClick=${() => NAV.push({v: "lineTx", id, ps, pe})}>Opérations</button></span>
-        </div>`; })}</div>
+      ${e.main.length > 0 && html`<section class="card" style="padding:16px 18px;display:flex;flex-direction:column;gap:10px" aria-label="Situation">
+        <span class="t2" style="margin:0">${capF(budPer(ref, e.ps, e.pe))} · ${e.income ? "reçu" : e.rest >= 0 ? "il reste" : "dépassé de"}</span>
+        <span style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span class="amt" style=${"font-size:38px;text-align:left;letter-spacing:-.02em;line-height:1.05;color:" + (e.income ? "var(--ink)" : remCol(e.rest, e.bud))}>${fmt0(e.income ? e.act : Math.abs(e.rest))}</span><span class="muted" style="font-size:14px;font-weight:600">sur ${fmt0(e.bud)}</span></span>
+        <${BudBar} col=${col} pct=${e.bud > 0 ? e.spent / e.bud : e.spent > 0 ? 1 : 0} ppct=${e.bud > 0 ? e.plan / e.bud : 0} over=${!e.income && e.act > e.bud + .004} h=${10} />
+        <span class="t2" style="margin:0;white-space:normal">${heroTxt}${carry ? ` · dont report ${fmt(carry, true)}` : ""}</span>
+        ${single && html`<button class="benv-mrow" onClick=${() => SHEET.open({type: "amt", line: x1.l.id, d})}><span class="grow">Montant : <b>${fmt0(baseAmt(x1.l, x1.ps))} ${durLabel(x1.l.dur)}</b>${x1.l.ov && x1.l.ov[x1.ps] != null ? html`<span class="t2" style="display:block">ajusté pour ${budPer(ref, x1.ps, x1.pe)}, d'habitude ${fmt0(baseAmt({...x1.l, ov: {}}, x1.ps))}</span>` : ""}</span><span class="benv-go"><${Ic} n="edit" s=${15} />Modifier</span></button>`}
+      </section>`}
+      ${e.ps && !cur && html`<button class="link" style="align-self:center;margin-top:-8px" onClick=${() => setD(t)}>Revenir ${w.cur === "ce mois-ci" ? "à ce mois-ci" : "à aujourd'hui"}</button>`}
+      ${!single && e.main.length > 0 && html`<section><div class="sec-h"><h2>${e.income ? "Revenus attendus" : "Catégories"}</h2><span class="t2">touche le montant pour le changer</span></div>${lineRows(e.main)}</section>`}
+      ${!e.income && e.inc.length > 0 && html`<section><div class="sec-h"><h2>Revenus attendus</h2></div>${lineRows(e.inc)}</section>`}
+      ${e.ps && html`<section class="card" style="padding-top:4px"><div class="sec-h" style="margin:12px 16px 6px"><h2>${(e.income ? "Rentrées " : "Dépenses ") + perOf(ref, e.ps, e.pe)}</h2>${txs.length > 0 && html`<span class="t2">${txs.length} opération${txs.length > 1 ? "s" : ""}</span>`}</div>
+        ${txs.length ? (all ? txs : txs.slice(0, 6)).map(tx => html`<${TxRow} t=${tx} showAcc />`) : html`<div class="empty" style="padding:14px 18px 20px;font-size:14px">Rien pour l'instant.</div>`}
+        ${txs.length > 6 && !all && html`<button class="row" style="justify-content:center;color:var(--accent);font-weight:600;min-height:48px" onClick=${() => setAll(true)}>Voir les ${txs.length} opérations</button>`}
+      </section>`}
+      ${bars.length > 1 && html`<section class="card" style="padding:12px 16px 14px"><div class="sec-h" style="margin:0 0 8px"><h2>${w.hist}</h2></div>
+        <${HistBars} bars=${bars} sel=${e.ps} col=${col} income=${e.income} onPick=${pick} />
+        <p class="help" style="margin:10px 0 0">Pointillés : le montant prévu. Touche une barre pour revoir cette période.</p></section>`}
+      ${!lines.length && html`<div class="card"><div class="empty"><b>Aucune catégorie</b>Ajoute la catégorie que ce budget doit suivre.<div class="btns" style="margin-top:14px"><button class="btn" onClick=${() => addMissing(b)}>Toutes les catégories</button><button class="btn pri" onClick=${() => SHEET.open({type: "line", budget: b.id})}>Ajouter une catégorie</button></div></div></div>`}
+      ${off.length > 0 && html`<section><div class="sec-h"><h2>Pas en cours à cette date</h2></div><div class="card">${off.map(l => html`<button class="row planned" onClick=${() => SHEET.open({type: "line", id: l.id})}><span class="grow"><div class="t1">${lineName(l)}</div><div class="t2">${l.start > d ? "commence le " + dayShort(l.start) + " " + l.start.slice(0, 4) : "terminée le " + dayShort(l.end) + " " + l.end.slice(0, 4)}</div></span><span class="muted">›</span></button>`)}</div></section>`}
+      <section><div class="sec-h"><h2>Réglages</h2></div><div class="card setcard">
+        <button class="row" onClick=${catAct}><span class="grow t1">${!line && lines.length > 1 ? "Catégories" : "Catégorie et période"}</span><span class="t2" style="max-width:55%">${line ? lineName(line) + ", " + durLabel(line.dur) : lines.length ? lines.map(lineName).join(", ") + (lines.length === 1 ? ", " + durLabel(lines[0].dur) : "") : "à ajouter"}</span><span class="muted">›</span></button>
+        ${!line && html`<button class="row" onClick=${() => SHEET.open({type: "bdg", id: b.id})}><span class="grow t1">Comptes</span><span class="t2" style="max-width:55%">${capF(bAccLabel(b))}</span><span class="muted">›</span></button>`}
+        ${tgt.length > 0 && html`<${Toggle} on=${carryOn} set=${setCarry} label="Reporter le reste" sub=${`Ce qui n'est pas dépensé s'ajoute ${w.nxt}, un dépassement s'en retire.`} />`}
+        ${prLineOk(b.id) && (line
+          ? (b.prorata ? html`<div class="row" style="min-height:0"><span class="t2" style="white-space:normal">Tout le budget « ${b.name} » est au prorata des salaires.</span></div>`
+            : html`<${Toggle} on=${!!line.prorata} set=${v => Store.put({...A().bud[line.id], prorata: v})} label="Au prorata des salaires" sub=${line.prorata ? "Comptée chaque mois dans " + prWho + "." : "Partager cette enveloppe au prorata de vos salaires."} />`)
+          : html`<${Toggle} on=${prAll} set=${setPr} label="Au prorata des salaires" sub=${prAll ? "Compté chaque mois dans " + prWho + "." : prSome.length ? "Seulement pour : " + prSome.map(lineName).join(", ") + ". Active pour tout le budget." : "Partager ce budget au prorata de vos salaires."} />`)}
+        ${!line && html`<button class="row" onClick=${() => SHEET.open({type: "bdgActions", id: b.id})}><span class="grow t1">Plus d'options</span><span class="t2">dates, moyenne, supprimer…</span><span class="muted">›</span></button>`}
+      </div></section>
     </main>`;
+}
+/* « Modifier le montant » : nouveau montant, et à partir de quand */
+function AmtSheet({line, d, close}) {
+  const l = lineById(line), t = today(), dd = d || t;
+  const p = l ? (periodAt(l, dd) || periodsOf(l, dd, dd)[0] || null) : null;
+  const [v, setV] = useState(() => l && p ? amtStr(baseAmt(l, p[0])) : "");
+  const [mode, setMode] = useState("from"), [err, setErr] = useState("");
+  if (!l || !p) return html`<${Sheet} title="Montant" close=${close}><div class="empty">Cette ligne n'a pas de période à cette date.</div></${Sheet}>`;
+  const [ps, pe] = p, b = budgetOf(l), w = durWords(l.dur), cur = ps <= t && pe >= t;
+  const base = baseAmt(l, ps), habit = baseAmt({...l, ov: {}}, ps), hasOv = l.ov?.[ps] != null;
+  const nps = addDays(pe, 1), np = !l.end || nps <= l.end ? (periodAt(l, nps) || [nps, nps]) : null;
+  const N = budPer(l, ps, pe), NN = np ? budPer(l, np[0], np[1]) : "", after = np ? baseAmt({...l, ov: {}}, nps) : habit;
+  const x = calc(v || "0"), ok = !isNaN(x) && x >= 0, X = ok ? fmt0(x) : "…";
+  const avg = avgLine(l, ps), carry = r2(lineBudget(l, ps) - base);
+  const opts = [
+    ["once", (cur ? capF(w.cur) : capF(N)) + " seulement", `${capF(N)} passe à ${X}, puis retour à ${fmt0(after)}`],
+    ["from", cur ? w.fromCur : "À partir " + deN(N), `${capF(N)} et ${w.after} : ${X}`],
+    ...(np ? [["next", cur ? w.fromNext : "À partir " + deN(NN), `${capF(N)} reste à ${fmt0(base)}, ${X} dès ${NN}`]] : []),
+  ];
+  const save = () => {
+    if (!ok) return setErr("Le montant doit être un nombre positif ou 0.");
+    const val = r2(x);
+    if (mode === "once" && Math.abs(val - habit) < .005) { const o = A().bud[l.id], ov = {...(o.ov || {})}; delete ov[ps]; Store.put({...o, ov}); }
+    else setLineAmount(l.id, val, mode, ps, pe);
+    close(); toast("Montant enregistré");
+  };
+  const back = () => { const o = A().bud[l.id], ov = {...(o.ov || {})}; delete ov[ps]; Store.put({...o, ov}); close(); toast(capF(N) + " revient à " + fmt0(habit)); };
+  return html`<${Sheet} title=${linesOf(l.budget).length > 1 ? lineName(l) : b.name} close=${close} right=${html`<button class="link" onClick=${save}>Enregistrer</button>`}>
+    <label class="lb" for="am-v">${l.income ? "Montant attendu " : "Nouveau montant "}${w.sl.replace("/ ", "par ")}</label>
+    <div style="display:flex;align-items:baseline;gap:6px;border-bottom:2px solid var(--accent);padding-bottom:4px"><input id="am-v" class="amount-in" style="text-align:left;flex:1;min-width:0" inputmode="decimal" value=${v} onInput=${e => { setV(e.target.value); setErr(""); }} /><span class="amt muted" style="font-size:30px">€</span></div>
+    <div class="help">Avant : ${fmt0(base)}${hasOv ? ` (ajusté pour ${N}, d'habitude ${fmt0(habit)})` : ""}${avg > 0 ? html` · moyenne ${w.last} : <button type="button" class="link" style="font-size:inherit;padding:0" aria-label=${"Utiliser la moyenne : " + fmt0(avg)} onClick=${() => setV(amtStr(Math.round(avg)))}>${fmt0(avg)}</button>` : ""}${carry ? ` · report ${fmt(carry, true)} en plus` : ""}</div>
+    <div class="lb" id="am-q" style="margin-top:6px;font-size:15px;color:var(--ink)">À partir de quand ?</div>
+    <div role="radiogroup" aria-labelledby="am-q" style="display:flex;flex-direction:column;gap:8px">${opts.map(([k, tt, s]) => html`<button type="button" role="radio" aria-checked=${mode === k ? "true" : "false"} class=${"pick" + (mode === k ? " on" : "")} onClick=${() => setMode(k)}><span class="rad"></span><span class="grow" style="min-width:0"><div class="t1">${tt}</div><div class="t2" style="white-space:normal">${s}</div></span></button>`)}</div>
+    ${prLineOk(l.budget) && (l.prorata || b.prorata) && html`<div class="help" style="display:flex;gap:8px;align-items:flex-start"><${Ic} n="users" s=${16} /><span>Au prorata : ton virement et la ligne ${deN((PR()?.name || "").trim() || "l'autre personne")} seront recalculés.</span></div>`}
+    ${err && html`<div class="banner" role="alert">${err}</div>`}
+    <button class="btn pri" onClick=${save}>Enregistrer</button>
+    ${hasOv && html`<button class="btn" onClick=${back}>Revenir à ${fmt0(habit)} pour ${N}</button>`}
+  </${Sheet}>`;
+}
+function BdgLines({budget, close}) {
+  const b = A().bdg[budget], ls = linesOf(budget), t = today();
+  const go = f => { close(); setTimeout(f, 30); };
+  return html`<${Sheet} title="Catégories" close=${close} left=${html`<button class="link" onClick=${close}>Fermer</button>`}>
+    <div class="help">« ${b?.name || "Budget"} » suit les opérations de ces catégories. Touche une ligne pour changer sa catégorie, sa période ou ses dates.</div>
+    <div class="card">${ls.map(l => html`<button class="row" onClick=${() => go(() => SHEET.open({type: "line", id: l.id}))}>${lineGlyph(l, l.income ? "var(--pos)" : b ? budColor(b) : null)}<span class="grow"><div class="t1">${capF(lineName(l))}</div><div class="t2">${fmt0(baseAmt(l, (periodAt(l, t) || [l.start])[0]))} ${durLabel(l.dur)}${l.income ? " · revenu attendu" : ""}</div></span><span class="muted">›</span></button>`)}</div>
+    <button class="btn" onClick=${() => go(() => SHEET.open({type: "line", budget}))}><${Ic} n="plus" s=${18} />Ajouter une catégorie</button>
+  </${Sheet}>`;
 }
 function LineTxView({id, ps, pe}) {
   const l = lineById(id); if (!l) return html`<${Top} title="Opérations" back />`;
@@ -4057,17 +4182,6 @@ function LineTxView({id, ps, pe}) {
   return html`<${Top} title=${lineName(l)} sub=${periodLabel(ps, pe) + " · " + fmt(lineActual(l, ps, pe))} back />
     <main class="scr"><div class="card">${list.length ? list.map(t => html`<${TxRow} t=${t} showAcc />`) : html`<div class="empty">Aucune opération sur cette période.</div>`}</div>
     <p class="help">Une part peut être rattachée au mois précédent ou suivant, ou exclue des budgets, depuis la fiche de l'opération.</p></main>`;
-}
-function OvrSheet({line, ps, close}) {
-  const l = lineById(line), cur = l.ov?.[ps];
-  const [v, setV] = useState(amtStr(cur ?? baseAmt({...l, ov: {}}, ps)));
-  const save = val => { const ov = {...(A().bud[line].ov || {})}; if (val == null) delete ov[ps]; else ov[ps] = val; Store.put({...A().bud[line], ov}); close(); };
-  return html`<${Sheet} title="Montant de la période" close=${close} right=${html`<button class="link" onClick=${() => { const x = calc(v); if (!isNaN(x)) save(x); }}>Enregistrer</button>`}>
-    <div class="help">${lineName(l)} · ${periodLabel(ps, periodAt(l, ps)?.[1] || ps)}. Ce montant ne concerne que cette période.</div>
-    <input class="amount-in" inputmode="decimal" value=${v} onInput=${e => setV(e.target.value)} aria-label="Montant de la période" />
-    <button class="btn pri" onClick=${() => { const x = calc(v); if (!isNaN(x)) save(x); }}>Enregistrer</button>
-    ${cur != null && html`<button class="btn" onClick=${() => save(null)}>Revenir au montant de la ligne</button>`}
-  </${Sheet}>`;
 }
 function BdgSheet({id, pre, close}) {
   const b0 = id ? A().bdg[id] : null;
@@ -5099,10 +5213,10 @@ function SheetHost({s, close}) {
     case "bdg": return html`<${BdgSheet} ...${p} />`;
     case "bdgActions": return html`<${BdgActions} ...${p} />`;
     case "line": return html`<${LineSheet} ...${p} />`;
+    case "amt": return html`<${AmtSheet} ...${p} />`;
+    case "bdgLines": return html`<${BdgLines} ...${p} />`;
     case "lineDates": return html`<${LineDates} ...${p} />`;
     case "fillAvg": return html`<${FillAvg} ...${p} />`;
-    case "fund": return html`<${FundSheet} ...${p} />`;
-    case "ovr": return html`<${OvrSheet} ...${p} />`;
     case "bdgFromTx": return html`<${BdgFromTx} ...${p} />`;
     case "choice": return html`<${Choice} ...${p} />`;
     case "bulk": return html`<${BulkSheet} ...${p} />`;
