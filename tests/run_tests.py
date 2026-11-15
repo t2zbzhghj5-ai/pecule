@@ -1223,6 +1223,44 @@ def etat_prevue(br, url):
 
 
 @test
+def budgets_par_compte(br, url):
+    """Budgets : menu « Choisir un compte » (le compte et ses cartes, ou tous les comptes), choix retenu."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    pg.evaluate("location.hash = '#budgets'")
+    a.wait(800)
+    info = a.js("return D.budgets(true).map(b => [b.name, (b.accounts || []).map(id => D.A().acc[id].name)]);")
+    names = [n for n, _ in info]
+    check(all(n in a.body() for n in names), "tous les budgets au départ : %s" % names)
+    joint = a.js("return Object.values(D.A().acc).find(x => x.name === 'Joint').id;")
+    on_joint = [n for n, accs in info if not accs or "Joint" in accs or any(x.startswith("Carte Joint") for x in accs)]
+    pg.locator('button.accpill[aria-label*="Tous les comptes"]').click()
+    a.wait(400)
+    sheet = pg.locator(".sheet").inner_text()
+    check("Tous les comptes" in sheet and "Prêt" not in sheet, "menu des comptes : %s" % sheet[:300])
+    pg.locator(".sheet .row", has_text="Joint").first.click()
+    a.wait(500)
+    body = a.body()
+    shown = [n for n in names if pg.locator(".benv-main", has_text=n).count()]
+    check(sorted(shown) == sorted(on_joint) and len(shown) < len(names), "budgets du Joint : %s (attendu %s)" % (shown, on_joint))
+    check(a.js("return D.S().bdgAcc;") == joint, "choix non retenu")
+    a.no_errors("budgets du Joint")
+    pg.reload()
+    a.wait(1200)
+    pg.evaluate("location.hash = '#budgets'")
+    a.wait(800)
+    check(pg.locator('button.accpill[aria-label*="Joint"]').count() == 1, "après réouverture, le Joint n'est plus choisi")
+    pg.locator("button.accpill").first.click()
+    a.wait(400)
+    pg.locator(".sheet .row", has_text="Tous les comptes").first.click()
+    a.wait(500)
+    check(all(pg.locator(".benv-main", has_text=n).count() for n in names) and a.js("return D.S().bdgAcc;") is None, "retour à tous les comptes")
+    a.no_errors("budgets de tous les comptes")
+    a.close()
+
+
+@test
 def budgets_enveloppe(br, url):
     """Budgets façon enveloppe : ce qui reste en premier ; le montant se change d'un geste (ce mois-ci seulement, à partir de ce mois, à partir du mois prochain)."""
     a = App(br, url)
