@@ -2894,7 +2894,8 @@ function LoanDash({a}) {
 function AccountView({id}) {
   const a = A().acc[id];
   const [q, setQ] = useState(""), [flt, setFlt] = useState(() => { const v = ACC_FLT[id] || "tout"; delete ACC_FLT[id]; return v; }), [selMode, setSelMode] = useState(false), [sel, setSel] = useState(new Set());
-  const [af, setAf] = useState({}), [sort, setSort] = useState("dd");
+  /* tri et filtres retenus : le tri pour tous les comptes, les filtres compte par compte */
+  const [af, setAf] = useState(() => (S().accFlt || {})[id] || {}), [sort, setSort] = useState(() => S().accSort || "dd");
   const [tab, setTab0] = useState(DASH_TAB[id] || "dash"); const setTab = v => { DASH_TAB[id] = v; setTab0(v); };
   if (!a) return html`<${Top} title="Compte" back /><main class="scr"><div class="empty">Ce compte n'existe plus.</div></main>`;
   const t = today(), hz = planHorizon();
@@ -2931,7 +2932,7 @@ function AccountView({id}) {
         <${QuickEntry} acc=${id} />
         <div style="display:flex;gap:6px;align-items:center"><div class="searchbox grow" style="min-height:40px"><${Ic} n="search" s=${17} /><input type="search" style="min-height:38px;font-size:15px" placeholder="Libellé, montant…" value=${q} onInput=${e => setQ(e.target.value)} aria-label="Rechercher" /></div><${PlanSpan} /></div>
         <div style="display:flex;gap:6px;align-items:center"><div class="grow" style="display:flex;gap:4px;min-width:0">${[["tout","Toutes"],["nonpointe","À valider"],["prevu","Prévues"]].map(([k, l]) => html`<button class=${"chip" + (flt === k ? " on" : "")} style="min-height:30px;padding:3px 10px;font-size:12.5px;white-space:nowrap" onClick=${() => setFlt(k)}>${l}</button>`)}</div>
-          <button class="ibtn" style="width:34px;height:34px;position:relative" aria-label="Filtres et tri" onClick=${() => SHEET.open({type: "filter", f0: af, sort0: sort, onApply: (x, s2) => { setAf(x); setSort(s2); }})}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>${(fltCount(af) || sort !== "dd") && html`<i style="position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;background:var(--accent)"></i>`}</button>
+          <button class="ibtn" style="width:34px;height:34px;position:relative" aria-label="Filtres et tri" onClick=${() => SHEET.open({type: "filter", f0: af, sort0: sort, onApply: (x, s2) => { setAf(x); setSort(s2); Store.put({...S(), k: "set", id: "set_main", accSort: s2, accFlt: {...(S().accFlt || {}), [id]: x}}); }})}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>${(fltCount(af) || sort !== "dd") && html`<i style="position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;background:var(--accent)"></i>`}</button>
           <button class=${"ibtn" + (selMode ? " on" : "")} style=${"width:34px;height:34px;" + (selMode ? "background:var(--accent);color:#fff" : "")} aria-label=${selMode ? "Terminer la sélection" : "Sélectionner"} onClick=${() => { setSelMode(!selMode); setSel(new Set()); }}><${Ic} n="check" s=${17} /></button></div>
       </div>
       <div class="card">${groups.length ? groups.map(([k, l]) => html`<div>${k && html`<div class="mhead">${monthLabel(k)}</div>`}${l.map(x => html`<${TxRow} t=${x} a=${id} run=${runShow ? runMap[x.id] ?? null : null} sel=${sel.has(x.id)} onSel=${selMode ? toggleSel : null} />`)}</div>`)
@@ -3025,7 +3026,7 @@ function PlanSpan() {
     ${!known && html`<option value=${v}>Période</option>`}<option value="m1">1 mois</option><option value="m3">3 mois</option><option value="m6">6 mois</option><option value="m9">9 mois</option><option value="m12">12 mois</option></select>`;
 }
 function AllTx({f0, q0}) {
-  const [accs, setAccs] = useState([]), [q, setQ] = useState(q0 || ""), [f, setF] = useState(f0 || {}), [sort, setSort] = useState("dd"), [selMode, setSelMode] = useState(false), [sel, setSel] = useState(new Set());
+  const [accs, setAccs] = useState([]), [q, setQ] = useState(q0 || ""), [f, setF] = useState(f0 || {}), [sort, setSort] = useState(() => S().txSort || "dd"), [selMode, setSelMode] = useState(false), [sel, setSel] = useState(new Set());
   const ids = accs.length ? accs : accList().map(a => a.id);
   const qq = norm(q);
   const seen = new Set();
@@ -3041,7 +3042,7 @@ function AllTx({f0, q0}) {
       <${QuickEntry} acc=${accs.length === 1 ? accs[0] : mainAcc()} />
       <div style="display:flex;gap:6px;align-items:center"><div class="searchbox grow" style="min-height:40px"><${Ic} n="search" s=${17} /><input type="search" style="min-height:38px;font-size:15px" placeholder="Libellé, montant…" value=${q} onInput=${e => setQ(e.target.value)} aria-label="Rechercher" /></div>
         <${PlanSpan} />
-        <button class="ibtn" style="width:40px;height:40px;position:relative;flex:none" aria-label="Filtres et tri" onClick=${() => SHEET.open({type: "filter", f0: f, sort0: sort, onApply: (x, s2) => { setF(x); setSort(s2); }})}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>${(nf || sort !== "dd") && html`<i style="position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;background:var(--accent)"></i>`}</button>
+        <button class="ibtn" style="width:40px;height:40px;position:relative;flex:none" aria-label="Filtres et tri" onClick=${() => SHEET.open({type: "filter", f0: f, sort0: sort, onApply: (x, s2) => { setF(x); setSort(s2); Store.put({...S(), k: "set", id: "set_main", txSort: s2}); }})}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>${(nf || sort !== "dd") && html`<i style="position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;background:var(--accent)"></i>`}</button>
         <button class="ibtn" style=${"width:40px;height:40px;flex:none;" + (selMode ? "background:var(--accent);color:#fff" : "")} aria-label=${selMode ? "Terminer la sélection" : "Sélectionner"} onClick=${() => { setSelMode(!selMode); setSel(new Set()); }}><${Ic} n="check" s=${17} /></button></div>
       ${list.length ? (() => {
         const order = accList(true).map(x => x.id), G = [];

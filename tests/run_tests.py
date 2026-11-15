@@ -686,6 +686,39 @@ def compte_joint_prorata(br, url):
 
 
 @test
+def tri_et_filtres_retenus(br, url):
+    """Comptes : tri « Date, récentes d'abord » par défaut ; le tri et les filtres choisis sont retenus (même après réouverture de l'app) ; « Tout effacer » revient au défaut."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    cour = a.acc_id("Courant")
+    a.js("D.NAV.push({v: 'acc', id: arg});", cour)
+    a.wait(500)
+    a.pg.click('main button:has-text("Opérations")')
+    a.wait(300)
+    a.pg.click('[aria-label="Filtres et tri"]')
+    a.wait(400)
+    check(a.pg.locator("#fl-s").input_value() == "dd", "tri par défaut : %s" % a.pg.locator("#fl-s").input_value())
+    a.pg.locator("#fl-s").select_option("da")
+    a.pg.locator('.sheet button:has-text("Appliquer")').last.click()
+    a.wait(400)
+    check(a.js("return D.S().accSort;") == "da", "tri non retenu")
+    a.pg.reload()
+    a.wait(1500)
+    a.js("D.NAV.push({v: 'acc', id: arg});", cour)
+    a.wait(500)
+    a.pg.click('main button:has-text("Opérations")')
+    a.wait(300)
+    a.pg.click('[aria-label="Filtres et tri"]')
+    a.wait(400)
+    check(a.pg.locator("#fl-s").input_value() == "da", "tri perdu après réouverture")
+    a.pg.locator('.sheet button:has-text("Tout effacer")').click()
+    a.wait(400)
+    check(a.js("return D.S().accSort;") == "dd", "« Tout effacer » ne revient pas au tri par défaut")
+    a.no_errors("tri retenu")
+    a.close()
+
+
+@test
 def verifications_donnees(br, url):
     """Vérifications : question 50/50 posée une fois sur l'accueil, incohérences repérées (50/50 sur un livret, carte sans compte, compte supprimé, ventilation fausse, livret négatif, budget périmé) et nettoyage."""
     a = App(br, url)
