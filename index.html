@@ -1416,6 +1416,9 @@ const counts = (l, x) => l.income ? (x.a > 0 || x.rf) : (x.a < 0 || x.rf);
 function lineActual(l, ps, pe) {
   return memo("la" + l.id + ps + pe, () => { const m = lineMatcher(l); let s = 0; for (const x of bSplits(budgetOf(l))) { if (x.d < ps || x.d > pe || !m(x.cat) || !counts(l, x)) continue; s += l.income ? x.a : -x.a; } return r2(s); });
 }
+function linePrevu(l, ps, pe) {
+  return memo("lv" + l.id + ps + pe, () => { const m = lineMatcher(l); let s = 0; for (const x of bSplits(budgetOf(l))) { if (x.t.st !== "prevue" || x.d < ps || x.d > pe || !m(x.cat) || !counts(l, x)) continue; s += l.income ? x.a : -x.a; } return r2(s); });
+}
 function lineTxs(l, ps, pe) { const m = lineMatcher(l), seen = new Set(), out = []; for (const x of bSplits(budgetOf(l))) { if (x.t.adj || x.d < ps || x.d > pe || !m(x.cat) || !counts(l, x) || seen.has(x.t.id)) continue; seen.add(x.t.id); out.push(x.t); } return out.sort((a, b) => b.date.localeCompare(a.date)); }
 function lineBudget(l, ps, depth = 0) {
   let a = baseAmt(l, ps);
@@ -1433,7 +1436,7 @@ function linePlanned(l, ps, pe, occ) {
 /* Déjà prévu dans l'échéancier sur la période (opérations rattachées au budget, pas encore passées) */
 const linePlan = (l, ps, pe) => l.income ? 0 : memo("lp" + l.id + ps + pe, () => linePlanned(l, ps, pe, occurrences(pe)));
 /* Les opérations prévues (échéancier) rattachées au budget le consomment comme les opérations réelles */
-function lineAt(l, d) { const p = periodAt(l, d); if (!p) return null; const bud = lineBudget(l, p[0]), spent = lineActual(l, p[0], p[1]), plan = linePlan(l, p[0], p[1]), act = r2(spent + plan); return {l, ps: p[0], pe: p[1], bud, act, spent, plan, rest: r2(bud - act), pct: bud > 0 ? act / bud : (act > 0 ? 1.5 : 0)}; }
+function lineAt(l, d) { const p = periodAt(l, d); if (!p) return null; const bud = lineBudget(l, p[0]), pv = linePrevu(l, p[0], p[1]), spent = r2(lineActual(l, p[0], p[1]) - pv), plan = r2(linePlan(l, p[0], p[1]) + pv), act = r2(spent + plan); return {l, ps: p[0], pe: p[1], bud, act, spent, plan, rest: r2(bud - act), pct: bud > 0 ? act / bud : (act > 0 ? 1.5 : 0)}; }
 function avgLine(l, ref, n = 3) { let s = 0, c = 0; let p = periodAt(l, ref) || periodsOf(l, ref, ref)[0]; let pp = p ? prevPeriod(l, p[0]) : null; while (pp && c < n) { s += lineActual(l, pp[0], pp[1]); c++; pp = prevPeriod(l, pp[0]); }
   if (!c) { const set = l.cat === "__other__" ? null : catSet(l.cat); for (let i = 1; i <= n; i++) { const k = ymAdd(ym(ref), -i); for (const x of bSplits(budgetOf(l))) if (x.d.startsWith(k) && (set ? set.has(x.cat) : true) && counts(l, x)) s += l.income ? x.a : -x.a; } c = n; }
   return r2(s / c); }
@@ -1793,15 +1796,15 @@ function TxRow({t, a, run, sel, onSel, showAcc, dateCol}) {
   const v = a ? amtFor(t, a) : t.amount;
   const s = sideSt(t, a || t.account);
   const open = () => onSel ? onSel(t) : t.kind === "bud" && t.virtual ? NAV.push({v: "line", id: t.line}) : t.virtual ? SHEET.open({type:"op", kind:"tx", occ:t, acc:a}) : SHEET.open({type:"op", kind:"tx", src:t, acc:a});
-  const toggle = e => { e.stopPropagation(); if (t.virtual) { if (t.kind === "bud") { toast("Prévision de budget : elle se recalcule toute seule"); return; } validateOcc(t); toast("Échéance validée"); return; } if (s === "saisie" || s === "importee") { Store.put(setBoth(t, "pointee")); toast("Validée : comptée dans le solde"); } else if (s === "pointee") { Store.put(setBoth(t, "saisie")); toast("Repassée en « créée »"); } else if (s === "verrouillee") toast("Opération verrouillée par un relevé"); };
-  return html`<div class=${"row" + (t.virtual ? " planned" : "") + (s === "annulee" ? " cancel" : "")} style=${"padding-right:8px" + (t.hl ? `;box-shadow:inset 4px 0 0 ${t.hl};background:color-mix(in srgb, ${t.hl} 7%, transparent)` : "")}>
+  const toggle = e => { e.stopPropagation(); if (t.virtual) { if (t.kind === "bud") { toast("Prévision de budget : elle se recalcule toute seule"); return; } validateOcc(t); toast("Échéance validée"); return; } if (s === "prevue") { Store.put(setBoth(t, "saisie")); toast("Passée en « créée »"); } else if (s === "saisie" || s === "importee") { Store.put(setBoth(t, "pointee")); toast("Validée : comptée dans le solde"); } else if (s === "pointee") { Store.put(setBoth(t, "saisie")); toast("Repassée en « créée »"); } else if (s === "verrouillee") toast("Opération verrouillée par un relevé"); };
+  return html`<div class=${"row" + (t.virtual || s === "prevue" ? " planned" : "") + (s === "annulee" ? " cancel" : "")} style=${"padding-right:8px" + (t.hl ? `;box-shadow:inset 4px 0 0 ${t.hl};background:color-mix(in srgb, ${t.hl} 7%, transparent)` : "")}>
     ${onSel && html`<span class=${"check" + (sel ? " on" : "")} onClick=${open}>${sel && html`<${Ic} n="check" s=${14} w=${3} />`}</span>`}
     <button class="grow" style="display:flex;align-items:center;gap:12px;background:none;border:0;padding:0;text-align:left;min-width:0" onClick=${open}>
       ${dateCol ? html`<span class="dcol"><b>${P(t.date).getDate()}</b><span>${dateCol === "m" ? monthShort(t.date) : P(t.date).toLocaleDateString("fr-FR", {weekday: "short"})}</span></span>` : html`<${CatIcon} id=${t.splits?.[0]?.cat} t=${t} />`}
-      <span class="grow"><div class="t1">${t.name}</div><div class="t2">${showAcc ? accName(t.account) + " · " : ""}${t.virtual ? (t.edited ? "prévue, modifiée · " : "prévue · ") : ""}${t.payee ? t.payee + " · " : ""}${txDesc(t, a || t.account)}${t.project ? " · " + t.project : ""}${(t.shares || []).length ? " · partagée" : ""}</div></span>
+      <span class="grow"><div class="t1">${t.name}</div><div class="t2">${showAcc ? accName(t.account) + " · " : ""}${t.virtual ? (t.edited ? "prévue, modifiée · " : "prévue · ") : s === "prevue" ? "prévue · " : ""}${t.payee ? t.payee + " · " : ""}${txDesc(t, a || t.account)}${t.project ? " · " + t.project : ""}${(t.shares || []).length ? " · partagée" : ""}</div></span>
       <span class="amt ${v > 0 ? "pos" : ""}">${fmt(v, true)}${run != null && html`<small>${dateCol ? "puis " : ""}${fmt(run)}</small>`}</span>
     </button>
-    <button class="st" onClick=${toggle} aria-label=${t.virtual ? "Valider l'échéance" : "Statut : " + STATUS[s]} title=${STATUS[s]}><${StIcon} s=${s} /></button>
+    <button class="st" onClick=${toggle} aria-label=${t.virtual ? "Valider l'échéance" : s === "prevue" ? "Statut : Prévue. Passer en créée" : "Statut : " + STATUS[s]} title=${STATUS[s]}><${StIcon} s=${s} /></button>
   </div>`;
 }
 
@@ -2938,7 +2941,7 @@ function AccountView({id}) {
   const qq = norm(q);
   let list = [...planned, ...real].filter(x => passFilter(x, af, id)).filter(x => {
     if (flt === "nonpointe" && (x.virtual || !["saisie", "importee"].includes(sideSt(x, id)))) return false;
-    if (flt === "prevu" && !x.virtual) return false;
+    if (flt === "prevu" && !x.virtual && sideSt(x, id) !== "prevue") return false;
     if (!qq) return true;
     return norm(x.name).includes(qq) || norm(x.comment).includes(qq) || norm(x.payee).includes(qq) || norm(x.project).includes(qq) || norm(txDesc(x, id)).includes(qq) || amtStr(amtFor(x, id)).includes(q.replace(".", ","));
   });
@@ -3122,7 +3125,7 @@ function BulkSheet({ids, acc, done, close}) {
   };
   return html`<${Sheet} title=${"Modifier " + txs.length + " opérations"} close=${close} right=${html`<button class="link" onClick=${apply}>Appliquer</button>`}>
     <div class="help">Seuls les champs remplis sont changés. Les opérations verrouillées ne sont pas modifiées.</div>
-    <${Field} label="Statut"><${Seg} v=${f.st} set=${v => set("st", v)} opts=${[["", "Inchangé"], ["saisie", "Créée"], ["pointee", "Validée"], ["annulee", "Annulée"]]} /></${Field}>
+    <${Field} label="Statut"><${Seg} v=${f.st} set=${v => set("st", v)} opts=${[["", "Inchangé"], ["prevue", "Prévue"], ["saisie", "Créée"], ["pointee", "Validée"], ["annulee", "Annulée"]]} /></${Field}>
     <${Field} label="Catégorie" help="Pour les opérations non ventilées."><${CatField} v=${f.cat} set=${v => set("cat", v)} />${f.cat !== undefined && html`<button class="link" style="align-self:flex-start" onClick=${() => set("cat", undefined)}>Ne pas changer la catégorie</button>`}</${Field}>
     <${Field} label="Tiers" id="bk-p"><input id="bk-p" list="dl-payee2" value=${f.payee} onInput=${e => set("payee", e.target.value)} placeholder="Inchangé" /><datalist id="dl-payee2">${suggest("payee").map(x => html`<option value=${x} />`)}</datalist></${Field}>
     <div class="grid2"><${Field} label="Moyen de paiement" id="bk-m"><select id="bk-m" value=${f.pay} onChange=${e => set("pay", e.target.value)}><option value="">Inchangé</option>${Object.entries(PAY).map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select></${Field}>
@@ -3506,8 +3509,8 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
         <${Field} label="Moyen de paiement" id="op-pay"><select id="op-pay" value=${f.pay} onChange=${e => set("pay", e.target.value)}>${Object.entries(PAY).map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select></${Field}>
         ${f.pay === "cheque" ? html`<${Field} label="N° de chèque" id="op-num"><input id="op-num" inputmode="numeric" value=${f.num} onInput=${e => set("num", e.target.value)} /></${Field}>` : html`<span></span>`}
       </div>`}
-      ${f.more && html`<${Field} label=${mode === "transfer" ? "Statut côté " + accName(f.account) : "Statut"}><${Seg} v=${f.st === "verrouillee" ? "pointee" : f.st} set=${v => set("st", v)} opts=${[["saisie","Créée"], ...(f.st === "importee" ? [["importee","Importée"]] : []), ["pointee","Validée"],["annulee","Annulée"]]} /></${Field}>`}
-      ${f.more && mode === "transfer" && f.to && html`<${Field} label=${"Statut côté " + accName(f.to)}><${Seg} v=${f.st2 === "verrouillee" ? "pointee" : f.st2} set=${v => set("st2", v)} opts=${[["saisie","Créée"],["pointee","Validée"]]} /></${Field}>`}
+      ${f.more && html`<${Field} label=${mode === "transfer" ? "Statut côté " + accName(f.account) : "Statut"}><${Seg} v=${f.st === "verrouillee" ? "pointee" : f.st} set=${v => set("st", v)} opts=${[["prevue","Prévue"], ["saisie","Créée"], ...(f.st === "importee" ? [["importee","Importée"]] : []), ["pointee","Validée"],["annulee","Annulée"]]} /></${Field}>`}
+      ${f.more && mode === "transfer" && f.to && html`<${Field} label=${"Statut côté " + accName(f.to)}><${Seg} v=${f.st2 === "verrouillee" ? "pointee" : f.st2} set=${v => set("st2", v)} opts=${[["prevue","Prévue"],["saisie","Créée"],["pointee","Validée"]]} /></${Field}>`}
     ${!isSch && !occ && mode === "expense" && isJointAcc(f.account) && html`<${Toggle} on=${!!f.half} set=${v => set("half", v)} label="Remboursement 50/50" sub=${f.half ? `Moitié sur ton virement vers le joint, moitié sur « ${halfName()} », le ${dayShort(halfDate(ym(f.date)))}.` : null} />`}
       ${!base && !occ && html`<${Toggle} on=${f.rep} set=${v => set("rep", v)} label="Répéter" sub=${f.rep ? "Devient une échéance prévue, 1re le " + dayShort(f.date) + "." : null} />
         ${f.rep && html`<div class="grid3">
@@ -4956,8 +4959,8 @@ function icompta2pecule(db, now, onlyPending) {
     if (BUDPROJ.test(t.name)) continue;
     const splits = mkSplits(t), others = new Set((bytx[t.ID] || []).map(otherTx).filter(Boolean).map(x => x.ID));
     others.forEach(x => used.add(x)); used.add(t.ID);
-    const d = {k: "tx", id: "tx_ic_" + sid(t.ID).toLowerCase(), account: acc[t.account], date: t.date, name: t.name.trim(), amount: Math.round(splits.reduce((x, y) => x + y.amount, 0) * 100) / 100, splits, st: "saisie", pay: others.size ? "virement" : "cb", payee: null, project: null, comment: "Importé d'iCompta"};
-    if (others.size) d.st2 = "saisie"; outTx.push(d);
+    const d = {k: "tx", id: "tx_ic_" + sid(t.ID).toLowerCase(), account: acc[t.account], date: t.date, name: t.name.trim(), amount: Math.round(splits.reduce((x, y) => x + y.amount, 0) * 100) / 100, splits, st: "prevue", pay: others.size ? "virement" : "cb", payee: null, project: null, comment: "Importé d'iCompta"};
+    if (others.size) d.st2 = "prevue"; outTx.push(d);
   }
   /* échéancier */
   const ssp = {}, byS = {};

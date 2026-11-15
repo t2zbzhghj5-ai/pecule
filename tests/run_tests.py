@@ -35,7 +35,7 @@ import fixture_icompta  # noqa: E402
 
 # ---------------------------------------------------------------- serveur (avec accès de test aux calculs)
 HOOK = ('window.__dbg = {A, S, Store, Hist, NAV, SHEET, occurrences, balance, amtFor, accList, today, budgets, lineAt, cardNext, cardPending, '
-        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, linesOf, setLineAmount};\n')
+        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount};\n')
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -217,7 +217,7 @@ def import_fictif_details(br, url):
     tx = a.js("return Object.values(D.A().tx).map(t => ({name: t.name, date: t.date, st: t.st, amount: t.amount}));")
     check(any(t["name"] == "Cantine" and t["date"] == "2026-11-03" and t["st"] == "saisie" for t in tx), "cantine du 3 nov. (prévue passée) non reprise à valider")
     check(not any(t["name"] == "Erreur annulée" for t in tx), "opération annulée importée")
-    check(any(t["name"] == "Impôts" and t["date"] == "2027-01-15" for t in tx), "opération ponctuelle prévue absente")
+    check(any(t["name"] == "Impôts" and t["date"] == "2027-01-15" and t["st"] == "prevue" for t in tx), "opération ponctuelle prévue absente ou pas « prévue »")
     check(not any(re.search(r"\(.*\d\d/\d\d/\d{4} - ", t["name"]) for t in tx), "ligne de projection de budget importée")
     ty = a.js("return D.cats().map(c => c.type);")
     check("both" in ty, "catégories mixtes absentes")
@@ -1173,6 +1173,53 @@ def icones_categories(br, url):
 
 def rest(a, cat, d="2026-11-15"):
     return a.js("const l = Object.values(D.A().bud).find(l => D.A().cat[l.cat]?.name === arg[0]); const x = D.lineAt(l, arg[1]); return x && x.rest;", [cat, d])
+
+
+@test
+def etat_prevue(br, url):
+    """État « Prévue » choisi à la main : formulaire, modification groupée, rond de statut ; compté « à venir » dans les budgets, même total."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    lid = a.js("return Object.values(D.A().bud).find(l => D.A().cat[l.cat]?.name === 'Loisirs').id;")
+    l = a.js("return D.A().bud[arg];", lid)
+    acc = a.js("return D.A().bdg[arg].accounts[0];", l["budget"])
+    tid = "tx_test_prevue"
+    a.js("D.Store.put({k: 'tx', id: arg[0], account: arg[1], date: D.today(), name: 'Test prévue', amount: -25, splits: [{cat: arg[2], amount: -25}], st: 'saisie', pay: 'cb'});", [tid, acc, l["cat"]])
+    a.wait(300)
+    at = lambda: a.js("const x = D.lineAt(D.lineById(arg), D.today()); return [x.spent, x.plan, x.act];", lid)
+    s0, p0, t0 = at()
+    # formulaire : Plus d'options › Statut › Prévue
+    a.js("D.SHEET.open({type: 'op', kind: 'tx', src: D.A().tx[arg]});", tid)
+    a.wait(400)
+    if pg.locator(".sheet .seg button", has_text="Prévue").count() == 0:
+        pg.locator(".sheet button", has_text="Plus d'options").first.click()
+        a.wait(300)
+    pg.locator(".sheet .seg button", has_text="Prévue").first.click()
+    pg.locator(".sheet .btn.pri").last.click()
+    a.wait(500)
+    check(a.js("return D.A().tx[arg].st;", tid) == "prevue", "formulaire : état %s" % a.js("return D.A().tx[arg].st;", tid))
+    s1, p1, t1 = at()
+    check(near(t1, t0) and near(s1, s0 - 25) and near(p1, p0 + 25), "budget : dépensé %s→%s, à venir %s→%s, total %s→%s" % (s0, s1, p0, p1, t0, t1))
+    # la ligne s'affiche « prévue », et le rond la fait passer en créée
+    a.js("D.NAV.push({v: 'acc', id: arg});", acc)
+    a.wait(600)
+    pg.locator(".seg button", has_text="Opérations").first.click()
+    a.wait(500)
+    row = pg.locator(".row", has_text="Test prévue").first
+    check("prévue" in row.inner_text(), "ligne sans « prévue » : %s" % row.inner_text())
+    row.locator('button.st[aria-label^="Statut : Prévue"]').click()
+    a.wait(300)
+    check(a.js("return D.A().tx[arg].st;", tid) == "saisie", "rond de statut : pas repassée en créée")
+    # modification groupée
+    a.js("D.SHEET.open({type: 'bulk', ids: [arg]});", tid)
+    a.wait(400)
+    pg.locator(".sheet .seg button", has_text="Prévue").first.click()
+    pg.locator(".sheet .link", has_text="Appliquer").click()
+    a.wait(400)
+    check(a.js("return D.A().tx[arg].st;", tid) == "prevue", "modification groupée : état %s" % a.js("return D.A().tx[arg].st;", tid))
+    a.no_errors("état prévue")
+    a.close()
 
 
 @test
