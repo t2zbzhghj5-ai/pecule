@@ -47,6 +47,7 @@ reste sur la machine ; rien n'est écrit dans le dépôt (`tests/out/` est ignor
 | `icones_categories` | Icônes des catégories choisies d'après le nom, modifiables, pictogrammes à la saisie et dans les réglages |
 | `etat_prevue` | État « Prévue » choisi à la main (formulaire, modification groupée), rond de statut qui la repasse en créée, comptée « à venir » dans les budgets avec le même total |
 | `budgets_par_compte` | Budgets : menu « Choisir un compte » (le compte et ses cartes, ou « Tous les comptes »), prêts absents du menu, choix retenu après réouverture |
+| `restant_mois_suivant` | Fin du restant « le 24 du mois suivant » (fenêtre « jusqu'au … ») : accueil = solde prévu ce jour-là, débit carte du 4 compris ; dates des mois suivants ; les autres comptes ne changent pas |
 | `budgets_enveloppe` | Budgets façon enveloppe : liste avec « Il te reste à dépenser », montant changé d'un geste (ce mois-ci seulement, à partir de ce mois, à partir du mois prochain), barres des derniers mois, report, budget à plusieurs catégories, autre mois |
 | `budgets_report` | Report du reste : rien n'est reporté depuis les mois d'avant Pécule ; un dépassement du mois en cours se reporte |
 | `budgets_suivent_les_saisies` | Dépense par carte → budget de sa catégorie ; changer de catégorie change de budget ; rattachement périmé ignoré |

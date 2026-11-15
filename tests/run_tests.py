@@ -35,7 +35,7 @@ import fixture_icompta  # noqa: E402
 
 # ---------------------------------------------------------------- serveur (avec accès de test aux calculs)
 HOOK = ('window.__dbg = {A, S, Store, Hist, NAV, SHEET, occurrences, balance, amtFor, accList, today, budgets, lineAt, cardNext, cardPending, '
-        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount};\n')
+        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf};\n')
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -1257,6 +1257,43 @@ def budgets_par_compte(br, url):
     a.wait(500)
     check(all(pg.locator(".benv-main", has_text=n).count() for n in names) and a.js("return D.S().bdgAcc;") is None, "retour à tous les comptes")
     a.no_errors("budgets de tous les comptes")
+    a.close()
+
+
+@test
+def restant_mois_suivant(br, url):
+    """Fin du restant « le 24 du mois suivant » : l'accueil montre le solde prévu ce jour-là (débit carte du 4 compris), choix par compte."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    joint = a.js("return Object.values(D.A().acc).find(x => x.name === 'Joint').id;")
+    a.js("D.Store.put({...D.S(), k: 'set', id: 'set_main', mainAcc: arg});", joint)
+    pg.evaluate("location.hash = '#accueil'")
+    a.wait(700)
+    proj = lambda d: a.js("return Math.round((D.balance(arg[0], {upTo: arg[1]}) + D.occurrences(arg[1]).reduce((s, o) => s + D.amtFor(o, arg[0]), 0)) * 100) / 100;", [joint, d])
+    g0 = a.js("const g = D.glanceState(arg); return [g.pe, g.eomB];", joint)
+    check(g0[0] == "2026-11-30" and near(g0[1], proj("2026-11-30")), "avant : %s" % g0)
+    pg.locator('button[aria-label^="Restant calculé jusqu"]').click()
+    a.wait(400)
+    pg.locator("#rs-d").select_option("25")
+    pg.locator(".sheet .seg button", has_text="Le mois suivant").click()
+    a.wait(200)
+    check("24 déc." in pg.locator(".sheet").inner_text(), "aperçu : %s" % pg.locator(".sheet").inner_text()[:300])
+    pg.locator(".sheet .btn.pri", has_text="Enregistrer").click()
+    a.wait(600)
+    acc = a.js("return D.A().acc[arg];", joint)
+    check(acc.get("restNext") is True and acc.get("resetDay") == 25, "réglage : %s / %s" % (acc.get("restNext"), acc.get("resetDay")))
+    g1 = a.js("const g = D.glanceState(arg); return [g.pe, g.eomB];", joint)
+    card_debit = a.js("return D.occurrences('2026-12-24').filter(o => o.date === '2026-12-04' && D.amtFor(o, arg) < 0 && o.card).length;", joint)
+    check(g1[0] == "2026-12-24" and near(g1[1], proj("2026-12-24")) and card_debit >= 1, "après : %s (attendu %s), débits carte du 4 déc. : %s" % (g1, proj("2026-12-24"), card_debit))
+    body = a.body()
+    check("jusqu'au 24 déc." in body, "accueil : %s" % body[:300])
+    # le 26 novembre, toujours le 24 décembre ; le 1er décembre, le 24 janvier
+    check(a.js("return [D.restEndOf(D.A().acc[arg], '2026-11-26'), D.restEndOf(D.A().acc[arg], '2026-12-01')];", joint) == ["2026-12-24", "2027-01-24"], "dates suivantes")
+    # les autres comptes ne changent pas
+    other = a.js("return D.accList().find(x => x.type === 'courant' && x.id !== arg).id;", joint)
+    check(a.js("return D.restEndOf(D.A().acc[arg]);", other) == "2026-11-30", "un autre compte a changé")
+    a.no_errors("restant au mois suivant")
     a.close()
 
 
