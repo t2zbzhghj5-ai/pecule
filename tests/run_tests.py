@@ -35,7 +35,7 @@ import fixture_icompta  # noqa: E402
 
 # ---------------------------------------------------------------- serveur (avec accès de test aux calculs)
 HOOK = ('window.__dbg = {A, S, Store, Hist, NAV, SHEET, occurrences, balance, amtFor, accList, today, budgets, lineAt, cardNext, cardPending, '
-        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf};\n')
+        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf, half50, half50Due, half50Msg, halfBase};\n')
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -1294,6 +1294,68 @@ def restant_mois_suivant(br, url):
     other = a.js("return D.accList().find(x => x.type === 'courant' && x.id !== arg).id;", joint)
     check(a.js("return D.restEndOf(D.A().acc[arg]);", other) == "2026-11-30", "un autre compte a changé")
     a.no_errors("restant au mois suivant")
+    a.close()
+
+
+@test
+def alerte_cinquante_cinquante(br, url):
+    """Alerte 50/50 : la ligne de la partenaire change → bandeau sur l'accueil, détail, message prêt à copier ; « C'est envoyé » le range jusqu'au prochain changement."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    j = a.acc_id("Joint")
+    name = a.js("return D.halfName();")
+    check(a.js("return D.half50Due();") is None, "alerte sans dépense 50/50")
+    add = lambda tid, nm, d, v: a.js("const [j, id, nm, d, v] = arg; D.Store.put({k: 'tx', id, account: j, date: d, name: nm, amount: v, splits: [{amount: v, cat: null}], st: 'saisie', half: true});", [j, tid, nm, d, v])
+    add("tx_t50_resto", "Restaurant", "2026-11-12", -80)
+    a.wait(500)
+    pg.evaluate("location.hash = '#accueil'")
+    a.wait(600)
+    ban = pg.locator("button.h50b")
+    check(ban.count() == 1 and ("%s · 50/50 de novembre : 40,00" % name) in ban.inner_text().replace("\u202f", " ").replace("\xa0", " "), "bandeau : %s" % (ban.inner_text() if ban.count() else "absent"))
+    a.no_errors("bandeau 50/50")
+    ban.click()
+    a.wait(500)
+    fixed = a.js("return D.half50('2026-11').fixed;")
+    msg = pg.locator("#h50m").input_value().replace("\u202f", " ").replace("\xa0", " ")
+    want0 = ("Joint · virement de novembre : %s €\ndont 50/50 : 40,00 €\n" % ("{:.2f}".format(fixed + 40).replace(".", ","))) if abs(fixed) > 0.004 else "Joint · 50/50 de novembre : 40,00 €\n"
+    check(msg == want0 + "Restaurant 12 nov. : 40 €", "message : %r" % msg)
+    pg.locator(".sheet .btn", has_text="C'est envoyé").click()
+    a.wait(500)
+    check(pg.locator("button.h50b").count() == 0 and a.js("return !!D.S().half50Sent['2026-11'];"), "après « C'est envoyé », le bandeau reste")
+    # nouvelle dépense : le bandeau revient avec l'écart et ce qui a changé
+    add("tx_t50_cine", "Cinéma", "2026-11-20", -50)
+    a.wait(500)
+    t = pg.locator("button.h50b").inner_text().replace("\u202f", " ").replace("\xa0", " ")
+    check("65,00" in t and "+25,00" in t and "Dépense ajoutée : Cinéma 20 nov." in t, "bandeau après ajout : %s" % t)
+    pg.locator("button.h50b").click()
+    a.wait(500)
+    sh = pg.locator(".sheet").inner_text().replace("\u202f", " ").replace("\xa0", " ")
+    check("Dernier envoi" in sh and "40,00" in sh and "Nouveau" in sh, "détail : %s" % sh[:300])
+    msg = pg.locator("#h50m").input_value().replace("\u202f", " ").replace("\xa0", " ")
+    check(msg.endswith("Restaurant 12 nov. : 40 €\nCinéma 20 nov. : 25 €") and ("65,00 €" in msg), "message après ajout : %r" % msg)
+    # copier : le presse-papiers reçoit le texte (modifié à la main)
+    pg.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    pg.locator("#h50m").fill("Coucou !\n" + msg)
+    pg.locator(".sheet .btn.pri", has_text="Copier le message").click()
+    a.wait(400)
+    clip = pg.evaluate("navigator.clipboard.readText()")
+    check(clip.startswith("Coucou !") and "Cinéma 20 nov." in clip, "presse-papiers : %r" % clip[:80])
+    a.js("D.SHEET.close();")
+    a.wait(300)
+    check(pg.locator("button.h50b").count() == 1, "« Copier » ne doit pas ranger le bandeau")
+    # dépense décochée : signalée comme retirée
+    a.js("D.Store.put({...D.A().tx.tx_t50_resto, half: false});")
+    a.wait(500)
+    t = pg.locator("button.h50b").inner_text()
+    check("Dépense retirée : Restaurant 12 nov." in t and "Dépense ajoutée : Cinéma" in t, "bandeau après retrait : %s" % t)
+    # ligne de la partenaire validée : plus d'alerte pour ce mois
+    m = a.js("const {M} = D.halfBase('2026-11'); return M ? M.id : null;")
+    if m:
+        a.js("D.Store.put({...D.A().tx[arg], st: 'pointee'});", m)
+        a.wait(500)
+        check(pg.locator("button.h50b").count() == 0, "alerte alors que la ligne est validée")
+    a.no_errors("alerte 50/50")
     a.close()
 
 

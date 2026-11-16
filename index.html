@@ -322,6 +322,14 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .pick.on{border:2px solid var(--accent);background:color-mix(in srgb, var(--accent) 9%, var(--surface));padding:9px 13px}
 .pick .rad{width:20px;height:20px;border-radius:50%;border:2px solid var(--muted);flex:none;box-sizing:border-box}
 .pick.on .rad{border:6px solid var(--accent)}
+.h50b{display:flex;align-items:center;gap:12px;padding:12px 14px;width:100%;text-align:left;color:inherit;font:inherit;min-height:60px;background:var(--surface);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent)}
+.h50b .t1,.h50b .t2{white-space:normal}
+.h50i{width:38px;height:38px;border-radius:12px;background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);display:flex;align-items:center;justify-content:center;flex:none}
+.h50cmp{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center}
+.h50cmp .card{padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.h50cmp .card b{font-family:var(--display);font-size:19px;font-variant-numeric:tabular-nums}
+.h50cmp .card.on{border:2px solid var(--accent);padding:9px 11px}
+.tag.acc{color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
 </style>
 </head>
 <body>
@@ -874,6 +882,58 @@ function halfSync() {
       if (JSON.stringify(splits) === JSON.stringify(b.splits || [])) continue;
       Store.put({...b, splits, amount: r2(splits.reduce((a, x) => a + (x.amount || 0), 0))}); } }
 }
+/* ============ Alerte 50/50 (maquette B) ============
+   Quand la ligne de la partenaire sur le joint change (dépense cochée 50/50, modifiée ou décochée), un bandeau sur l'accueil
+   ouvre le détail et un message prêt à copier dans un SMS. S().half50Sent = {"AAAA-MM": {sig, half, total, items}} : le dernier envoi, mois par mois. */
+function half50(k) { return memo("h50" + k, () => {
+  const j = halfJoint(); if (!j) return null;
+  const D = A(), {hers} = halfParts(k), {M} = halfBase(k), by = {};
+  for (const p of hers) { const t = p.hf !== "adj" ? D.tx[p.hf] : null, key = t ? t.id : "adj:" + p.memo;
+    const it = by[key] ||= {key, name: t ? t.name : p.memo, date: t ? t.date : null, half: 0, paid: 0};
+    it.half = r2(it.half + p.amount); if (!t) it.paid = r2(it.paid + p.amount * 2); }
+  for (const it of Object.values(by)) { const t = D.tx[it.key]; if (t) it.paid = r2(-(t.splits || []).filter(x => !x.to && (x.amount || 0) < 0).reduce((a, x) => a + x.amount, 0)); }
+  const items = Object.values(by).sort((a, b) => (a.date || "").localeCompare(b.date || "") || a.name.localeCompare(b.name));
+  const half = r2(items.reduce((a, x) => a + x.half, 0)), fixed = M ? r2((M.splits || []).filter(x => !x.hf).reduce((a, x) => a + (x.amount || 0), 0)) : 0;
+  return {k, j, items, half, fixed, total: r2(fixed + half), open: !M || halfOpen(M), date: halfDate(k), sig: JSON.stringify([items.map(x => [x.key, x.half])])}; }); }
+/* Le mois à signaler : celui en cours (et le précédent les 5 premiers jours), tant que la ligne n'est pas validée */
+function half50Due() {
+  const t = today(), k0 = ym(t), sent = S().half50Sent || {};
+  for (const k of [...(Number(t.slice(8)) <= 5 ? [ymAdd(k0, -1)] : []), k0]) { const h = half50(k); if (!h || !h.open) continue;
+    if (sent[k] ? sent[k].sig !== h.sig : h.items.length > 0) return h; }
+  return null;
+}
+function half50Diff(h) {
+  const s = (S().half50Sent || {})[h.k] || null, old = {}; for (const x of s?.items || []) old[x.key] = x;
+  const rows = h.items.map(x => ({...x, st: !s ? "" : !old[x.key] ? "new" : Math.abs(old[x.key].half - x.half) > .004 ? "mod" : "", was: old[x.key]?.half}));
+  const gone = (s?.items || []).filter(x => !h.items.some(y => y.key === x.key)).map(x => ({...x, st: "del"}));
+  return {s, rows, gone, before: s ? s.half : null};
+}
+const h50Lbl = x => x.name + (x.date ? " " + dayShort(x.date) : "");
+const h50Eur = v => Math.abs(v - Math.round(v)) < .005 ? fmt0(v) : fmt(v);
+function half50Sum(d) {
+  const add = d.rows.filter(x => x.st === "new"), mod = d.rows.filter(x => x.st === "mod"), out = [];
+  if (!d.s) return d.rows.length + (d.rows.length > 1 ? " dépenses à partager" : " dépense à partager");
+  if (add.length) out.push(add.length === 1 ? "Dépense ajoutée : " + h50Lbl(add[0]) : add.length + " dépenses ajoutées");
+  if (mod.length) out.push(mod.length === 1 ? "Dépense modifiée : " + h50Lbl(mod[0]) : mod.length + " dépenses modifiées");
+  if (d.gone.length) out.push(d.gone.length === 1 ? "Dépense retirée : " + h50Lbl(d.gone[0]) : d.gone.length + " dépenses retirées");
+  return out.join(" · ") || "Montants mis à jour";
+}
+function half50Msg(h) {
+  const mo = deN(MOIS[Number(h.k.slice(5)) - 1]), acc = accName(h.j), L = [];
+  if (Math.abs(h.fixed) > .004) L.push(`${acc} · virement ${mo} : ${fmt(h.total)}`, `dont 50/50 : ${fmt(h.half)}`);
+  else L.push(`${acc} · 50/50 ${mo} : ${fmt(h.half)}`);
+  const it = h.items.length > 4 ? [...h.items].sort((a, b) => b.half - a.half).slice(0, 3) : h.items;
+  for (const x of it) L.push(`${h50Lbl(x)} : ${h50Eur(x.half)}`);
+  if (h.items.length > 4) L.push(`+ ${h.items.length - 3} autres : ${h50Eur(r2(h.half - it.reduce((a, x) => a + x.half, 0)))}`);
+  if (!h.items.length) L.push("Plus aucune dépense partagée ce mois-ci.");
+  return L.join("\n");
+}
+function half50Sent(h) {
+  const all = {...(S().half50Sent || {})}, keep = ymAdd(ym(today()), -3);
+  for (const k of Object.keys(all)) if (k < keep) delete all[k];
+  all[h.k] = {sig: h.sig, half: h.half, total: h.total, items: h.items.map(({key, name, date, half}) => ({key, name, date, half}))};
+  Store.put({...S(), k: "set", id: "set_main", half50Sent: all});
+}
 function halfOccs(start, until) {
   const D = A(), j = halfJoint(), from = halfFrom(); if (!j || !from) return [];
   const byM = {};
@@ -1066,7 +1126,7 @@ const A = () => Store.d;
 const S = () => A().set.set_main || {};
 
 /* ============ Historique : annuler à tout moment ============ */
-const UI_KEYS = new Set(["prevSpan", "lastExport", "bakSnooze", "guideDone", "theme", "dashSpan", "glanceSpan", "planUntil", "mainAcc", "runMode", "hIgnore", "repAcc", "hidePlanned", "bdgAcc", "accSort", "accFlt", "txSort"]);
+const UI_KEYS = new Set(["prevSpan", "lastExport", "bakSnooze", "guideDone", "theme", "dashSpan", "glanceSpan", "planUntil", "mainAcc", "runMode", "hIgnore", "repAcc", "hidePlanned", "bdgAcc", "accSort", "accFlt", "txSort", "half50Sent"]);
 const Hist = {
   list: (() => { try { return JSON.parse(localStorage.getItem("pecule-hist") || "[]"); } catch { return []; } })(),
   cur: null, timer: null, off: 0, ls: new Set(), last: null,
@@ -1614,6 +1674,7 @@ const I = {
   gear: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z",
   search: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4",
   check: "M5 12.5l4.5 4.5L19 7.5",
+  copy: "M9 9h11v11H9zM5 15H4V4h11v1",
   lock: "M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3",
   clock: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2",
   x: "M6 6l12 12M18 6 6 18",
@@ -1936,6 +1997,49 @@ function NudgeCard({icon, col = "var(--accent)", title, text, children}) {
     <div style="display:flex;gap:12px;align-items:flex-start"><span style=${`width:36px;height:36px;border-radius:12px;background:color-mix(in srgb,${col} 12%,transparent);color:${col};display:flex;align-items:center;justify-content:center;flex:none`}><${Ic} n=${icon} s=${19} /></span>
       <span class="grow"><div style="font-size:15px;font-weight:700">${title}</div><div class="muted" style="font-size:13px;line-height:1.4;margin-top:2px">${text}</div></span></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">${children}</div></div>`;
+}
+function Half50Banner() {
+  const h = half50Due(); if (!h) return null;
+  const d = half50Diff(h), diff = d.before != null ? r2(h.half - d.before) : null, mo = deN(MOIS[Number(h.k.slice(5)) - 1]);
+  return html`<button class="card h50b" onClick=${() => SHEET.open({type: "half50", k: h.k})}>
+    <span class="h50i"><${Ic} n="users" s=${19} /></span>
+    <span class="grow" style="min-width:0"><div class="t1">${halfName()} · 50/50 ${mo} : ${fmt(h.half)}</div><div class="t2">${[...(diff != null && Math.abs(diff) > .004 ? [fmt(diff, true)] : []), half50Sum(d)].join(" · ")}</div></span>
+    <span class="muted" aria-hidden="true">›</span></button>`;
+}
+function Half50Sheet({k, close}) {
+  const h = half50(k) || {k, items: [], half: 0, fixed: 0, total: 0, j: halfJoint(), date: halfDate(k), sig: ""};
+  const d = half50Diff(h), [txt, setTxt] = useState(() => half50Msg(h)), [sig, setSig] = useState(h.sig), ta = useRef(null);
+  if (sig !== h.sig) { setSig(h.sig); setTxt(half50Msg(h)); }
+  const nm = halfName(), mois = MOIS[Number(k.slice(5)) - 1], diff = d.before != null ? r2(h.half - d.before) : null;
+  const copy = async () => {
+    let ok = false;
+    try { await navigator.clipboard.writeText(txt); ok = true; } catch (e) {}
+    if (!ok && ta.current) { try { ta.current.focus(); ta.current.select(); ok = document.execCommand("copy"); } catch (e) {} }
+    toast(ok ? "Message copié : colle-le dans un SMS" : "Copie impossible : sélectionne le texte et copie-le");
+  };
+  const sent = () => { half50Sent(h); close(); toast("Noté. Le bandeau reviendra si le 50/50 change."); };
+  const tag = (x) => x.st === "new" ? html`<span class="tag acc">Nouveau</span>` : x.st === "mod" ? html`<span class="tag acc">Modifié</span>` : x.st === "del" ? html`<span class="tag">Retiré</span>` : "";
+  return html`<${Sheet} title=${"50/50 " + deN(nm)} close=${close} left=${html`<button class="link" onClick=${close}>Fermer</button>`}>
+    <div class="h50cmp">
+      <div class="card"><span class="t2">Dernier envoi</span><b>${d.before != null ? fmt(d.before) : "aucun"}</b></div>
+      <span class="muted" aria-hidden="true">→</span>
+      <div class="card on"><span class="t2">${capF(mois)}${diff != null && Math.abs(diff) > .004 ? " · " + fmt(diff, true) : ""}</span><b>${fmt(h.half)}</b></div>
+    </div>
+    <div class="card">
+      <div class="t2" style="padding:12px 16px 4px;font-weight:600">Dépenses partagées ${deN(mois)}</div>
+      ${[...d.rows, ...d.gone].map(x => html`<div class=${"row" + (x.st === "del" ? " cancel" : "")} style="min-height:56px">
+        <span class="grow" style="min-width:0"><div class="t1">${x.name}${tag(x)}</div><div class="t2">${x.date ? dayShort(x.date) + " · " : ""}${x.st === "del" ? "plus partagée" : fmt0(x.paid) + " payés"}${x.st === "mod" ? " · avant " + h50Eur(x.was) : ""}</div></span>
+        <span style="text-align:right;flex:none"><div class="t1" style=${x.st === "del" ? "text-decoration:line-through" : ""}>${h50Eur(x.half)}</div><div class="t2">pour ${nm}</div></span></div>`)}
+      ${!d.rows.length && !d.gone.length && html`<div class="empty" style="padding:14px 16px">Aucune dépense partagée ce mois-ci.</div>`}
+      ${Math.abs(h.fixed) > .004 && html`<div class="row"><span class="grow t2">Montant fixe de la ligne</span><span class="t1">${fmt(h.fixed)}</span></div>`}
+      <div class="row"><span class="grow t2">Virement de ${nm}, le ${dayShort(h.date)}</span><span class="t1" style="white-space:nowrap">${fmt(h.total)}</span></div>
+    </div>
+    <label class="lb" for="h50m">Message (tu peux le modifier)</label>
+    <textarea id="h50m" ref=${ta} rows=${Math.min(8, txt.split("\n").length + 1)} value=${txt} onInput=${e => setTxt(e.target.value)} style="font:inherit;font-size:15px;line-height:1.5;resize:none"></textarea>
+    <button class="btn pri" onClick=${copy}><${Ic} n="copy" s=${18} />Copier le message</button>
+    <button class="btn" onClick=${sent}><${Ic} n="check" s=${18} />C'est envoyé</button>
+    <div class="help" style="text-align:center">Le bandeau reste sur l'accueil jusqu'à « C'est envoyé ».</div>
+  </${Sheet}>`;
 }
 function DataNudge() {
   if (halfNeedsOk()) return html`<${NudgeCard} icon="users" title="Remboursement 50/50 : c'est bien ça ?" text=${html`Ta moitié part du <b>${accName(halfFrom())}</b> vers le ${accName(halfJoint())}, et sa moitié s'appelle « ${halfName()} ».`}>
@@ -2639,7 +2743,7 @@ function Accounts() {
   return html`
     <header class="top" style="align-items:center;gap:8px"><span style="display:flex;align-items:center;gap:6px;min-width:0;flex:1"><${AccPill} /></span><span class="muted" style="font-size:13px;font-weight:500;white-space:nowrap">${(d => d.charAt(0).toUpperCase() + d.slice(1))(P(today()).toLocaleDateString("fr-FR", {weekday: "short", day: "numeric", month: "short"}))}</span><button class="hbtn" style="width:40px;height:40px;font-size:18px;font-weight:700;flex:none" aria-label="Guide de Pécule" onClick=${() => NAV.push({v: "guide"})}>?</button></header>
     <main class="scr wide dash" style="gap:20px">
-      <div class="dash-full"><${BackupNudge} /><${DataNudge} /></div>
+      <div class="dash-full"><${BackupNudge} /><${DataNudge} /><${Half50Banner} /></div>
       <div class="dash-l"><${Glance} />
       ${main && html`<${GlanceBudgets} />`}</div>
       <div class="dash-r">${main && html`<${DashOps} id=${main} key=${main} />`}
@@ -5241,6 +5345,7 @@ function SheetHost({s, close}) {
     case "bdgActions": return html`<${BdgActions} ...${p} />`;
     case "line": return html`<${LineSheet} ...${p} />`;
     case "amt": return html`<${AmtSheet} ...${p} />`;
+    case "half50": return html`<${Half50Sheet} ...${p} />`;
     case "bdgLines": return html`<${BdgLines} ...${p} />`;
     case "lineDates": return html`<${LineDates} ...${p} />`;
     case "fillAvg": return html`<${FillAvg} ...${p} />`;
