@@ -333,6 +333,11 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .pvar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:14px;min-height:24px;margin-top:2px}
 .pvar-v{display:inline-flex;align-items:center;gap:4px;font-weight:700;font-variant-numeric:tabular-nums}
 .pring{position:absolute;left:-3px;right:-3px;border:1.5px solid;border-radius:8px;pointer-events:none}
+.st-card{display:flex;align-items:center;gap:12px;padding:14px;width:100%;text-align:left;color:inherit;font:inherit;min-height:68px;border:0;background:var(--surface)}
+.st-card .t1{font-size:16px;font-weight:700}
+.st-ic{width:40px;height:40px;border-radius:20px;display:flex;align-items:center;justify-content:center;flex:none}
+.set-foot{display:flex;justify-content:center;gap:10px}
+.set-foot .link{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;font-size:15px;font-weight:600}
 </style>
 </head>
 <body>
@@ -4697,31 +4702,58 @@ function RepSheet({id, close}) {
 function Settings() {
   const Item = ({icon, label, sub, go}) => html`<button class="row" onClick=${go}><span class="ic sm" style="background:var(--surface2);color:var(--accent)"><${Ic} n=${icon} s=${18} /></span><span class="grow"><div class="t1">${label}</div>${sub && html`<div class="t2">${sub}</div>`}</span><span class="muted">›</span></button>`;
   const H = l => html`<div class="mhead" style="padding:4px 4px 0;background:none">${l}</div>`;
-  const nh = healthChecks().length;
+  /* En haut, une seule question : est-ce que tout va bien ? (vérifications et sauvegarde) */
+  const nh = healthChecks().length, t = today(), last = S().lastExport, days = last ? daysBetween(last, t) : null, bakOld = !last || days >= 30;
+  const ok = !nh && !bakOld, saved = last ? "Sauvegardé le " + dayShort(last) + (last.slice(0, 4) !== t.slice(0, 4) ? " " + last.slice(0, 4) : "") : "Aucune sauvegarde téléchargée";
+  const stTitle = nh ? nh + (nh > 1 ? " points à regarder" : " point à regarder") : bakOld ? "Sauvegarde à faire" : "Tout est en ordre";
+  const stSub = nh ? saved : bakOld ? (last ? "Dernière il y a " + days + " jours · aucune incohérence" : "Aucune sauvegarde · aucune incohérence") : saved + " · aucune incohérence";
+  const stCol = ok ? "var(--pos)" : "var(--warn)";
+  const pct = prOn() ? Math.round(prRatio(ym(t)) * 100) : null;
+  const jointSub = !halfJoint() ? "Aucun compte joint" : "50/50" + (pct != null ? " et prorata" : "") + " avec " + ((halfName() || "").trim() || "l'autre personne");
+  const hist = Hist.list.length ? "Dernière : " + Hist.list[0].label : "Historique de tes changements";
+  const closed = (S().closed || {})[closeTarget()], cm = capF(MOIS[Number(closeTarget().slice(5)) - 1]);
   return html`<${Top} title="Réglages" back /><main class="scr">
-    ${H("Outils")}
+    <button class="card st-card" onClick=${() => NAV.push({v: nh || !bakOld ? "health" : "data"})}>
+      <span class="st-ic" style=${"background:color-mix(in srgb," + stCol + " 14%,transparent);color:" + stCol}><${Ic} n=${ok ? "check" : nh ? "shield" : "save"} s=${20} /></span>
+      <span class="grow"><div class="t1">${stTitle}</div><div class="t2">${stSub}</div></span><span class="muted">›</span></button>
+    ${H("Organisation")}
     <div class="card">
-      <${Item} icon="info" label="Guide de Pécule" sub="6 chapitres pour tout comprendre · aussi via le ? de l'accueil" go=${() => NAV.push({v: "guide"})} />
-      <${Item} icon="undo" label="Annuler une modification" sub=${Hist.list.length ? Hist.list[0].label : "Historique de tes changements"} go=${() => NAV.push({v: "hist"})} />
-      <${Item} icon="cal" label="Bilan du mois" sub=${(S().closed || {})[closeTarget()] ? monthLabel(closeTarget()) + " terminé" : "Finir " + monthLabel(closeTarget()) + " au propre"} go=${() => NAV.push({v: "close"})} />
-      <${Item} icon="shield" label="Vérifications" sub=${nh ? nh + (nh > 1 ? " points à regarder" : " point à regarder") : "Tout est en ordre"} go=${() => NAV.push({v: "health"})} />
       <${Item} icon="tag" label="Catégories" sub=${cats().length + " catégories"} go=${() => NAV.push({v: "cats"})} />
-      <${Item} icon="magic" label="Règles" sub="Catégoriser automatiquement" go=${() => NAV.push({v: "rules"})} />
+      <${Item} icon="magic" label="Règles" sub="Ranger les opérations automatiquement" go=${() => NAV.push({v: "rules"})} />
+      <${Item} icon="cal" label="Bilan du mois" sub=${cm + (closed ? " terminé" : " à finir")} go=${() => NAV.push({v: "close"})} />
     </div>
     ${H("Partage")}
     <div class="card">
-      <${Item} icon="heart" label="Compte joint au prorata" sub=${!halfJoint() ? "Aucun compte joint" : prOn() ? `Toi ${Math.round(prRatio(ym(today())) * 100)} % · ${(PR().name || "").trim() || "l'autre"} ${100 - Math.round(prRatio(ym(today())) * 100)} % · le ${(Number(PR().day) || 1) === 1 ? "1er" : Number(PR().day)} du mois` : "Partager les charges cochées au prorata des salaires"} go=${() => NAV.push({v: "joint"})} />
-      <${Item} icon="users" label="Remboursement 50/50" sub=${halfJoint() ? "Avec " + halfName() + (halfFrom() ? " · depuis le " + accName(halfFrom()) : "") : "Aucun compte joint"} go=${() => SHEET.open({type: "half"})} />
-      <${Item} icon="users" label="Personnes" sub="Dépenses partagées, qui doit quoi" go=${() => NAV.push({v: "people"})} />
+      <${Item} icon="heart" label="Compte joint" sub=${jointSub} go=${() => SHEET.open({type: "menu", title: "Compte joint", items: "joint"})} />
+      <${Item} icon="users" label="Personnes" sub="Qui doit quoi" go=${() => NAV.push({v: "people"})} />
     </div>
     ${H("Données")}
     <div class="card">
-      <${Item} icon="import" label="Importer des opérations" sub="CSV, OFX ou QIF de ta banque" go=${() => SHEET.open({type: "import"})} />
-      <${Item} icon="save" label="Sauvegarde et export" go=${() => NAV.push({v: "data"})} />
-      <${Item} icon="gear" label="Préférences" go=${() => NAV.push({v: "prefs"})} />
+      <${Item} icon="save" label="Sauvegarde" sub=${last ? "Dernière le " + dayShort(last) + (last.slice(0, 4) !== t.slice(0, 4) ? " " + last.slice(0, 4) : "") : "Jamais téléchargée"} go=${() => NAV.push({v: "data"})} />
+      <${Item} icon="import" label="Importer" sub="iCompta, CSV, OFX, QIF" go=${() => SHEET.open({type: "menu", title: "Importer", items: "import"})} />
+      <${Item} icon="undo" label="Annuler une modification" sub=${hist} go=${() => NAV.push({v: "hist"})} />
     </div>
-    <p class="help" style="text-align:center">${STANDALONE ? "Tes données sont privées : elles restent sur cet appareil, rien n'est envoyé sur internet." : "Tes données sont privées : elles sont rangées dans ton espace personnel de Claude et suivent ton compte sur tous tes appareils."}</p>
+    <div class="set-foot">
+      <button class="link" onClick=${() => NAV.push({v: "prefs"})}><${Ic} n="gear" s=${17} />Préférences</button>
+      <button class="link" onClick=${() => NAV.push({v: "guide"})}><${Ic} n="info" s=${17} />Guide</button>
+    </div>
+    <p class="help" style="text-align:center;margin-top:-6px">${STANDALONE ? "Tes données restent sur cet appareil." : "Tes données sont privées : elles sont rangées dans ton espace personnel de Claude et suivent ton compte sur tous tes appareils."}</p>
   </main>`;
+}
+/* Petit menu des Réglages : compte joint (50/50 et prorata) et imports */
+function MenuSheet({title, items, close}) {
+  const go = f => { close(); setTimeout(f, 30); };
+  const pct = prOn() ? Math.round(prRatio(ym(today())) * 100) : null, who = (PR()?.name || "").trim() || "l'autre";
+  const L = items === "joint" ? [
+    ["users", "Remboursement 50/50", halfJoint() ? "Avec " + halfName() + (halfFrom() ? " · depuis le " + accName(halfFrom()) : "") : "Aucun compte joint", () => SHEET.open({type: "half"})],
+    ["heart", "Au prorata des salaires", !halfJoint() ? "Aucun compte joint" : pct != null ? `Toi ${pct} % · ${who} ${100 - pct} % · le ${(Number(PR()?.day) || 1) === 1 ? "1er" : Number(PR()?.day)} du mois` : "Pas activé", () => NAV.push({v: "joint"})],
+  ] : [
+    ["import", "Depuis iCompta", "Comptes, opérations en cours, échéancier, catégories, budgets", () => SHEET.open({type: "icImport"})],
+    ["import", "Fichier de ta banque", "CSV, OFX ou QIF", () => SHEET.open({type: "import"})],
+  ];
+  return html`<${Sheet} title=${title} close=${close} left=${html`<button class="link" onClick=${close}>Fermer</button>`}>
+    <div class="card">${L.map(([ic, l, sub, f]) => html`<button class="row" style="min-height:64px" onClick=${() => go(f)}><span class="ic sm" style="background:var(--surface2);color:var(--accent)"><${Ic} n=${ic} s=${18} /></span><span class="grow"><div class="t1">${l}</div><div class="t2" style="white-space:normal">${sub}</div></span><span class="muted">›</span></button>`)}</div>
+  </${Sheet}>`;
 }
 function Prefs() {
   const s = S(); const up = (k, v) => Store.put({...s, k: "set", id: "set_main", [k]: v});
@@ -5353,6 +5385,7 @@ function SheetHost({s, close}) {
     case "bdgActions": return html`<${BdgActions} ...${p} />`;
     case "line": return html`<${LineSheet} ...${p} />`;
     case "amt": return html`<${AmtSheet} ...${p} />`;
+    case "menu": return html`<${MenuSheet} ...${p} />`;
     case "half50": return html`<${Half50Sheet} ...${p} />`;
     case "bdgLines": return html`<${BdgLines} ...${p} />`;
     case "lineDates": return html`<${LineDates} ...${p} />`;

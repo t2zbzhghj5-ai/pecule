@@ -35,7 +35,7 @@ import fixture_icompta  # noqa: E402
 
 # ---------------------------------------------------------------- serveur (avec accès de test aux calculs)
 HOOK = ('window.__dbg = {A, S, Store, Hist, NAV, SHEET, occurrences, balance, amtFor, accList, today, budgets, lineAt, cardNext, cardPending, '
-        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf, half50, half50Due, half50Msg, halfBase};\n')
+        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf, half50, half50Due, half50Msg, halfBase, healthChecks, hKey};\n')
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -1387,6 +1387,42 @@ def previsions_variation(br, url):
     a.wait(300)
     check("aujourd'hui" in line() and pg.locator(".pring").count() == 0, "première barre : %r" % line())
     a.no_errors("prévisions, écart entre deux mois")
+    a.close()
+
+
+@test
+def reglages_clarte(br, url):
+    """Réglages (passage clarté) : carte d'état en haut, Organisation / Partage / Données, menus Compte joint et Importer."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    a.js("D.NAV.push({v: 'settings'});")
+    a.wait(600)
+    main = pg.inner_text("main")
+    for h in ["Organisation", "Partage", "Données", "Compte joint", "Sauvegarde", "Importer", "Préférences", "Guide"]:
+        check(h.lower() in main.lower(), "Réglages : « %s » absent" % h)
+    nh = a.js("return D.healthChecks().length;")
+    st = pg.locator("button.st-card").inner_text()
+    check(("à regarder" in st) if nh else ("Sauvegarde à faire" in st), "carte d'état (%d points) : %r" % (nh, st))
+    # sauvegarde récente et rien à regarder : tout est en ordre
+    a.js("D.Store.put({...D.S(), k: 'set', id: 'set_main', lastExport: D.today(), hIgnore: D.healthChecks().map(c => D.hKey(c))});")
+    a.wait(400)
+    if a.js("return D.healthChecks().length;") == 0:
+        check("Tout est en ordre" in pg.locator("button.st-card").inner_text(), "tout est en ordre : %r" % pg.locator("button.st-card").inner_text())
+    pg.locator("main button.row", has_text="Compte joint").click()
+    a.wait(400)
+    sh = pg.inner_text(".sheet")
+    check("Remboursement 50/50" in sh and "Au prorata des salaires" in sh, "menu Compte joint : %r" % sh[:200])
+    pg.locator(".sheet button.row", has_text="Remboursement 50/50").click()
+    a.wait(500)
+    check(pg.locator(".sheet").count() >= 1 and "50/50" in pg.inner_text(".sheet"), "fiche 50/50 non ouverte")
+    a.js("D.SHEET.close();")
+    a.wait(300)
+    pg.locator("main button.row", has_text="Importer").click()
+    a.wait(400)
+    sh = pg.inner_text(".sheet")
+    check("Depuis iCompta" in sh and "Fichier de ta banque" in sh, "menu Importer : %r" % sh[:200])
+    a.no_errors("réglages")
     a.close()
 
 

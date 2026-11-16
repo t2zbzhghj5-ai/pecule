@@ -50,6 +50,7 @@ reste sur la machine ; rien n'est écrit dans le dépôt (`tests/out/` est ignor
 | `restant_mois_suivant` | Fin du restant « le 24 du mois suivant » (fenêtre « jusqu'au … ») : accueil = solde prévu ce jour-là, débit carte du 4 compris ; dates des mois suivants ; les autres comptes ne changent pas |
 | `alerte_cinquante_cinquante` | Alerte 50/50 : bandeau sur l'accueil quand la ligne de la partenaire change, détail (dernier envoi, nouveau, retiré), message prêt à copier (presse-papiers), « C'est envoyé », plus d'alerte une fois la ligne validée |
 | `previsions_variation` | Prévisions : sous le montant, l'écart avec la barre d'avant (entourée) ou avec aujourd'hui pour la première, mis à jour quand on touche une barre |
+| `reglages_clarte` | Réglages (passage clarté) : carte d'état (points à regarder, sauvegarde, tout est en ordre), parties Organisation / Partage / Données, menus Compte joint et Importer |
 | `budgets_enveloppe` | Budgets façon enveloppe : liste avec « Il te reste à dépenser », montant changé d'un geste (ce mois-ci seulement, à partir de ce mois, à partir du mois prochain), barres des derniers mois, report, budget à plusieurs catégories, autre mois |
 | `budgets_report` | Report du reste : rien n'est reporté depuis les mois d'avant Pécule ; un dépassement du mois en cours se reporte |
 | `budgets_suivent_les_saisies` | Dépense par carte → budget de sa catégorie ; changer de catégorie change de budget ; rattachement périmé ignoré |
