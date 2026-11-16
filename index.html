@@ -330,6 +330,9 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .h50cmp .card b{font-family:var(--display);font-size:19px;font-variant-numeric:tabular-nums}
 .h50cmp .card.on{border:2px solid var(--accent);padding:9px 11px}
 .tag.acc{color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.pvar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:14px;min-height:24px;margin-top:2px}
+.pvar-v{display:inline-flex;align-items:center;gap:4px;font-weight:700;font-variant-numeric:tabular-nums}
+.pring{position:absolute;left:-3px;right:-3px;border:1.5px solid;border-radius:8px;pointer-events:none}
 </style>
 </head>
 <body>
@@ -1675,6 +1678,8 @@ const I = {
   search: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4",
   check: "M5 12.5l4.5 4.5L19 7.5",
   copy: "M9 9h11v11H9zM5 15H4V4h11v1",
+  up: "M12 19V5M6 11l6-6 6 6",
+  down: "M12 5v14M6 13l6 6 6-6",
   lock: "M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3",
   clock: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2",
   x: "M6 6l12 12M18 6 6 18",
@@ -2781,9 +2786,11 @@ function DashOps({id}) {
 /* Prévisions : restant en fin de période, sur 12 mois, en barres */
 function Previsions() {
   const id = mainAcc(), a = id && A().acc[id], t = today(), N = [12, 24, 36].includes(S().prevSpan) ? S().prevSpan : 12, step = N / 12, gap = N > 12 ? 2 : 5;
-  const pts = (() => { if (!a || a.type === "pret") return []; const ser = dailySeries([id], t, addMonths(t, N + 1)), byD = {}; for (const p of ser) byD[p[0]] = p[1];
-    const out = []; let E = accPeriod(a)[1], k = 0; while (out.length < N && k++ < N * 3 + 4) { if (byD[E] != null) out.push([E, byD[E]]); E = accPeriod({...a, restEnd: null}, addDays(E, 1))[1]; } return out; })();
+  const pv = (() => { if (!a || a.type === "pret") return {out: [], now: null}; const ser = dailySeries([id], t, addMonths(t, N + 1)), byD = {}; for (const p of ser) byD[p[0]] = p[1];
+    const out = []; let E = accPeriod(a)[1], k = 0; while (out.length < N && k++ < N * 3 + 4) { if (byD[E] != null) out.push([E, byD[E]]); E = accPeriod({...a, restEnd: null}, addDays(E, 1))[1]; } return {out, now: byD[t] ?? null}; })(), pts = pv.out;
   const [sel, setSel] = useState(() => Math.max(0, a ? pts.findIndex(p => p[0] === restEndOf(a)) : 0)), i0 = Math.min(sel, Math.max(0, pts.length - 1));
+  /* Écart avec la période d'avant (ou avec aujourd'hui pour la première barre) */
+  const prevV = i0 > 0 ? pts[i0 - 1]?.[1] : pv.now, dv = pts.length && prevV != null ? r2(pts[i0][1] - prevV) : null, prevL = i0 > 0 && pts[i0 - 1] ? "au " + dayShort(pts[i0 - 1][0]) : "à aujourd'hui";
   const vals = pts.map(p => p[1]), mn = Math.min(0, ...vals), mx = Math.max(0, ...vals), H = 170, sc = v => (v - mn) / ((mx - mn) || 1) * (H - 10), zero = Math.round(H - 5 - sc(0));
   return html`<header class="top" style="align-items:center"><${AccPill} /></header>
   <main class="scr wide" style="gap:14px">
@@ -2792,14 +2799,15 @@ function Previsions() {
     ${pts.length ? html`<section class="card" style="padding:18px">
       <div class="muted" style="font-size:13px">Restant au ${dayShort(pts[i0][0])} ${pts[i0][0].slice(0, 4)}</div>
       <div style=${"font-family:var(--display);font-size:32px;font-weight:700;color:" + (pts[i0][1] < 0 ? "var(--low)" : "var(--ink)")}>${fmt(pts[i0][1])}</div>
+      ${dv != null && html`<div class="pvar">${Math.abs(dv) < .005 ? html`<span class="muted">Identique ${prevL}</span>` : html`<span class="pvar-v" style=${"color:color-mix(in srgb, " + (dv > 0 ? "var(--pos)" : "var(--low)") + " 72%, var(--ink))"}><${Ic} n=${dv > 0 ? "up" : "down"} s=${15} />${fmt(dv, true)}</span><span class="muted">par rapport ${prevL}</span>`}</div>`}
       <div style=${`position:relative;height:${H}px;margin-top:14px;display:grid;grid-template-columns:repeat(${pts.length},minmax(0,1fr));gap:${gap}px`}>
         <div aria-hidden="true" style=${`position:absolute;left:0;right:0;top:${zero}px;border-top:1px dashed color-mix(in srgb,var(--muted) 55%,transparent)`}></div>
-        ${pts.map((p, i) => { const h = Math.max(3, Math.abs(sc(p[1]) - sc(0))), top = p[1] >= 0 ? zero - h : zero;
-          return html`<button onClick=${() => setSel(i)} aria-pressed=${i === i0} aria-label=${dayShort(p[0]) + " : " + fmt(p[1])} style=${`position:relative;height:${H}px;border:0;background:none;padding:0`}><span style=${`position:absolute;left:0;right:0;top:${top}px;height:${h}px;border-radius:6px;background:${p[1] < 0 ? "var(--low)" : "var(--accent)"};opacity:${i === i0 ? 1 : .35}`}></span></button>`; })}
+        ${pts.map((p, i) => { const h = Math.max(3, Math.abs(sc(p[1]) - sc(0))), top = p[1] >= 0 ? zero - h : zero, col = p[1] < 0 ? "var(--low)" : "var(--accent)";
+          return html`<button onClick=${() => setSel(i)} aria-pressed=${i === i0} aria-label=${dayShort(p[0]) + " : " + fmt(p[1])} style=${`position:relative;height:${H}px;border:0;background:none;padding:0`}><span style=${`position:absolute;left:0;right:0;top:${top}px;height:${h}px;border-radius:6px;background:${col};opacity:${i === i0 ? 1 : .35}`}></span>${i === i0 - 1 && html`<span class="pring" aria-hidden="true" style=${`top:${top - 3}px;height:${h + 6}px;border-color:${col}`}></span>`}</button>`; })}
       </div>
       <div style=${`display:grid;grid-template-columns:repeat(${pts.length},minmax(0,1fr));gap:${gap}px;margin-top:6px`}>${pts.map((p, i) => html`<span style=${"font-size:10px;text-align:center;white-space:nowrap;overflow:visible;color:" + (i === i0 ? "var(--ink);font-weight:700" : "var(--muted)")}>${step === 1 || i % step === 0 ? monthShort(p[0]).replace(".", "") : ""}</span>`)}</div>
     </section>
-    <div class="help" style="padding:0 4px">Touche une barre pour voir la période. En orange, celles où le compte passerait sous zéro.</div>` : html`<div class="card"><div class="empty">Pas de prévision pour ce compte.</div></div>`}
+    <div class="help" style="padding:0 4px">Touche une barre pour voir la période : l'écart se compare à la barre d'avant (entourée). En orange, les périodes où le compte passerait sous zéro.</div>` : html`<div class="card"><div class="empty">Pas de prévision pour ce compte.</div></div>`}
     <div class="card">
       <button class="row" style="border-top:0" onClick=${() => NAV.tab("echeancier")}><${Ic} n="repeat" /><span class="grow"><div class="t1">Échéancier</div><div class="t2">Prélèvements, virements et revenus programmés</div></span><span class="muted">›</span></button>
       <button class="row" onClick=${() => NAV.tab("analyses")}><${Ic} n="chart" /><span class="grow"><div class="t1">Analyses</div><div class="t2">Dépenses par catégorie, évolution du solde</div></span><span class="muted">›</span></button>

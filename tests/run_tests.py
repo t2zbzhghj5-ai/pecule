@@ -1360,6 +1360,37 @@ def alerte_cinquante_cinquante(br, url):
 
 
 @test
+def previsions_variation(br, url):
+    """Prévisions : sous le montant, l'écart avec la barre d'avant (entourée), ou avec aujourd'hui pour la première."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    pg.evaluate("location.hash = '#prev'")
+    a.wait(800)
+    num = lambda s: float(re.sub(r"[^0-9,−-]", "", s.split(":")[-1]).replace("−", "-").replace(",", "."))
+    bars = pg.locator("main section.card button[aria-pressed]")
+    n = bars.count()
+    check(n >= 12, "barres : %d" % n)
+    def line():
+        return pg.locator(".pvar").inner_text().replace("\u202f", " ").replace("\xa0", " ")
+    for i in (3, 1):
+        bars.nth(i).click()
+        a.wait(300)
+        v, w = num(bars.nth(i).get_attribute("aria-label")), num(bars.nth(i - 1).get_attribute("aria-label"))
+        d = round(v - w, 2)
+        txt = line()
+        want = ("+" if d > 0 else "−") + "{:,.2f}".format(abs(d)).replace(",", " ").replace(".", ",")
+        prev = bars.nth(i - 1).get_attribute("aria-label").split(" : ")[0]
+        check(want in txt and ("par rapport au " + prev) in txt, "barre %d : %r (attendu %s par rapport au %s)" % (i, txt, want, prev))
+        check(pg.locator(".pring").count() == 1, "barre d'avant non entourée")
+    bars.nth(0).click()
+    a.wait(300)
+    check("aujourd'hui" in line() and pg.locator(".pring").count() == 0, "première barre : %r" % line())
+    a.no_errors("prévisions, écart entre deux mois")
+    a.close()
+
+
+@test
 def budgets_enveloppe(br, url):
     """Budgets façon enveloppe : ce qui reste en premier ; le montant se change d'un geste (ce mois-ci seulement, à partir de ce mois, à partir du mois prochain)."""
     a = App(br, url)
