@@ -40,7 +40,9 @@
   color-scheme:dark;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;margin:0}
+html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
+/* La page elle-même ne défile jamais (bogue d'iOS 26 : les barres fixées en bas se décalent quand la page défile) : c'est #app qui défile */
+#app{position:fixed;inset:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior-y:contain}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.35;-webkit-font-smoothing:antialiased}
 button{font:inherit;color:inherit;cursor:pointer}
 :focus-visible{outline:2.5px solid var(--accent);outline-offset:2px;border-radius:8px}
@@ -2616,7 +2618,7 @@ function GuideIll({k, v}) {
 function GuideView() {
   const [ch, setCh] = useState(null), done = S().guideDone || {}, nDone = GUIDE.filter(c => done[c.id]).length;
   const mark = id => Store.put({...S(), k: "set", id: "set_main", guideDone: {...done, [id]: true}});
-  useEffect(() => { scrollTo(0, 0); }, [ch]);
+  useEffect(() => { appTop(); }, [ch]);
   if (ch == null) return html`<${Top} title="Guide de Pécule" sub="Bien démarrer, en 12 minutes" back />
     <main class="scr" style="gap:16px">
       <div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:8px">
@@ -5484,9 +5486,9 @@ function App() {
   const [stack, setStack] = useState([]);
   const [sheets, setSheets] = useState([]);
   useEffect(() => { const f = () => { setTab(readHash()); setStack([]); }; addEventListener("hashchange", f); return () => removeEventListener("hashchange", f); }, []);
-  NAV.push = v => { setStack(s => [...s, v]); scrollTo(0, 0); };
+  NAV.push = v => { setStack(s => [...s, v]); appTop(); };
   NAV.pop = () => setStack(s => s.slice(0, -1));
-  NAV.tab = t => { setStack([]); setTab(t); try { history.replaceState(null, "", "#" + t); } catch { location.hash = t; } scrollTo(0, 0); };
+  NAV.tab = t => { setStack([]); setTab(t); try { history.replaceState(null, "", "#" + t); } catch { location.hash = t; } appTop(); };
   SHEET.open = s => setSheets(x => [...x, {...s, key: uid("sh")}]);
   SHEET.close = () => setSheets(x => x.slice(0, -1));
   const hasSet = !!A().set.set_main;
@@ -5507,6 +5509,12 @@ function App() {
 /* 50/50 : les dépenses cochées s'ajoutent au virement et à l'opération de la partenaire du mois */
 let halfT = null;
 Store.sub(() => { if (halfT) return; halfT = setTimeout(() => { halfT = null; try { jointMigrate(); halfSync(); prSync(); } catch (e) { console.error(e); } }, 60); });
+/* Haut de l'écran : c'est #app qui défile, pas la page */
+function appTop() { const el = document.getElementById("app"); if (el) el.scrollTop = 0; }
+/* iOS décale parfois la page quand le clavier se ferme : on la remet en place pour que la barre du bas reste collée en bas */
+function resetPage() { if (window.scrollY || document.documentElement.scrollTop) window.scrollTo(0, 0); }
+document.addEventListener("focusout", () => setTimeout(() => { const a = document.activeElement; if (!a || !/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) resetPage(); }, 80));
+if (window.visualViewport) visualViewport.addEventListener("resize", () => { if (visualViewport.height >= window.innerHeight - 2) resetPage(); });
 render(html`<${App} />`, document.getElementById("app"));
 Store.init();
 if ("serviceWorker" in navigator) { try { navigator.serviceWorker.register("./sw.js"); } catch {} }

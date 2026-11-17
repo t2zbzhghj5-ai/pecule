@@ -326,7 +326,7 @@ def ecrans_iphone(br, url):
     for tab in ["comptes", "budgets", "prev", "mes", "echeancier", "analyses"]:
         a.pg.evaluate("location.hash = '#%s'" % tab)
         a.wait(400)
-        w = a.pg.evaluate("document.documentElement.scrollWidth - innerWidth")
+        w = a.pg.evaluate("(() => { const e = document.getElementById('app'); return Math.max(document.documentElement.scrollWidth - innerWidth, e.scrollWidth - e.clientWidth); })()")
         check(w <= 1, "onglet %s : déborde de %d px en largeur" % (tab, w))
     a.close()
 
