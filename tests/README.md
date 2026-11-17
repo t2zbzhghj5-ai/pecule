@@ -43,7 +43,7 @@ reste sur la machine ; rien n'est écrit dans le dépôt (`tests/out/` est ignor
 | `reorganiser_comptes` | Comptes › Réorganiser : cartes sous leur compte, ↑/↓ entre voisines affichées, l'accueil suit |
 | `menus_comptes_dans_l_ordre` | Les menus déroulants de comptes suivent l'ordre de l'écran Comptes (chaque compte suivi de ses cartes), même si l'ordre enregistré est désordonné |
 | `echeancier_choix_du_compte` | Échéancier : même menu « Choisir un compte » que l'accueil (cartes sous leur compte), choix propre à l'échéancier |
-| `rentrees_et_solde_de_depart` | Rentrées du même jour additionnées ; avertissement quand on change le solde de départ (signe) |
+| `rentrees_et_solde_de_depart` | Accueil sans « Prochaine rentrée » ; avertissement quand on change le solde de départ (signe) |
 | `icones_categories` | Icônes des catégories choisies d'après le nom, modifiables, pictogrammes à la saisie et dans les réglages |
 | `etat_prevue` | État « Prévue » choisi à la main (formulaire, modification groupée), rond de statut qui la repasse en créée, comptée « à venir » dans les budgets avec le même total |
 | `budgets_par_compte` | Budgets : menu « Choisir un compte » (le compte et ses cartes, ou « Tous les comptes »), prêts absents du menu, choix retenu après réouverture |
@@ -51,6 +51,7 @@ reste sur la machine ; rien n'est écrit dans le dépôt (`tests/out/` est ignor
 | `alerte_cinquante_cinquante` | Alerte 50/50 : bandeau sur l'accueil quand la ligne de la partenaire change, détail (dernier envoi, nouveau, retiré), message prêt à copier (presse-papiers), « C'est envoyé », plus d'alerte une fois la ligne validée |
 | `previsions_variation` | Prévisions : sous le montant, l'écart avec la barre d'avant (entourée) ou avec aujourd'hui pour la première, mis à jour quand on touche une barre |
 | `reglages_clarte` | Réglages (passage clarté) : carte d'état (points à regarder, sauvegarde, tout est en ordre), parties Organisation / Partage / Données, menus Compte joint et Importer |
+| `accueil_debit_cartes` | Accueil (maquette F) : plus de « Prochaine rentrée » ; solde validé et débit différé des cartes du compte (somme, date, noms) ; une carte s'ouvre d'un geste, plusieurs par un menu ; compte sans carte : une seule tuile |
 | `budgets_enveloppe` | Budgets façon enveloppe : liste avec « Il te reste à dépenser », montant changé d'un geste (ce mois-ci seulement, à partir de ce mois, à partir du mois prochain), barres des derniers mois, report, budget à plusieurs catégories, autre mois |
 | `budgets_report` | Report du reste : rien n'est reporté depuis les mois d'avant Pécule ; un dépassement du mois en cours se reporte |
 | `budgets_suivent_les_saisies` | Dépense par carte → budget de sa catégorie ; changer de catégorie change de budget ; rattachement périmé ignoré |

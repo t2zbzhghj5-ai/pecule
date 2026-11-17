@@ -35,7 +35,7 @@ import fixture_icompta  # noqa: E402
 
 # ---------------------------------------------------------------- serveur (avec accès de test aux calculs)
 HOOK = ('window.__dbg = {A, S, Store, Hist, NAV, SHEET, occurrences, balance, amtFor, accList, today, budgets, lineAt, cardNext, cardPending, '
-        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf, half50, half50Due, half50Msg, halfBase, healthChecks, hKey};\n')
+        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf, half50, half50Due, half50Msg, halfBase, healthChecks, hKey, kidsOf, cardNext};\n')
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -996,8 +996,15 @@ def reorganiser_comptes(br, url):
     """Comptes › Réorganiser : les cartes se rangent sous leur compte ; ↑ échange avec la voisine affichée ; l'accueil suit."""
     a = App(br, url)
     a.import_ic(FICTIF)
-    a.pick("Joint")
-    before = [t.split("\n")[1] for t in a.pg.locator(".dchip").all_inner_texts()]
+    def cards_home():
+        a.pick("Joint")
+        a.pg.locator("button.dtile").click()
+        a.wait(400)
+        names = a.pg.locator(".sheet .row .t1").all_inner_texts()
+        a.js("D.SHEET.close();")
+        a.wait(300)
+        return names
+    before = cards_home()
     check(len(before) == 2, "cartes sous le Joint : %s" % before)
     a.pg.evaluate("location.hash = '#mes'")
     a.wait(400)
@@ -1009,8 +1016,7 @@ def reorganiser_comptes(br, url):
     a.pg.click('[aria-label="Monter %s"]' % before[1])
     a.wait(500)
     a.pg.click('[aria-label="Terminer la réorganisation"]')
-    a.pick("Joint")
-    after = [t.split("\n")[1] for t in a.pg.locator(".dchip").all_inner_texts()]
+    after = cards_home()
     check(after == before[::-1], "ordre des cartes sur l'accueil : %s (attendu %s)" % (after, before[::-1]))
     a.pg.evaluate("location.hash = '#mes'")
     a.wait(300)
@@ -1113,14 +1119,14 @@ def echeancier_choix_du_compte(br, url):
 
 @test
 def rentrees_et_solde_de_depart(br, url):
-    """Deux rentrées le même jour : additionnées sur l'accueil. Changer le signe du solde de départ : avertissement avant d'enregistrer."""
+    """Accueil sans « Prochaine rentrée » (maquette F). Changer le signe du solde de départ : avertissement avant d'enregistrer."""
     a = App(br, url)
     a.import_ic(FICTIF)
     c = a.acc_id("Courant")
     a.js("D.Store.put({k: 'tx', id: 'tx_prime', account: arg, date: '2026-11-28', name: 'Prime', amount: 300, splits: [{amount: 300}], st: 'saisie'});", c)
     a.pick("Courant")
     t = a.pg.inner_text("main section")
-    check("2 rentrées · 28 nov." in t and "+2 800,00" in t.replace("\u202f", " ").replace("\xa0", " "), "rentrées du 28 nov. non additionnées : %s" % t.replace("\n", " | ")[:300])
+    check("rentrée" not in t.lower() and "Solde validé" in t, "accueil : %s" % t.replace("\n", " | ")[:300])
     a.js("D.SHEET.open({type: 'acc', id: arg});", c)
     a.wait(500)
     check(not a.pg.locator(".sheet .banner[role=status]").count(), "avertissement affiché sans changement")
@@ -1423,6 +1429,41 @@ def reglages_clarte(br, url):
     sh = pg.inner_text(".sheet")
     check("Depuis iCompta" in sh and "Fichier de ta banque" in sh, "menu Importer : %r" % sh[:200])
     a.no_errors("réglages")
+    a.close()
+
+
+@test
+def accueil_debit_cartes(br, url):
+    """Accueil (maquette F) : solde validé et débit différé des cartes du compte ; une carte s'ouvre d'un geste, plusieurs par un menu."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    norm = lambda x: x.replace("\u202f", " ").replace("\xa0", " ")
+    a.pick("Joint")
+    j = a.acc_id("Joint")
+    want = a.js("const cs = D.kidsOf(D.accList(), arg).filter(c => c.type === 'carte'); return [cs.length, Math.round(cs.reduce((s, c) => s + ((D.cardNext(c) || {}).amt || 0), 0) * 100) / 100];", j)
+    tile = norm(pg.locator("button.dtile").inner_text())
+    amt = "−" + "{:,.2f}".format(want[1]).replace(",", " ").replace(".", ",")
+    check(want[0] == 2 and "Débit cartes" in tile and amt in tile and "Carte Joint" in tile, "tuile du Joint : %r (attendu %s)" % (tile, amt))
+    check("Solde validé" in pg.inner_text("main section"), "solde validé absent")
+    pg.locator("button.dtile").click()
+    a.wait(400)
+    pg.locator(".sheet .row", has_text="Carte Claire").click()
+    a.wait(500)
+    check(a.js("return D.A().acc[D.S().mainAcc].name;") == "Carte Claire", "le menu n'ouvre pas la carte")
+    # un compte avec une seule carte : la tuile ouvre directement la carte
+    c = a.acc_id("Courant")
+    one = a.js("return D.kidsOf(D.accList(), arg).filter(x => x.type === 'carte').map(x => x.name);", c)
+    a.pick("Courant")
+    if len(one) == 1:
+        pg.locator("button.dtile").click()
+        a.wait(400)
+        check(a.js("return D.A().acc[D.S().mainAcc].name;") == one[0], "une carte : pas ouverte directement")
+    # un compte sans carte : une seule tuile, le solde validé
+    liv = a.js("return D.accList().find(x => x.type !== 'carte' && x.type !== 'pret' && !D.kidsOf(D.accList(), x.id).some(k => k.type === 'carte')).name;")
+    a.pick(liv)
+    check(pg.locator("button.dtile").count() == 0 and "Solde validé" in pg.inner_text("main section"), "compte sans carte (%s)" % liv)
+    a.no_errors("accueil, débit des cartes")
     a.close()
 
 
