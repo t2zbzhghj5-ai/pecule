@@ -346,6 +346,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .ktile{padding:10px 12px;min-width:0;text-align:left}
 .ktile .l{display:flex;align-items:center;gap:5px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ktile .v{font-size:17px;white-space:nowrap}
+.ktile .l.kname{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;white-space:normal;overflow:hidden;line-height:1.25;word-break:break-word}
 .ktile .s{font-size:11.5px}
 </style>
 </head>
@@ -2675,8 +2676,7 @@ function Glance() {
   const left = Math.max(0, daysBetween(t, g.pe)), pct = Math.min(100, Math.max(0, Math.round((daysBetween(g.ps, t) + 1) / (daysBetween(g.ps, g.pe) + 1) * 100)));
   /* Débit différé des cartes du compte (maquette F) : à la place de l'ancienne « Prochaine rentrée » */
   const cards = kidsOf(accList(), id).filter(c => c.type === "carte");
-  /* Maquette K : une tuile par carte, à côté du solde validé (nom court : sans « Carte » ni « CB ») */
-  const short = c => c.name.replace(/^(carte|cb)\s+/i, "") || c.name;
+  /* Maquette K : une tuile par carte, à côté du solde validé, avec le nom exact de la carte */
   return html`<section style="text-align:center;padding:10px 0 2px">
     <div style="font-size:14px;color:var(--muted);font-weight:500">Tu peux encore dépenser</div>
     <div style="display:flex;align-items:center;justify-content:center;gap:8px"><span style="font-family:var(--display);font-size:52px;font-weight:700;letter-spacing:-0.03em;line-height:1.1;margin-top:4px;color:${g.eomB < 0 ? "var(--low)" : "var(--ink)"}">${fmt(g.eomB)}</span></div>
@@ -2689,7 +2689,7 @@ function Glance() {
       <div class="tile ktile"><div class="l">Solde validé</div><div class="v" style=${g.b < 0 ? "color:var(--neg)" : ""}>${fmt(g.b)}</div><div class="s">à la banque</div></div>
       ${cards.map(c => { const n = cardNext(c);
         return html`<button class="tile ktile dtile" onClick=${() => Store.put({...S(), k: "set", id: "set_main", mainAcc: c.id})} aria-label=${c.name + " : " + (n ? "débit de " + fmt(n.amt) + " le " + dayShort(n.date) : "rien à débiter") + ". Ouvrir la carte"}>
-          <div class="l"><${Ic} n="card" s=${13} />${short(c)}</div><div class="v">${n ? fmt(-n.amt) : "—"}</div><div class="s">${n ? "débit le " + dayShort(n.date) : "rien à débiter"}</div></button>`; })}
+          <div class="l kname">${c.name}</div><div class="v">${n ? fmt(-n.amt) : "—"}</div><div class="s">${n ? "débit le " + dayShort(n.date) : "rien à débiter"}</div></button>`; })}
     </div>
   </section>`;
 }
