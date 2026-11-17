@@ -998,12 +998,7 @@ def reorganiser_comptes(br, url):
     a.import_ic(FICTIF)
     def cards_home():
         a.pick("Joint")
-        a.pg.locator("button.dtile").click()
-        a.wait(400)
-        names = a.pg.locator(".sheet .row .t1").all_inner_texts()
-        a.js("D.SHEET.close();")
-        a.wait(300)
-        return names
+        return [x.split(" : ")[0] for x in a.pg.locator("button.ktile").evaluate_all("l => l.map(b => b.getAttribute('aria-label'))")]
     before = cards_home()
     check(len(before) == 2, "cartes sous le Joint : %s" % before)
     a.pg.evaluate("location.hash = '#mes'")
@@ -1434,36 +1429,29 @@ def reglages_clarte(br, url):
 
 @test
 def accueil_debit_cartes(br, url):
-    """Accueil (maquette F) : solde validé et débit différé des cartes du compte ; une carte s'ouvre d'un geste, plusieurs par un menu."""
+    """Accueil (maquette K) : solde validé puis une tuile par carte du compte (son débit différé, sa date) ; toucher une carte l'ouvre."""
     a = App(br, url)
     a.import_ic(FICTIF)
     pg = a.pg
     norm = lambda x: x.replace("\u202f", " ").replace("\xa0", " ")
     a.pick("Joint")
     j = a.acc_id("Joint")
-    want = a.js("const cs = D.kidsOf(D.accList(), arg).filter(c => c.type === 'carte'); return [cs.length, Math.round(cs.reduce((s, c) => s + ((D.cardNext(c) || {}).amt || 0), 0) * 100) / 100];", j)
-    tile = norm(pg.locator("button.dtile").inner_text())
-    amt = "−" + "{:,.2f}".format(want[1]).replace(",", " ").replace(".", ",")
-    check(want[0] == 2 and "Débit cartes" in tile and amt in tile and "Carte Joint" in tile, "tuile du Joint : %r (attendu %s)" % (tile, amt))
-    check("Solde validé" in pg.inner_text("main section"), "solde validé absent")
-    pg.locator("button.dtile").click()
-    a.wait(400)
-    pg.locator(".sheet .row", has_text="Carte Claire").click()
+    want = a.js("return D.kidsOf(D.accList(), arg).filter(c => c.type === 'carte').map(c => [c.name, (D.cardNext(c) || {}).amt || 0, (D.cardNext(c) || {}).date]);", j)
+    tiles = pg.locator("button.ktile")
+    check(tiles.count() == len(want) == 2, "tuiles de cartes du Joint : %d (attendu %d)" % (tiles.count(), len(want)))
+    for i, (nm, amt, d) in enumerate(want):
+        t = norm(tiles.nth(i).inner_text())
+        sv = "−" + "{:,.2f}".format(amt).replace(",", " ").replace(".", ",")
+        check(sv in t and "débit le" in t and nm.replace("Carte ", "") in t, "tuile %s : %r (attendu %s)" % (nm, t, sv))
+    check("Solde validé" in pg.inner_text("main section") and "rentrée" not in pg.inner_text("main section").lower(), "solde validé absent ou rentrée affichée")
+    pg.locator('button.ktile[aria-label^="Carte Claire"]').click()
     a.wait(500)
-    check(a.js("return D.A().acc[D.S().mainAcc].name;") == "Carte Claire", "le menu n'ouvre pas la carte")
-    # un compte avec une seule carte : la tuile ouvre directement la carte
-    c = a.acc_id("Courant")
-    one = a.js("return D.kidsOf(D.accList(), arg).filter(x => x.type === 'carte').map(x => x.name);", c)
-    a.pick("Courant")
-    if len(one) == 1:
-        pg.locator("button.dtile").click()
-        a.wait(400)
-        check(a.js("return D.A().acc[D.S().mainAcc].name;") == one[0], "une carte : pas ouverte directement")
+    check(a.js("return D.A().acc[D.S().mainAcc].name;") == "Carte Claire", "toucher la tuile n'ouvre pas la carte")
     # un compte sans carte : une seule tuile, le solde validé
     liv = a.js("return D.accList().find(x => x.type !== 'carte' && x.type !== 'pret' && !D.kidsOf(D.accList(), x.id).some(k => k.type === 'carte')).name;")
     a.pick(liv)
-    check(pg.locator("button.dtile").count() == 0 and "Solde validé" in pg.inner_text("main section"), "compte sans carte (%s)" % liv)
-    a.no_errors("accueil, débit des cartes")
+    check(pg.locator("button.ktile").count() == 0 and "Solde validé" in pg.inner_text("main section"), "compte sans carte (%s)" % liv)
+    a.no_errors("accueil, une tuile par carte")
     a.close()
 
 

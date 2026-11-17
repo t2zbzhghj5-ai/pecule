@@ -340,7 +340,13 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .set-foot .link{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;font-size:15px;font-weight:600}
 .tile .s{font-size:12.5px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dtile{font:inherit;color:inherit;text-align:left;width:100%;min-width:0;border:0}
-.dtile .s{white-space:normal}
+.ktiles{display:grid;grid-template-columns:1fr;gap:8px;margin-top:18px;position:relative}
+.ktiles.many{grid-template-columns:repeat(3,1fr)}
+.ktiles.many .ktile:first-child{grid-column:1/-1}
+.ktile{padding:10px 12px;min-width:0;text-align:left}
+.ktile .l{display:flex;align-items:center;gap:5px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ktile .v{font-size:17px;white-space:nowrap}
+.ktile .s{font-size:11.5px}
 </style>
 </head>
 <body>
@@ -1687,6 +1693,7 @@ const I = {
   check: "M5 12.5l4.5 4.5L19 7.5",
   copy: "M9 9h11v11H9zM5 15H4V4h11v1",
   up: "M12 19V5M6 11l6-6 6 6",
+  card: "M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM3 10h18M7 15h4",
   down: "M12 5v14M6 13l6 6 6-6",
   lock: "M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3",
   clock: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2",
@@ -2667,11 +2674,9 @@ function Glance() {
       </div></section>`; }
   const left = Math.max(0, daysBetween(t, g.pe)), pct = Math.min(100, Math.max(0, Math.round((daysBetween(g.ps, t) + 1) / (daysBetween(g.ps, g.pe) + 1) * 100)));
   /* Débit différé des cartes du compte (maquette F) : à la place de l'ancienne « Prochaine rentrée » */
-  const cards = kidsOf(accList(), id).filter(c => c.type === "carte"), deb = cards.map(c => ({c, n: cardNext(c)})).filter(x => x.n);
-  const dd = deb.length ? deb.reduce((m, x) => x.n.date < m ? x.n.date : m, deb[0].n.date) : null, debAmt = r2(deb.reduce((s, x) => s + x.n.amt, 0));
-  const debLbl = (cards.length > 1 ? "Débit cartes" : "Débit carte") + (dd ? " · " + (deb.every(x => x.n.date === dd) ? "" : "dès le ") + dayShort(dd) : "");
-  const debSub = cards.length <= 2 ? cards.map(c => c.name).join(" et ") : cards.length + " cartes";
-  const openCards = () => cards.length === 1 ? Store.put({...S(), k: "set", id: "set_main", mainAcc: cards[0].id}) : SHEET.open({type: "menu", title: "Cartes", items: "cards", acc: id});
+  const cards = kidsOf(accList(), id).filter(c => c.type === "carte");
+  /* Maquette K : une tuile par carte, à côté du solde validé (nom court : sans « Carte » ni « CB ») */
+  const short = c => c.name.replace(/^(carte|cb)\s+/i, "") || c.name;
   return html`<section style="text-align:center;padding:10px 0 2px">
     <div style="font-size:14px;color:var(--muted);font-weight:500">Tu peux encore dépenser</div>
     <div style="display:flex;align-items:center;justify-content:center;gap:8px"><span style="font-family:var(--display);font-size:52px;font-weight:700;letter-spacing:-0.03em;line-height:1.1;margin-top:4px;color:${g.eomB < 0 ? "var(--low)" : "var(--ink)"}">${fmt(g.eomB)}</span></div>
@@ -2680,9 +2685,11 @@ function Glance() {
       <div style="height:6px;border-radius:3px;background:color-mix(in srgb,var(--ink) 8%,transparent);overflow:hidden"><div style=${`height:6px;border-radius:3px;background:var(--accent);width:${pct}%`}></div></div>
       <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:6px"><span>Aujourd'hui</span><span>${left === 0 ? "Dernier jour" : left + (left > 1 ? " jours restants" : " jour restant")}</span></div>
     </div></div>
-    <div style=${"display:grid;grid-template-columns:" + (cards.length ? "1fr 1fr" : "1fr") + ";gap:10px;margin-top:18px;position:relative"}>
-      <div class="tile"><div class="l">Solde validé</div><div class="v" style=${g.b < 0 ? "color:var(--neg)" : ""}>${fmt(g.b)}</div><div class="s">à la banque aujourd'hui</div></div>
-      ${cards.length > 0 && html`<button class="tile dtile" onClick=${openCards} aria-label=${debLbl + " : " + (deb.length ? fmt(-debAmt) : "rien à débiter") + ". " + (cards.length === 1 ? "Ouvrir " + cards[0].name : "Choisir une carte")}><div class="l">${debLbl}</div><div class="v">${deb.length ? fmt(-debAmt) : "—"}</div><div class="s">${debSub}</div></button>`}
+    <div class=${"ktiles" + (cards.length > 2 ? " many" : "")} style=${cards.length && cards.length <= 2 ? "grid-template-columns:1.15fr" + " 1fr".repeat(cards.length) : ""}>
+      <div class="tile ktile"><div class="l">Solde validé</div><div class="v" style=${g.b < 0 ? "color:var(--neg)" : ""}>${fmt(g.b)}</div><div class="s">à la banque</div></div>
+      ${cards.map(c => { const n = cardNext(c);
+        return html`<button class="tile ktile dtile" onClick=${() => Store.put({...S(), k: "set", id: "set_main", mainAcc: c.id})} aria-label=${c.name + " : " + (n ? "débit de " + fmt(n.amt) + " le " + dayShort(n.date) : "rien à débiter") + ". Ouvrir la carte"}>
+          <div class="l"><${Ic} n="card" s=${13} />${short(c)}</div><div class="v">${n ? fmt(-n.amt) : "—"}</div><div class="s">${n ? "débit le " + dayShort(n.date) : "rien à débiter"}</div></button>`; })}
     </div>
   </section>`;
 }
@@ -4746,12 +4753,10 @@ function Settings() {
   </main>`;
 }
 /* Petit menu des Réglages : compte joint (50/50 et prorata) et imports */
-function MenuSheet({title, items, acc, close}) {
+function MenuSheet({title, items, close}) {
   const go = f => { close(); setTimeout(f, 30); };
   const pct = prOn() ? Math.round(prRatio(ym(today())) * 100) : null, who = (PR()?.name || "").trim() || "l'autre";
-  const L = items === "cards" ? kidsOf(accList(), acc).filter(c => c.type === "carte").map(c => { const n = cardNext(c);
-    return ["wallet", c.name, n ? "Débit de " + fmt(n.amt) + " le " + dayShort(n.date) : "Rien à débiter", () => Store.put({...S(), k: "set", id: "set_main", mainAcc: c.id})]; })
-  : items === "joint" ? [
+  const L = items === "joint" ? [
     ["users", "Remboursement 50/50", halfJoint() ? "Avec " + halfName() + (halfFrom() ? " · depuis le " + accName(halfFrom()) : "") : "Aucun compte joint", () => SHEET.open({type: "half"})],
     ["heart", "Au prorata des salaires", !halfJoint() ? "Aucun compte joint" : pct != null ? `Toi ${pct} % · ${who} ${100 - pct} % · le ${(Number(PR()?.day) || 1) === 1 ? "1er" : Number(PR()?.day)} du mois` : "Pas activé", () => NAV.push({v: "joint"})],
   ] : [

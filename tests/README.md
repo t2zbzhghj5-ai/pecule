@@ -51,7 +51,7 @@ reste sur la machine ; rien n'est écrit dans le dépôt (`tests/out/` est ignor
 | `alerte_cinquante_cinquante` | Alerte 50/50 : bandeau sur l'accueil quand la ligne de la partenaire change, détail (dernier envoi, nouveau, retiré), message prêt à copier (presse-papiers), « C'est envoyé », plus d'alerte une fois la ligne validée |
 | `previsions_variation` | Prévisions : sous le montant, l'écart avec la barre d'avant (entourée) ou avec aujourd'hui pour la première, mis à jour quand on touche une barre |
 | `reglages_clarte` | Réglages (passage clarté) : carte d'état (points à regarder, sauvegarde, tout est en ordre), parties Organisation / Partage / Données, menus Compte joint et Importer |
-| `accueil_debit_cartes` | Accueil (maquette F) : plus de « Prochaine rentrée » ; solde validé et débit différé des cartes du compte (somme, date, noms) ; une carte s'ouvre d'un geste, plusieurs par un menu ; compte sans carte : une seule tuile |
+| `accueil_debit_cartes` | Accueil (maquette K) : plus de « Prochaine rentrée » ; solde validé puis une tuile par carte du compte (débit différé, date) ; toucher une carte l'ouvre ; compte sans carte : une seule tuile |
 | `budgets_enveloppe` | Budgets façon enveloppe : liste avec « Il te reste à dépenser », montant changé d'un geste (ce mois-ci seulement, à partir de ce mois, à partir du mois prochain), barres des derniers mois, report, budget à plusieurs catégories, autre mois |
 | `budgets_report` | Report du reste : rien n'est reporté depuis les mois d'avant Pécule ; un dépassement du mois en cours se reporte |
 | `budgets_suivent_les_saisies` | Dépense par carte → budget de sa catégorie ; changer de catégorie change de budget ; rattachement périmé ignoré |
