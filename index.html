@@ -3354,19 +3354,23 @@ function parseBankText(text) {
     const nm = /\b(?:chez|aupres de|auprès de|a destination de|à destination de|beneficiaire|bénéficiaire|de la part de|de|à)\s+([A-Z0-9][A-Z0-9 &'.\-*]{2,40})(?![a-zà-ÿ])/.exec(b);
     if (nm) name = nm[1];
     if (!name) {
+      let boiler = false; const bo = x => { boiler = true; return " "; };
       let rest = bankBlank(b.slice(0, best.idx) + " " + b.slice(best.idx + best.len))
         .replace(/\b(\d{1,2})(?:er)?\s+(janv|janvier|jan|févr|fevr|février|fevrier|fév|fev|mars|avr|avril|mai|juin|juil|juillet|août|aout|sept|septembre|oct|octobre|nov|novembre|déc|dec|décembre|decembre)\.?(?:\s+\d{4})?/gi, " ")
         .replace(/\b(avant-hier|hier|aujourd'hui|aujourd’hui)\b/gi, " ")
-        .replace(/\b(paiement|achat|retrait)\s+(?:par\s+)?(?:carte|cb)\b/gi, " ")
-        .replace(/\b(votre|ton)\s+(compte|carte)\s+(a été|est)\s+(débité|debite|débitée|debitee|crédité|credite)e?\b/gi, " ")
+        .replace(/\b(paiement|achat|retrait)\s+(?:par\s+)?(?:carte|cb)\b/gi, bo)
+        .replace(/\b(votre|ton)\s+(compte|carte)\s+(a été|est)\s+(débité|debite|débitée|debitee|crédité|credite)e?\b/gi, bo)
+        .replace(/(?:\b(?:par|en)\s+)?\b(?:cb|carte bancaire)\b/gi, " ")
         .replace(/\b(montant|euros?|eur)\b|€|[*:•|]/gi, " ");
       rest = rest.replace(/\s+/g, " ").trim();
-      /* petits mots laissés seuls au début ou à la fin (« le », « de », « à »…) */
-      const SMALL = /^(?:(?:de|du|des|d'|le|la|les|l'|à|a|au|aux|pour|par|chez|sur|en|le|ce)\s+)+|(?:\s+(?:de|du|des|le|la|les|à|a|au|aux|pour|par|chez|sur|en|ce))+$/i;
-      for (let i = 0; i < 3; i++) rest = rest.replace(SMALL, "").trim();
+      /* petits mots laissés seuls à la fin (« le » d'une date, « de »…) ; au début seulement après une formule de banque
+         (« Paiement CB de … ») : « Le Poinçonneur » ou « Chez Paul » restent entiers */
+      const PUNCT = /^[\s,;:&+\-–—\/.]+|[\s,;:&+\-–—\/]+$/g;
+      const HEAD = /^(?:(?:de|du|des|d'|à|a|au|aux|pour|par|chez|sur|en)\s+)+/i, TAIL = /(?:\s+(?:de|du|des|le|la|les|à|a|au|aux|pour|par|chez|sur|en|ce))+$/i;
+      for (let i = 0; i < 3; i++) { rest = rest.replace(PUNCT, "").replace(TAIL, "").replace(/\s+[+\-−]?\d[\d ,.]*$/, "").trim(); if (boiler) rest = rest.replace(HEAD, "").trim(); }
       name = rest.slice(0, 60).trim();
     }
-    name = name.replace(/\s+/g, " ").trim().replace(/\s+[+\-−]?\d[\d ,.]*(€|eur)?$/i, "").trim();
+    name = name.replace(/\s+/g, " ").trim().replace(/\s+[+\-−]?\d[\d ,.]*(€|eur)?$/i, "").replace(/^[\s,;:&+\-–—\/.]+|[\s,;:&+\-–—\/]+$/g, "").trim();
     if (name === name.toUpperCase() && /[A-Z]/.test(name) && name.length > 3) name = name.charAt(0) + name.slice(1).toLowerCase();
     if (name) name = name.charAt(0).toUpperCase() + name.slice(1);
     return {date, amount: r2(amount), name: name || "Opération", account, src: b};

@@ -416,7 +416,8 @@ def saisie_texte_et_suggestions(br, url):
     cases = [("Courses Carrefour 12,5 €", "Courses Carrefour", -12.5), ("Boulangerie 3,5", "Boulangerie", -3.5), ("Ciné 12", "Ciné", -12),
              ("Pain au chocolat 2,40", "Pain au chocolat", -2.4), ("Cadeau de Noël pour Louis 35,90", "Cadeau de Noël pour Louis", -35.9),
              ("Pharmacie de la gare 8,9", "Pharmacie de la gare", -8.9), ("Apéro chez Paul 1 234,5", "Apéro chez Paul", -1234.5),
-             ("Remboursement mutuelle 18,7", "Remboursement mutuelle", 18.7), ("Paiement CB 4532 de 18,30 € le 10/11 chez FNAC", "Fnac", -18.3)]
+             ("Remboursement mutuelle 18,7", "Remboursement mutuelle", 18.7), ("Paiement CB 4532 de 18,30 € le 10/11 chez FNAC", "Fnac", -18.3),
+             ("Le poinçonneur 12,50 €", "Le poinçonneur", -12.5), ("Le poinçonneur, 12,5 & 3", "Le poinçonneur", -12.5), ("Chez Paul 20 € CB", "Chez Paul", -20)]
     for txt, nm, v in cases:
         r = a.js("return D.parseBankText(arg).map(x => [x.name, x.amount]);", txt)
         check(len(r) == 1 and r[0][0] == nm and near(r[0][1], v), "« %s » lu %s (attendu %s, %s)" % (txt, r, nm, v))
