@@ -1462,6 +1462,30 @@ def accueil_debit_cartes(br, url):
 
 
 @test
+def comptes_solde_valide_cartes(br, url):
+    """Écran Comptes : les cartes affichent leur solde validé, comme les comptes (pas l'encours avec les opérations à valider)."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    c = a.acc_id("Carte Joint")
+    a.js("D.Store.put({k: 'tx', id: 'tx_t_cb_val', account: arg, date: D.today(), name: 'Achat à valider', amount: -12.34, splits: [{amount: -12.34, cat: null}], st: 'saisie'});", c)
+    a.wait(400)
+    val, enc = a.js("return [D.balance(arg, {cleared: true}), D.balance(arg)];", c)
+    check(abs(val - enc) > 0.004, "la carte devrait avoir une opération à valider")
+    pg.evaluate("location.hash = '#mes'")
+    a.wait(600)
+    row = pg.locator("button.row", has_text="Carte Joint").first.inner_text().replace("\u202f", " ").replace("\xa0", " ")
+    want = ("−" if val < 0 else "") + "{:,.2f}".format(abs(val)).replace(",", " ").replace(".", ",")
+    check(want in row, "ligne de la carte : %r (attendu le solde validé %s)" % (row, want))
+    a.js("D.NAV.push({v: 'acc', id: arg});", c)
+    a.wait(500)
+    hero = pg.inner_text("section.acc-hero").replace("\u202f", " ").replace("\xa0", " ")
+    check("Solde validé" in hero and want in hero and "Encours" in hero, "en-tête de la carte : %r" % hero[:200])
+    a.no_errors("comptes, solde validé des cartes")
+    a.close()
+
+
+@test
 def budgets_enveloppe(br, url):
     """Budgets façon enveloppe : ce qui reste en premier ; le montant se change d'un geste (ce mois-ci seulement, à partir de ce mois, à partir du mois prochain)."""
     a = App(br, url)

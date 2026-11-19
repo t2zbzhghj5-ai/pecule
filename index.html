@@ -1198,7 +1198,8 @@ const TYPES = {courant:"Compte courant", carte:"Carte à débit différé", epar
 const GROUPS = [["courant","Au quotidien",["courant","especes"]],["carte","Cartes à débit différé",["carte"]],["epargne","Épargne",["epargne"]],["pret","Prêts",["pret"]]];
 const PAY = {cb:"Carte", prelevement:"Prélèvement", virement:"Virement", cheque:"Chèque", especes:"Espèces", autre:"Autre"};
 const STATUS = {prevue:"Prévue", saisie:"Créée", importee:"Créée (import)", pointee:"Validée", verrouillee:"Validée, relevé verrouillé", annulee:"Annulée"};
-const shownBal = a => a.type === "carte" || a.type === "pret" ? balance(a.id) : balance(a.id, {cleared: true});
+/* Solde affiché : le solde validé, cartes comprises (choix de Nicolas, v48) ; un prêt garde son capital restant dû */
+const shownBal = a => a.type === "pret" ? balance(a.id) : balance(a.id, {cleared: true});
 const COLORS = ["#F2643D","#2F6FED","#13A38A","#E3579A","#F0A52E","#7B61FF","#D2486E","#5B6B8C","#3BA55C","#0EA5C6","#B7791F","#8A93AD"];
 
 /* Ordre des comptes = celui de l'écran Comptes : par groupe, chaque compte suivi de ses cartes. Tous les menus le suivent. */
@@ -2667,9 +2668,9 @@ function Glance() {
   const g = glanceState(id), t = today(), a = g.a;
   const isCard = a.type === "carte", isLoan = a.type === "pret";
   if (isLoan) return html`<section class="hero"><div class="cap" style="margin:0">Capital restant dû</div><div class="big">${fmt(-g.b)}</div></section>`;
-  if (isCard) { const nx = cardNext(a), val = balance(id, {cleared: true}), pend = cardPending(id), diff = nx ? r2(nx.amt + g.b) : 0, lk = a.linked && A().acc[a.linked];
+  if (isCard) { const nx = cardNext(a), val = balance(id, {cleared: true}), pend = cardPending(id), enc = balance(id), diff = nx ? r2(nx.amt + enc) : 0, lk = a.linked && A().acc[a.linked];
     return html`<section style="display:flex;flex-direction:column;gap:10px"><div class="hero">
-      <div class="cap" style="margin:0">${nx ? "Prochain débit le " + dayShort(nx.date) : "Encours"}</div><div class="big">${nx ? fmt(nx.amt) : fmt(g.b)}</div>
+      <div class="cap" style="margin:0">${nx ? "Prochain débit le " + dayShort(nx.date) : "Encours"}</div><div class="big">${nx ? fmt(nx.amt) : fmt(enc)}</div>
       ${nx && Math.abs(diff) > 0.004 && html`<div style="font-size:14px;color:var(--muted);margin-top:4px">${diff > 0 ? "dont " + fmt(diff) + " prévus d'ici le " + dayShort(nx.cut || nx.date) : fmt(-diff) + " d'achats après le " + dayShort(nx.cut || nx.date) + " partiront au débit suivant"}</div>`}
       ${lk && html`<button class="link" style="margin-top:10px;font-size:14px;font-weight:500;color:var(--muted);padding:6px 0;text-align:left" onClick=${() => Store.put({...S(), k: "set", id: "set_main", mainAcc: a.linked})}>Débitée sur le <b style="color:var(--accent)">${A().acc[a.linked].name.replace(/^Compte/, "compte")}</b>${nx ? "" : " le " + dayShort(nextDebit(a))} ›</button>`}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -2993,7 +2994,7 @@ function AccHero({a}) {
   const t = today(), b = shownBal(a), E = restEndOf(a);
   const eomBal = r2(balance(a.id, {upTo: E}) + occurrences(E).reduce((s, o) => s + amtFor(o, a.id), 0));
   let label = "Solde validé", sub = [];
-  if (a.type === "carte") { label = "Encours de la carte"; const nx = occurrences(addDays(t, 45)).find(o => o.card === a.id); sub.push(nx ? `Prochain débit le ${dayShort(nx.date)} : ${fmt(-nx.amount)}` : "Aucun débit à venir"); sub.push("sur " + accName(a.linked)); }
+  if (a.type === "carte") { const enc = balance(a.id), nx = occurrences(addDays(t, 45)).find(o => o.card === a.id); if (Math.abs(enc - b) > .004) sub.push("Encours " + fmt(enc)); sub.push(nx ? `Prochain débit le ${dayShort(nx.date)} : ${fmt(-nx.amount)}` : "Aucun débit à venir"); sub.push("sur " + accName(a.linked)); }
   else if (a.type === "pret") { label = "Capital restant dû"; const lp = loanPlan(a); if (lp && isFinite(lp.n)) sub.push(`${lp.n} échéances · fin ${monthShort(ym(lp.end))} ${lp.end.slice(0, 4)}`); }
   else sub.push("Restant " + dayShort(E) + " : " + fmt(eomBal));
   const ser = a.type === "pret" ? null : dailySeries([a.id], addDays(t, -45), E);
