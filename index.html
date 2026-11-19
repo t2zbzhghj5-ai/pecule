@@ -3314,37 +3314,61 @@ function StatementView({id, sid}) {
 
 /* ============ Coller un texte de la banque ============ */
 const MOIS_RE = {janv: 1, jan: 1, fevr: 2, fev: 2, mars: 3, mar: 3, avr: 4, mai: 5, juin: 6, juil: 7, aout: 8, sept: 9, sep: 9, oct: 10, nov: 11, dec: 12};
+/* Lecture d'un texte collé ou écrit (« Monoprix 23,40 € hier », notification de banque…).
+   Montant : 23,40 / 12,5 / 60.25 / 1 234,5 / 25 € ; sans virgule ni €, le dernier nombre (« Ciné 12 »).
+   Libellé : tout le texte autour du montant (« Pain au chocolat »), sans la date ni les formules de la banque. */
+const AMT_STRICT = /([+\-−]?\s?(?:\d{1,3}(?:[  .]\d{3})+|\d+)[,.]\d{1,2}(?!\d))\s?(€|eur\b)?|([+\-−]?\s?(?:\d{1,3}(?:[  ]\d{3})+|\d+))\s?(€|eur\b)/gi;
+function bankBlank(b) {
+  /* dates et numéros de carte remplacés par des espaces (même longueur : les positions restent justes) */
+  const sp = m => " ".repeat(m.length);
+  return b.replace(/\b\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}\b/g, sp).replace(/\b\d{1,2}\/\d{1,2}\b/g, sp)
+    .replace(/(?:carte|cb)\s*(?:n°|no)?\s*[x*.…]*\s*\d{4}\b/gi, sp).replace(/(?:\*{2,}|x{2,}|…|\.{3})\s?\d{4}\b/gi, sp)
+    .replace(/\b\d{1,2}h\d{0,2}\b/gi, sp);
+}
 function parseBankText(text) {
-  const raw = String(text || "").replace(/ | /g, " ").trim();
+  const raw = String(text || "").replace(/ | /g, " ").trim();
   if (!raw) return [];
-  const amtRe = /([+\-−]?\s?(?:\d{1,3}(?:[ .]\d{3})+|\d+)(?:,\d{2}|\.\d{2}))\s?(€|eur\b)?|([+\-−]?\s?\d+)\s?(€|eur\b)/gi;
   const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  const withAmt = lines.filter(l => { amtRe.lastIndex = 0; return amtRe.test(l); });
+  const hasAmt = l => { AMT_STRICT.lastIndex = 0; return AMT_STRICT.test(bankBlank(l)); };
+  const withAmt = lines.filter(hasAmt);
   const blocks = withAmt.length > 1 && withAmt.length === lines.length ? lines : [lines.join(" ")];
   const t = today();
   return blocks.map(b => {
-    const nb = norm(b);
-    amtRe.lastIndex = 0; let m, best = null;
-    while ((m = amtRe.exec(b))) { const str = m[1] || m[3]; const v = parseNum(str); if (isNaN(v)) continue; const score = (m[2] || m[4] ? 2 : 0) + (/[,.]\d{2}$/.test(str) ? 1 : 0); if (!best || score > best.score) best = {v, score, str, idx: m.index, len: m[0].length}; }
-    if (!best) return null;
+    const nb = norm(b), bb = bankBlank(b);
+    AMT_STRICT.lastIndex = 0; let m, best = null;
+    while ((m = AMT_STRICT.exec(bb))) { const str = m[1] || m[3]; const v = parseNum(str); if (isNaN(v)) continue; const score = (m[2] || m[4] ? 2 : 0) + (/[,.]\d{1,2}$/.test(str.trim()) ? 1 : 0); if (!best || score > best.score) best = {v, score, str, idx: m.index, len: m[0].length}; }
+    if (!best) { const re = /[+\-−]?\d+/g; let x; while ((x = re.exec(bb))) best = {v: parseNum(x[0]), score: 0, str: x[0], idx: x.index, len: x[0].length}; }
+    if (!best || isNaN(best.v) || !best.v) return null;
     let amount = Math.abs(best.v);
     const explicitPlus = /^\s*\+/.test(best.str), explicitMinus = /^\s*[-−]/.test(best.str);
     const credit = explicitPlus || (!explicitMinus && /(credit|recu|virement (de|recu)|versement|remboursement|salaire|avoir|depot)/.test(nb) && !/(debit|paiement|achat|prelev|retrait)/.test(nb));
     if (!credit) amount = -amount;
-    let date = null, dm = /(\d{1,2})[\/.-](\d{1,2})(?:[\/.-](\d{2,4}))?/.exec(b);
+    let date = null, dm = /(\d{1,2})[\/.-](\d{1,2})(?:[\/.-](\d{2,4}))?/.exec(b.slice(0, best.idx) + " ".repeat(best.len) + b.slice(best.idx + best.len));
     if (dm && Number(dm[2]) <= 12 && Number(dm[1]) <= 31) { let y = dm[3] ? Number(dm[3]) : Number(t.slice(0, 4)); if (y < 100) y += 2000; date = `${y}-${pad(Number(dm[2]))}-${pad(Number(dm[1]))}`; if (!dm[3] && date > addDays(t, 2)) date = `${y - 1}${date.slice(4)}`; }
     if (!date) { const mm = /(\d{1,2})(?:er)?\s+(janv|jan|fevr|fev|mars|mar|avr|mai|juin|juil|aout|sept|sep|oct|nov|dec)[a-z]*\.?(?:\s+(\d{4}))?/.exec(nb); if (mm) { const y = mm[3] ? Number(mm[3]) : Number(t.slice(0, 4)); date = `${y}-${pad(MOIS_RE[mm[2]])}-${pad(Number(mm[1]))}`; if (!mm[3] && date > addDays(t, 2)) date = `${y - 1}${date.slice(4)}`; } }
-    if (!date) date = /hier/.test(nb) ? addDays(t, -1) : t;
+    if (!date) date = /avant-hier/.test(nb) ? addDays(t, -2) : /hier/.test(nb) ? addDays(t, -1) : t;
     let account = null; const cm = /(?:carte|cb)[^0-9\n]{0,15}?(\d{4})\b/i.exec(b) || /(?:\*{2,}|x{2,}|…|\.{3})\s?(\d{4})\b/i.exec(b);
     if (cm) account = accList().find(a => a.name.includes(cm[1]) || String(a.number || "").endsWith(cm[1]))?.id || null;
+    /* Libellé : le commerçant d'une notification (« chez MONOPRIX »), sinon tout le texte autour du montant */
     let name = "";
-    const nm = /(?:chez|aupres de|a destination de|beneficiaire|de la part de|de|à|a)\s+([A-Z0-9][A-Z0-9 &'.\-*]{2,40})/.exec(b);
+    const nm = /\b(?:chez|aupres de|auprès de|a destination de|à destination de|beneficiaire|bénéficiaire|de la part de|de|à)\s+([A-Z0-9][A-Z0-9 &'.\-*]{2,40})(?![a-zà-ÿ])/.exec(b);
     if (nm) name = nm[1];
-    if (!name) { let rest = (b.slice(0, best.idx) + " " + b.slice(best.idx + best.len)).replace(/(\d{1,2})[\/.-](\d{1,2})([\/.-]\d{2,4})?/g, " ");
-      rest = rest.replace(/\b(paiement|par|carte|cb|achat|debit|débit|credit|crédit|de|du|le|la|les|un|une|des|votre|vous|avez|effectu[ée]+|a été|été|prélèvement|prelevement|virement|reçu|recu|montant|eur|euros?|sur|compte|n°|chez|à|au|aux|le|op[ée]ration|en|attente|ce|jour|hier|aujourd'hui)\b/gi, " ").replace(/[*:€•|]/g, " ").replace(/\s+/g, " ").trim();
-      name = rest.split(" ").slice(0, 5).join(" "); }
+    if (!name) {
+      let rest = bankBlank(b.slice(0, best.idx) + " " + b.slice(best.idx + best.len))
+        .replace(/\b(\d{1,2})(?:er)?\s+(janv|janvier|jan|févr|fevr|février|fevrier|fév|fev|mars|avr|avril|mai|juin|juil|juillet|août|aout|sept|septembre|oct|octobre|nov|novembre|déc|dec|décembre|decembre)\.?(?:\s+\d{4})?/gi, " ")
+        .replace(/\b(avant-hier|hier|aujourd'hui|aujourd’hui)\b/gi, " ")
+        .replace(/\b(paiement|achat|retrait)\s+(?:par\s+)?(?:carte|cb)\b/gi, " ")
+        .replace(/\b(votre|ton)\s+(compte|carte)\s+(a été|est)\s+(débité|debite|débitée|debitee|crédité|credite)e?\b/gi, " ")
+        .replace(/\b(montant|euros?|eur)\b|€|[*:•|]/gi, " ");
+      rest = rest.replace(/\s+/g, " ").trim();
+      /* petits mots laissés seuls au début ou à la fin (« le », « de », « à »…) */
+      const SMALL = /^(?:(?:de|du|des|d'|le|la|les|l'|à|a|au|aux|pour|par|chez|sur|en|le|ce)\s+)+|(?:\s+(?:de|du|des|le|la|les|à|a|au|aux|pour|par|chez|sur|en|ce))+$/i;
+      for (let i = 0; i < 3; i++) rest = rest.replace(SMALL, "").trim();
+      name = rest.slice(0, 60).trim();
+    }
     name = name.replace(/\s+/g, " ").trim().replace(/\s+[+\-−]?\d[\d ,.]*(€|eur)?$/i, "").trim();
-    if (name === name.toUpperCase() && name.length > 3) name = name.charAt(0) + name.slice(1).toLowerCase();
+    if (name === name.toUpperCase() && /[A-Z]/.test(name) && name.length > 3) name = name.charAt(0) + name.slice(1).toLowerCase();
+    if (name) name = name.charAt(0).toUpperCase() + name.slice(1);
     return {date, amount: r2(amount), name: name || "Opération", account, src: b};
   }).filter(Boolean);
 }

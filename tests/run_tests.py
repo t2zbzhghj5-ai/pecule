@@ -35,7 +35,7 @@ import fixture_icompta  # noqa: E402
 
 # ---------------------------------------------------------------- serveur (avec accès de test aux calculs)
 HOOK = ('window.__dbg = {A, S, Store, Hist, NAV, SHEET, occurrences, balance, amtFor, accList, today, budgets, lineAt, cardNext, cardPending, '
-        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf, half50, half50Due, half50Msg, halfBase, healthChecks, hKey, kidsOf, cardNext};\n')
+        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf, parseBankText, half50, half50Due, half50Msg, halfBase, healthChecks, hKey, kidsOf, cardNext};\n')
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -412,6 +412,14 @@ def saisie_texte_et_suggestions(br, url):
         a.wait(350)
     t = a.pg.inner_text(".wiz") + " " + " ".join(a.pg.eval_on_selector_all(".wiz input", "l => l.map(i => i.value)"))
     check("4,20" in t and "Boulangerie" in t and "10 nov" in t, "texte « Boulangerie 4,20 € hier » mal lu : %s" % t.replace("\n", " | ")[:300])
+    # montants à une décimale ou sans virgule, libellés gardés en entier
+    cases = [("Courses Carrefour 12,5 €", "Courses Carrefour", -12.5), ("Boulangerie 3,5", "Boulangerie", -3.5), ("Ciné 12", "Ciné", -12),
+             ("Pain au chocolat 2,40", "Pain au chocolat", -2.4), ("Cadeau de Noël pour Louis 35,90", "Cadeau de Noël pour Louis", -35.9),
+             ("Pharmacie de la gare 8,9", "Pharmacie de la gare", -8.9), ("Apéro chez Paul 1 234,5", "Apéro chez Paul", -1234.5),
+             ("Remboursement mutuelle 18,7", "Remboursement mutuelle", 18.7), ("Paiement CB 4532 de 18,30 € le 10/11 chez FNAC", "Fnac", -18.3)]
+    for txt, nm, v in cases:
+        r = a.js("return D.parseBankText(arg).map(x => [x.name, x.amount]);", txt)
+        check(len(r) == 1 and r[0][0] == nm and near(r[0][1], v), "« %s » lu %s (attendu %s, %s)" % (txt, r, nm, v))
     a.pg.keyboard.press("Escape")
     a.js("try { D.SHEET.close && D.SHEET.close(); } catch (e) {}")
     a.wait(300)
