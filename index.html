@@ -381,6 +381,17 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .rblock .rb-pill{margin-top:12px;min-height:34px;border-radius:17px;border:0;background:var(--track);color:inherit;font-size:14px;font-weight:600;padding:0 12px;display:inline-flex;align-items:center;gap:6px}
 .card.flat{background:none;border-radius:0;overflow:visible}
 .card.flat>.row{border-top:0;padding-left:4px;padding-right:4px}
+.updb{display:flex;align-items:center;gap:10px;background:var(--p-mint);border-radius:22px;padding:10px 4px 10px 12px;margin-bottom:12px}
+.updb-ic{width:38px;height:38px;border-radius:13px;background:var(--track);color:var(--pi-mint);display:grid;place-items:center;flex:none}
+.updb .t1{font-size:15px;font-weight:600;white-space:nowrap}
+.updb .t2{font-size:12.5px;color:var(--pi-mint)}
+.updb-go,.updr{height:36px;border-radius:18px;border:0;background:var(--accent);color:var(--onacc);font:inherit;font-size:14px;font-weight:600;padding:0 14px;flex:none;white-space:nowrap}
+.updb-x{width:36px;height:44px;border:0;background:none;color:var(--pi-mint);display:grid;place-items:center;flex:none}
+.updr{background:var(--surface);color:var(--ink)}
+.updr.on{background:var(--accent);color:var(--onacc)}
+.news-ic{width:52px;height:52px;border-radius:18px;background:var(--p-mint);color:var(--pi-mint);display:grid;place-items:center}
+.news li{display:flex;gap:10px;align-items:flex-start;font-size:15px;line-height:1.45}
+.news li::before{content:"";width:8px;height:8px;border-radius:4px;background:var(--pi-mint);margin-top:8px;flex:none}
 .prow{border:0;border-radius:20px;background:var(--pb);color:var(--ink);min-height:64px;padding:12px 16px}
 .prow .t2{color:var(--pi)}
 .prow svg{color:var(--pi)}
@@ -1126,6 +1137,12 @@ function calc(str) {
 
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
+/* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
+const APP_VERSION = 54;
+/* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
+const NEWS = {
+  54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
+};
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));
 const Store = {
@@ -1738,6 +1755,7 @@ const I = {
   x: "M6 6l12 12M18 6 6 18",
   trash: "M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13",
   edit: "M4 20h4L19 9l-4-4L4 16zM14 6l4 4",
+  refresh: "M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6",
   swap: "M7 7h13l-4-4M17 17H4l4 4",
   more: "M5 12h.01M12 12h.01M19 12h.01",
   repeat: "M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3",
@@ -2097,6 +2115,65 @@ function Half50Sheet({k, close}) {
     <button class="btn pri" onClick=${copy}><${Ic} n="copy" s=${18} />Copier le message</button>
     <button class="btn" onClick=${sent}><${Ic} n="check" s=${18} />C'est envoyé</button>
     <div class="help" style="text-align:center">Le bandeau reste sur l'accueil jusqu'à « C'est envoyé ».</div>
+  </${Sheet}>`;
+}
+/* ============ Mise à jour de l'app ============
+   La version en ligne se lit dans sw.js (CACHE = "pecule-vNN"). Vérifiée au lancement, au retour dans l'app
+   (au plus toutes les 10 minutes) et à la demande dans Réglages. Mettre à jour = recharger : les données restent sur l'appareil. */
+const UPD = {online: null, checking: false, busy: false, hide: false, at: 0, ls: new Set()};
+const updEmit = () => UPD.ls.forEach(f => f(x => x + 1));
+function useUpd() { const [, f] = useState(0); useEffect(() => { UPD.ls.add(f); return () => UPD.ls.delete(f); }, []); }
+async function updCheck(manual) {
+  if (UPD.checking) return; UPD.checking = true; updEmit();
+  let v = null;
+  try { const r = await fetch("./sw.js?check=" + Date.now(), {cache: "no-store"}); if (r.ok) v = Number((/pecule-v(\d+)/.exec(await r.text()) || [])[1]) || null; } catch {}
+  UPD.checking = false; UPD.at = Date.now(); if (v) UPD.online = v; updEmit();
+  if (manual && !(v > APP_VERSION)) toast(v == null ? "Pas de connexion : vérification impossible" : "Pécule est à jour (version " + APP_VERSION + ")");
+}
+function updAuto() { if (navigator.onLine === false || Date.now() - UPD.at < 10 * 60e3) return; updCheck(false); }
+async function applyUpdate() {
+  if (UPD.busy) return; UPD.busy = true; updEmit();
+  try { const reg = await navigator.serviceWorker?.getRegistration?.(); if (reg) await Promise.race([reg.update(), new Promise(r => setTimeout(r, 4000))]); } catch {}
+  location.reload();
+}
+setTimeout(updAuto, 2500);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") updAuto(); });
+function UpdBanner() {
+  useUpd();
+  if (!(UPD.online > APP_VERSION) || UPD.hide) return null;
+  return html`<div class="updb" role="status">
+    <span class="updb-ic"><${Ic} n="refresh" s=${19} w=${2} /></span>
+    <span class="grow" style="min-width:0"><div class="t1">Nouvelle version</div><div class="t2">Données intactes</div></span>
+    <button class="updb-go" onClick=${applyUpdate} disabled=${UPD.busy}>${UPD.busy ? "Mise à jour…" : "Mettre à jour"}</button>
+    <button class="updb-x" aria-label="Plus tard" onClick=${() => { UPD.hide = true; updEmit(); }}><${Ic} n="x" s=${16} w=${2.2} /></button>
+  </div>`;
+}
+function UpdRow() {
+  useUpd();
+  const nw = UPD.online > APP_VERSION;
+  const sub = UPD.checking ? "Recherche…" : nw ? "Version " + UPD.online + " disponible" : "Version " + APP_VERSION + (UPD.online != null ? ", à jour" : "");
+  return html`<div class="row upd-row" style="min-height:64px"><span class="ic sm" style="background:var(--surface2);color:var(--accent)"><${Ic} n="refresh" s=${18} /></span>
+    <span class="grow"><div class="t1">Mise à jour</div><div class="t2" style=${nw ? "color:var(--pos);font-weight:600" : ""}>${sub}</div></span>
+    <button class=${"updr" + (nw ? " on" : "")} disabled=${UPD.checking || UPD.busy} onClick=${() => nw ? applyUpdate() : updCheck(true)}>${UPD.busy ? "Mise à jour…" : nw ? "Mettre à jour" : "Rechercher"}</button></div>`;
+}
+/* Après une mise à jour : une fois, ce qui a changé. Le numéro vu est gardé à part des données (une restauration n'y touche pas). */
+const VER_KEY = "pecule-ver"; let NEWS_DONE = false;
+function newsBoot(hasData) {
+  let seen; try { seen = Number(localStorage.getItem(VER_KEY)) || 0; } catch { return; }
+  if (!seen) seen = hasData ? 53 : APP_VERSION; /* 53 : dernière version sans cette fenêtre */
+  const notes = Object.keys(NEWS).map(Number).filter(v => v > seen && v <= APP_VERSION).sort((a, b) => a - b).flatMap(v => NEWS[v]);
+  try { localStorage.setItem(VER_KEY, String(APP_VERSION)); } catch {}
+  if (notes.length) setTimeout(() => SHEET.open({type: "news", notes}), 500);
+}
+function NewsSheet({notes, close}) {
+  return html`<${Sheet} title="Pécule est à jour" close=${close} left=${null}>
+    <div class="news" style="display:flex;flex-direction:column;gap:6px;padding:4px 4px 0">
+      <span class="news-ic"><${Ic} n="check" s=${26} w=${2.4} /></span>
+      <div class="muted" style="font-size:15px;margin-top:10px">Version ${APP_VERSION}</div>
+      <div class="mhead" style="padding:14px 0 4px;background:none">Nouveautés</div>
+      <ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px">${notes.map(t => html`<li>${t}</li>`)}</ul>
+      <button class="btn pri" style="margin-top:22px;width:100%" onClick=${close}>OK</button>
+    </div>
   </${Sheet}>`;
 }
 function DataNudge() {
@@ -2810,7 +2887,7 @@ function Accounts() {
   return html`
     <header class="top" style="align-items:center;gap:8px"><span style="display:flex;align-items:center;gap:6px;min-width:0;flex:1"><${AccPill} /></span><span class="muted" style="font-size:13px;font-weight:500;white-space:nowrap">${(d => d.charAt(0).toUpperCase() + d.slice(1))(P(today()).toLocaleDateString("fr-FR", {weekday: "short", day: "numeric", month: "short"}))}</span><button class="hbtn" style="width:40px;height:40px;font-size:18px;font-weight:700;flex:none" aria-label="Guide de Pécule" onClick=${() => NAV.push({v: "guide"})}>?</button></header>
     <main class="scr wide dash" style="gap:20px">
-      <div class="dash-full"><${BackupNudge} /><${DataNudge} /><${Half50Banner} /></div>
+      <div class="dash-full"><${UpdBanner} /><${BackupNudge} /><${DataNudge} /><${Half50Banner} /></div>
       <div class="dash-l"><${Glance} />
       ${main && html`<${GlanceBudgets} />`}</div>
       <div class="dash-r">${main && html`<${DashOps} id=${main} key=${main} />`}
@@ -4823,6 +4900,8 @@ function Settings() {
       <${Item} icon="import" label="Importer" sub="iCompta, CSV, OFX, QIF" go=${() => SHEET.open({type: "menu", title: "Importer", items: "import"})} />
       <${Item} icon="undo" label="Annuler une modification" sub=${hist} go=${() => NAV.push({v: "hist"})} />
     </div>
+    ${H("Application")}
+    <div class="card"><${UpdRow} /></div>
     <div class="set-foot">
       <button class="link" onClick=${() => NAV.push({v: "prefs"})}><${Ic} n="gear" s=${17} />Préférences</button>
       <button class="link" onClick=${() => NAV.push({v: "guide"})}><${Ic} n="info" s=${17} />Guide</button>
@@ -5476,6 +5555,7 @@ function SheetHost({s, close}) {
     case "line": return html`<${LineSheet} ...${p} />`;
     case "amt": return html`<${AmtSheet} ...${p} />`;
     case "menu": return html`<${MenuSheet} ...${p} />`;
+    case "news": return html`<${NewsSheet} ...${p} />`;
     case "half50": return html`<${Half50Sheet} ...${p} />`;
     case "bdgLines": return html`<${BdgLines} ...${p} />`;
     case "lineDates": return html`<${LineDates} ...${p} />`;
@@ -5568,6 +5648,7 @@ function App() {
   SHEET.open = s => setSheets(x => [...x, {...s, key: uid("sh")}]);
   SHEET.close = () => setSheets(x => x.slice(0, -1));
   const hasSet = !!A().set.set_main;
+  if (!NEWS_DONE && (hasSet || Store.ready)) { NEWS_DONE = true; newsBoot(hasSet); }
   { const th = S().theme; const el = document.documentElement; if (th === "light" || th === "dark") { if (el.dataset.theme !== th) el.dataset.theme = th; } else if (el.dataset.theme) delete el.dataset.theme; }
   if (Store.mode === "error") return html`<div class="ob"><h1>Pécule</h1><p class="lead">Impossible d'accéder à tes données pour le moment. Recharge la page dans un instant.</p></div>`;
   if (!hasSet && !Store.ready) return html`<div class="ob" style="align-items:center;text-align:center;padding-top:30vh"><h1>Pécule</h1><p class="lead">${Store.mode === "slow" ? "Tes données mettent du temps à arriver… vérifie ta connexion." : "Chargement de tes comptes…"}</p></div>`;

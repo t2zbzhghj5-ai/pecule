@@ -35,7 +35,7 @@ import fixture_icompta  # noqa: E402
 
 # ---------------------------------------------------------------- serveur (avec accès de test aux calculs)
 HOOK = ('window.__dbg = {A, S, Store, Hist, NAV, SHEET, occurrences, balance, amtFor, accList, today, budgets, lineAt, cardNext, cardPending, '
-        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf, parseBankText, half50, half50Due, half50Msg, halfBase, healthChecks, hKey, kidsOf, cardNext, runBal, addDays};\n')
+        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf, parseBankText, half50, half50Due, half50Msg, halfBase, healthChecks, hKey, kidsOf, cardNext, runBal, addDays, updCheck, UPD, APP_VERSION};\n')
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -1467,6 +1467,48 @@ def accueil_debit_cartes(br, url):
     a.pick(liv)
     check(pg.locator("button.ktile").count() == 0 and "Solde validé" in pg.inner_text("main section"), "compte sans carte (%s)" % liv)
     a.no_errors("accueil, une tuile par carte")
+    a.close()
+
+
+@test
+def mise_a_jour(br, url):
+    """Mise à jour : numéro identique dans l'app et sw.js ; « Rechercher » quand tout est à jour ; bandeau sur l'accueil et ligne des Réglages quand une version plus récente est en ligne ; « Mettre à jour » recharge l'app ; fenêtre « Nouveautés » une seule fois."""
+    import re as _re
+    sw = open(os.path.join(ROOT, "sw.js")).read()
+    a = App(br, url)
+    pg = a.pg
+    ver = a.js("return D.APP_VERSION;")
+    check(("pecule-v%d" % ver) in sw, "APP_VERSION %s différent de sw.js" % ver)
+    a.import_ic(FICTIF)
+    a.pick("Joint")
+    a.wait(2600)
+    check(pg.locator(".updb").count() == 0, "bandeau affiché sans nouvelle version")
+    a.js("D.NAV.push({v: 'settings'})"); a.wait(500)
+    check("Version %d" % ver in pg.locator(".upd-row").inner_text(), "ligne Mise à jour : %r" % pg.locator(".upd-row").inner_text())
+    pg.locator(".upd-row .updr").click(); a.wait(800)
+    check("Pécule est à jour (version %d)" % ver in a.body(), "pas de confirmation « à jour »")
+    pg.route(_re.compile(r".*/sw\.js\?check=.*"), lambda r: r.fulfill(status=200, content_type="text/javascript", body='const CACHE = "pecule-v999";'))
+    a.js("return D.updCheck(false);"); a.wait(500)
+    t = pg.locator(".upd-row").inner_text()
+    check("Version 999 disponible" in t and "Mettre à jour" in t, "nouvelle version dans Réglages : %r" % t)
+    a.js("D.NAV.tab('comptes')"); a.wait(500)
+    check(pg.locator("main .updb").count() == 1 and "Mettre à jour" in pg.locator("main .updb").inner_text(), "bandeau absent")
+    check(pg.locator("main .updb").bounding_box()["y"] < pg.locator("main .rblock").bounding_box()["y"], "bandeau pas au-dessus du restant")
+    pg.locator('.updb-x').click(); a.wait(300)
+    check(pg.locator("main .updb").count() == 0, "« Plus tard » ne cache pas le bandeau")
+    a.js("window.__avant = 1; D.UPD.hide = false; D.NAV.push({v: 'settings'})"); a.wait(400)
+    pg.locator(".upd-row .updr").click(); a.wait(2500)
+    check(a.js("return window.__avant === undefined;"), "« Mettre à jour » n'a pas rechargé l'app")
+    pg.unroute(_re.compile(r".*/sw\.js\?check=.*"))
+    check(pg.locator(".sheet").count() == 0, "fenêtre ouverte après le rechargement sans changement de version")
+    a.js("localStorage.setItem('pecule-ver', String(arg - 1));", ver)
+    pg.reload(); a.wait(1800)
+    check(pg.locator('.sheet[aria-label="Pécule est à jour"]').count() == 1 and "Nouveautés" in a.body(), "fenêtre Nouveautés absente")
+    pg.locator('.sheet .btn.pri', has_text="OK").click(); a.wait(400)
+    check(pg.locator(".sheet").count() == 0, "OK ne ferme pas les nouveautés")
+    pg.reload(); a.wait(1800)
+    check(pg.locator(".sheet").count() == 0, "nouveautés montrées deux fois")
+    a.no_errors("mise à jour")
     a.close()
 
 
