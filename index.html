@@ -2677,7 +2677,6 @@ function Glance() {
         <div class="tile"><div class="l">Solde validé</div><div class="v">${fmt(-val)}</div></div>
         <div class="tile"><div class="l">${"À valider" + (pend.n ? " · " + pend.n + (pend.n > 1 ? " opérations" : " opération") : "")}</div><div class="v">${fmt(pend.amt)}</div></div>
       </div></section>`; }
-  const left = Math.max(0, daysBetween(t, g.pe)), pct = Math.min(100, Math.max(0, Math.round((daysBetween(g.ps, t) + 1) / (daysBetween(g.ps, g.pe) + 1) * 100)));
   /* Débit différé des cartes du compte (maquette F) : à la place de l'ancienne « Prochaine rentrée » */
   const cards = kidsOf(accList(), id).filter(c => c.type === "carte");
   /* Maquette K : une tuile par carte, à côté du solde validé, avec le nom exact de la carte */
@@ -2685,10 +2684,6 @@ function Glance() {
     <div style="font-size:14px;color:var(--muted);font-weight:500">Tu peux encore dépenser</div>
     <div style="display:flex;align-items:center;justify-content:center;gap:8px"><span style="font-family:var(--display);font-size:52px;font-weight:700;letter-spacing:-0.03em;line-height:1.1;margin-top:4px;color:${g.eomB < 0 ? "var(--low)" : "var(--ink)"}">${fmt(g.eomB)}</span></div>
     <button onClick=${() => SHEET.open({type: "reset", id})} aria-label=${"Restant calculé jusqu'au " + dayShort(g.pe) + ", toucher pour changer la date"} style="border:0;background:none;padding:4px 8px;font-size:14px;color:var(--muted)">jusqu'au ${dayShort(g.pe)}</button>
-    <div style="margin:14px 24px 0;display:flex;align-items:center;gap:8px"><div style="flex:1">
-      <div style="height:6px;border-radius:3px;background:color-mix(in srgb,var(--ink) 8%,transparent);overflow:hidden"><div style=${`height:6px;border-radius:3px;background:var(--accent);width:${pct}%`}></div></div>
-      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:6px"><span>Aujourd'hui</span><span>${left === 0 ? "Dernier jour" : left + (left > 1 ? " jours restants" : " jour restant")}</span></div>
-    </div></div>
     <div class=${"ktiles" + (cards.length > 2 ? " many" : "")} style=${cards.length && cards.length <= 2 ? "grid-template-columns:1.15fr" + " 1fr".repeat(cards.length) : ""}>
       <div class="tile ktile"><div class="l">Solde validé</div><div class="v" style=${g.b < 0 ? "color:var(--neg)" : ""}>${fmt(g.b)}</div><div class="s">à la banque</div></div>
       ${cards.map(c => { const n = cardNext(c);
