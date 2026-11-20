@@ -35,7 +35,7 @@ import fixture_icompta  # noqa: E402
 
 # ---------------------------------------------------------------- serveur (avec accès de test aux calculs)
 HOOK = ('window.__dbg = {A, S, Store, Hist, NAV, SHEET, occurrences, balance, amtFor, accList, today, budgets, lineAt, cardNext, cardPending, '
-        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf, parseBankText, half50, half50Due, half50Msg, halfBase, healthChecks, hKey, kidsOf, cardNext, runBal, addDays, updCheck, UPD, APP_VERSION};\n')
+        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf, parseBankText, half50, half50Due, half50Msg, halfBase, healthChecks, hKey, kidsOf, cardNext, runBal, addDays, updCheck, UPD, APP_VERSION, prItems, nextPending};\n')
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -896,7 +896,7 @@ def sauvegarde_aller_retour(br, url):
 
 @test
 def saisie_echeance(br, url):
-    """Bouton + › Échéance : dépense de 15 € le 12 de chaque mois, catégorie Divers."""
+    """Bouton + › Échéance : dépense de 15 €, catégorie Divers, à partir du 12 nov. (date choisie) jusqu'au 12 janv. 2027 (fin facultative, refusée si avant le début)."""
     a = App(br, url)
     a.import_ic(FICTIF)
     n0 = a.js("return Object.keys(D.A().sch).length;")
@@ -912,8 +912,21 @@ def saisie_echeance(br, url):
     a.wait(300)
     a.pg.locator('.wiz .wbig:has-text("Divers")').first.click()
     a.wait(300)
-    a.pg.locator('.wiz .wbig:text-is("12")').first.click()
+    # étape « Quand commence-t-elle ? » : date de début au choix, date de fin facultative
+    check("Quand commence-t-elle" in a.pg.locator(".wiz").inner_text(), "étape de la date de début absente")
+    a.pg.fill('[aria-label="Date de la première échéance"]', "2026-11-12")
+    a.wait(200)
+    a.pg.locator('.wiz [role=switch]:has-text("Avec une date de fin")').click()
+    a.wait(200)
+    a.pg.fill('[aria-label="Date de la dernière échéance"]', "2026-10-01")
+    a.wait(200)
+    check(a.pg.locator(".wgo").is_disabled() and "avant la première" in a.pg.locator(".wiz").inner_text(), "fin avant le début acceptée")
+    a.pg.fill('[aria-label="Date de la dernière échéance"]', "2027-01-12")
+    a.wait(200)
+    a.pg.click(".wgo")
     a.wait(300)
+    rec = a.pg.locator(".wiz").inner_text()
+    check("Dès le 12 nov." in rec and "12 janv. 2027" in rec, "récapitulatif : %r" % rec[-200:])
     for _ in range(3):
         if a.pg.locator('.wgo:has-text("Enregistrer")').count():
             break
@@ -927,6 +940,8 @@ def saisie_echeance(br, url):
     check(a.js("return D.A().cat[arg]?.name;", s["splits"][0].get("cat")) == "Divers", "catégorie de l'échéance")
     occ = a.js("return D.occurrences('2027-01-31').filter(o => o.name === arg).map(o => o.date);", s["name"])
     check(occ[:3] == ["2026-11-12", "2026-12-12", "2027-01-12"], "occurrences : %s" % occ)
+    occ = a.js("return D.occurrences('2027-12-31').filter(o => o.name === arg).map(o => o.date);", s["name"])
+    check(occ == ["2026-11-12", "2026-12-12", "2027-01-12"] and s.get("end") == "2027-01-12" and s.get("start") == "2026-11-12", "fin non respectée : %s (fin %s)" % (occ, s.get("end")))
     a.no_errors("échéance")
     a.close()
 
@@ -1467,6 +1482,41 @@ def accueil_debit_cartes(br, url):
     a.pick(liv)
     check(pg.locator("button.ktile").count() == 0 and "Solde validé" in pg.inner_text("main section"), "compte sans carte (%s)" % liv)
     a.no_errors("accueil, une tuile par carte")
+    a.close()
+
+
+@test
+def echeance_date_de_fin(br, url):
+    """Date de fin d'une échéance : plus aucune occurrence après (prévisions, prochaine date, terminée) ; visible dans l'échéancier ; au prorata, une échéance ne compte ni avant son début ni après sa fin."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    j, cour = a.acc_id("Joint"), a.acc_id("Courant")
+    a.js("""D.Store.put({k: 'sch', id: 'sch_t_fin', account: arg, name: 'Cours de piano', amount: -50, splits: [{amount: -50, cat: null}], freq: {n: 1, u: 'm'}, next: '2026-12-05', anchor: 5, start: '2026-12-05', end: '2027-02-05', left: null, auto: false, paused: false, skips: [], pay: 'prelevement'});""", cour)
+    a.wait(300)
+    occ = a.js("return D.occurrences('2027-12-31').filter(o => o.name === 'Cours de piano').map(o => o.date);")
+    check(occ == ["2026-12-05", "2027-01-05", "2027-02-05"], "occurrences après la fin : %s" % occ)
+    a.js("D.Store.put({...D.A().sch.sch_t_fin, next: '2027-03-05'});"); a.wait(200)
+    check(a.js("return D.nextPending(D.A().sch.sch_t_fin);") is None, "prochaine date après la fin")
+    a.js("D.Store.put({...D.A().sch.sch_t_fin, next: '2026-12-05'});"); a.wait(200)
+    a.js("D.NAV.tab('echeancier')"); a.wait(400)
+    a.pick("Courant")
+    row = pg.locator("main button.row", has_text="Cours de piano").first
+    check(row.count() == 1 and "jusqu'au 5 févr. 2027" in row.inner_text(), "fin absente de la ligne : %r" % (row.inner_text() if row.count() else None))
+    row.click(); a.wait(400)
+    check("Jusqu'au 5 févr. 2027" in pg.locator(".sheet").inner_text(), "fin absente de la fiche")
+    a.js("D.SHEET.close()"); a.wait(200)
+    # prorata : échéance du joint de janvier à mars 2027
+    a.js("D.NAV.push({v: 'joint'});"); a.wait(400)
+    pg.click('main button:has-text("Configurer")'); a.wait(400)
+    sh = pg.locator(".sheet")
+    sh.locator("#pr-f").select_option(cour); sh.locator("#pr-n").fill("Claire"); sh.locator("#pr-m").fill("3000"); sh.locator("#pr-p").fill("2000")
+    sh.locator('button:has-text("Enregistrer")').last.click(); a.wait(500)
+    a.js("""D.Store.put({k: 'sch', id: 'sch_t_pr', account: arg, name: 'Travaux', amount: -300, splits: [{amount: -300, cat: null}], freq: {n: 1, u: 'm'}, next: '2027-01-10', anchor: 10, start: '2027-01-10', end: '2027-03-10', left: null, auto: false, paused: false, skips: [], prorata: true, pay: 'prelevement'});""", j)
+    a.wait(300)
+    has = lambda k: a.js("return D.prItems(arg).some(x => x.id === 'sch_t_pr');", k)
+    check(not has("2026-12") and has("2027-01") and has("2027-03") and not has("2027-04"), "prorata hors période : déc %s janv %s mars %s avr %s" % (has("2026-12"), has("2027-01"), has("2027-03"), has("2027-04")))
+    a.no_errors("date de fin")
     a.close()
 
 

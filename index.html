@@ -592,13 +592,13 @@ const WZ_T = {
   dep: ["Dépense", "Un achat, une facture", "M12 5v14M5 12h14", "#0F172A", ["amount", "cat", "when", "recap"]],
   rev: ["Revenu", "Salaire, remboursement", "M12 19V5M5 12l7-7 7 7", "#0E9F6E", ["amount", "cat", "when", "recap"]],
   vir: ["Virement", "Entre tes comptes", "M7 7h13l-4-4M17 17H4l4 4", "#0891B2", ["amount", "dest", "when", "recap"]],
-  ech: ["Échéance", "Qui revient chaque mois", "M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3", "#7C3AED", ["sens", "amount", "cat", "day", "recap"]],
+  ech: ["Échéance", "Qui revient chaque mois", "M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3", "#7C3AED", ["sens", "amount", "cat", "start", "recap"]],
   bud: ["Budget", "Une enveloppe par mois", "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", "#E8604C", null],
   acc: ["Compte", "Banque, livret, carte", "M3 7h18v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zM3 7l2-3h14l2 3M16 13h2", "#F59E0B", null]
 };
 function QuickSheet({acc, close}) {
   const a0 = acc || mainAcc() || accList()[0]?.id, t = today();
-  const [w, setW] = useState({type: null, step: 0, amt: "", cat: null, to: null, when: 0, date: t, rep: false, day: Number(t.slice(8)), sens: "dep", account: a0, name: "", freq: "m1"});
+  const [w, setW] = useState({type: null, step: 0, amt: "", cat: null, to: null, when: 0, date: t, rep: false, start: t, sw: 0, hasEnd: false, end: "", sens: "dep", account: a0, name: "", freq: "m1"});
   const up = p => setW(x => ({...x, ...p}));
   const [txt, setTxt] = useState(""), [perr, setPerr] = useState(null);
   /* Saisie par texte : notification, SMS ou phrase tapée, lue sur l'appareil (aucun envoi) */
@@ -641,9 +641,9 @@ function QuickSheet({acc, close}) {
   const save = async () => {
     const d = {account: w.account, name: (w.name || "").trim() || autoName(), amount: n, income: inc, tr: isTr, to: isTr ? w.to : null, cat: isTr ? null : w.cat, pay: isTr ? "virement" : inc ? "virement" : w.type === "ech" ? "prelevement" : "cb"};
     if (w.type === "ech") {
-      const md = ym(t) + "-" + String(Math.min(w.day, Number(eom(ym(t)).slice(8)))).padStart(2, "0");
-      let nx = md; if (nx < t) { const k = ymAdd(ym(t), 1); nx = k + "-" + String(Math.min(w.day, Number(eom(k).slice(8)))).padStart(2, "0"); }
-      await Store.bulk(saveItem("sch", {...d, date: nx, freq: FREQ[w.freq], next: nx}).map(([o, x]) => [o, {...x, anchor: w.day}]));
+      /* 1re échéance à la date choisie, puis le même jour au rythme choisi ; fin facultative */
+      const nx = w.start || t;
+      await Store.bulk(saveItem("sch", {...d, date: nx, freq: FREQ[w.freq], next: nx}).map(([o, x]) => [o, {...x, anchor: Number(nx.slice(8)), start: nx, end: w.hasEnd && w.end ? w.end : null}]));
       close(); toast("Échéance ajoutée, 1re le " + dayShort(nx)); return;
     }
     if (w.rep) { await Store.bulk(saveItem("sch", {...d, date, freq: {n: 1, u: "m"}, next: date})); close(); toast(date > t ? "Ajoutée à l'échéancier, 1re le " + dayShort(date) : "Ajoutée à l'échéancier, à valider dès aujourd'hui"); return; }
@@ -651,12 +651,14 @@ function QuickSheet({acc, close}) {
     if (!isTr && !w.cat) tx = applyRules(tx, {isNew: true});
     Store.put(tx); close(); toast(label + (w.type === "dep" ? " enregistrée" : " enregistré"));
   };
-  const Q = {pick: ["Nouveau", "Que veux-tu ajouter ?"], sens: ["Échéance", "Qu'est-ce qui revient ?"], amount: [label, w.type === "ech" ? "Combien à chaque fois ?" : "Combien ?"], cat: [label, inc ? "D'où vient cet argent ?" : "Pour quoi ?"], dest: ["Virement", "Vers quel compte ?"], when: [label, "Quand ?"], day: ["Échéance", "Quel jour du mois ?"], recap: ["Dernière étape", "On vérifie ?"]}[kind];
+  const Q = {pick: ["Nouveau", "Que veux-tu ajouter ?"], sens: ["Échéance", "Qu'est-ce qui revient ?"], amount: [label, w.type === "ech" ? "Combien à chaque fois ?" : "Combien ?"], cat: [label, inc ? "D'où vient cet argent ?" : "Pour quoi ?"], dest: ["Virement", "Vers quel compte ?"], when: [label, "Quand ?"], start: ["Échéance", "Quand commence-t-elle ?"], recap: ["Dernière étape", "On vérifie ?"]}[kind];
   const icon = d => html`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d=${d} /></svg>`;
   const sign = isTr ? "" : inc ? "+" : "−";
   const recap = w.type ? [["Type", w.type === "ech" ? "Échéance · " + {dep: "dépense", rev: "revenu", vir: "virement"}[w.sens] : label], ["Montant", sign + fmt(n)],
     isTr ? ["Vers", w.to ? accName(w.to) : "—"] : ["Catégorie", w.cat ? catName(w.cat) : "Sans catégorie"],
-    ["Quand", w.type === "ech" ? "Le " + (w.day === 1 ? "1er" : w.day) + " · " + {m1: "chaque mois", m2: "tous les 2 mois", m3: "tous les 3 mois", y1: "chaque année", w1: "chaque semaine"}[w.freq] : dayLabel(date) + (w.rep ? ", puis chaque mois" : "")]] : [];
+    ["Quand", w.type === "ech" ? "Dès le " + dayY(w.start) + ", puis " + {m1: "chaque mois", m2: "tous les 2 mois", m3: "tous les 3 mois", y1: "chaque année", w1: "chaque semaine"}[w.freq] : dayLabel(date) + (w.rep ? ", puis chaque mois" : "")],
+    ...(w.type === "ech" ? [["Fin", w.hasEnd && w.end ? "Le " + dayY(w.end) : "Jamais"]] : [])] : [];
+  const startD = [t, addDays(t, 1), ymAdd(ym(t), 1) + "-01"], endErr = w.hasEnd && !!w.end && w.end < w.start;
   return html`<div class="wiz" role="dialog" aria-modal="true" aria-label=${kind === "pick" ? "Ajouter" : label}><div class="wiz-in">
     <div style="display:flex;align-items:center;justify-content:space-between">
       <button class="ibtn" style="border-radius:20px;box-shadow:none;background:var(--bg)" aria-label=${kind === "pick" ? "Fermer" : "Étape précédente"} onClick=${back}>${icon(kind === "pick" ? "M18 6L6 18M6 6l12 12" : "M15 18l-6-6 6-6")}</button>
@@ -689,8 +691,14 @@ function QuickSheet({acc, close}) {
       <label class=${"wbig" + (w.when === 3 ? " on" : "")} style="cursor:pointer"><span class="grow">Autre date</span><input type="date" aria-label="Autre date" value=${w.date} onInput=${e => e.target.value && up({date: e.target.value, when: 3})} style="width:auto;min-height:36px;font-size:15px" /></label>
       <button class="wbig" role="switch" aria-checked=${w.rep} onClick=${() => up({rep: !w.rep})}><span class="grow"><span style="display:block">Répéter chaque mois</span><span style="display:block;font-size:12px;font-weight:500;color:var(--muted)">Elle ira dans l'échéancier</span></span><span class=${"wsw" + (w.rep ? " on" : "")}><i></i></span></button></div>
       <div style="flex:1"></div><button class="wgo" onClick=${next}>Continuer</button>`}
-    ${kind === "day" && html`<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px">${Array.from({length: 31}, (x, i) => i + 1).map(d => html`<button class="wbig" style=${"min-height:44px;padding:0;justify-content:center;" + (w.day === d ? "background:var(--accent);color:var(--surface);border-color:var(--accent)" : "")} onClick=${() => up({day: d, step: w.step + 1})}>${d}</button>`)}</div>
-      <div class="help">Le 29, 30 ou 31 : Pécule prend le dernier jour des mois plus courts.</div>`}
+    ${kind === "start" && html`<div style="display:flex;flex-direction:column;gap:10px">
+      ${[["Aujourd'hui", startD[0]], ["Demain", startD[1]], ["Le 1er du mois prochain", startD[2]]].map(([l, d], i) => html`<button class=${"wbig" + (w.sw === i ? " on" : "")} aria-pressed=${w.sw === i} onClick=${() => up({sw: i, start: d})}><span class="grow">${l} · ${P(d).toLocaleDateString("fr-FR", {weekday: "short", day: "numeric", month: "short"})}</span>${w.sw === i ? "✓" : ""}</button>`)}
+      <label class=${"wbig" + (w.sw === 3 ? " on" : "")} style="cursor:pointer"><span class="grow">Autre date</span><input type="date" aria-label="Date de la première échéance" value=${w.start} onInput=${e => e.target.value && up({start: e.target.value, sw: 3})} style="width:auto;min-height:36px;font-size:15px" /></label>
+      <button class="wbig" role="switch" aria-checked=${w.hasEnd} onClick=${() => up({hasEnd: !w.hasEnd, end: w.end || addMonths(w.start, 11, Number(w.start.slice(8)))})}><span class="grow"><span style="display:block">Avec une date de fin</span><span style="display:block;font-size:12px;font-weight:500;color:var(--muted)">Sinon, elle revient sans limite</span></span><span class=${"wsw" + (w.hasEnd ? " on" : "")}><i></i></span></button>
+      ${w.hasEnd && html`<label class="wbig" style="cursor:pointer"><span class="grow">Dernière fois le</span><input type="date" aria-label="Date de la dernière échéance" min=${w.start} value=${w.end} onInput=${e => up({end: e.target.value})} style="width:auto;min-height:36px;font-size:15px" /></label>`}
+      ${endErr && html`<div style="font-size:13px;color:var(--neg)" role="alert">La date de fin est avant la première échéance.</div>`}</div>
+      <div class="help">Elle revient ensuite le même jour, au rythme choisi à la dernière étape (chaque mois par défaut).</div>
+      <div style="flex:1"></div><button class="wgo" disabled=${endErr} onClick=${next}>Continuer</button>`}
     ${kind === "recap" && html`<div class="card" style="padding:4px 18px;background:var(--bg);box-shadow:none">
         ${recap.map(([k, v]) => html`<div style="display:flex;justify-content:space-between;gap:10px;padding:13px 0;border-bottom:1px solid var(--line);font-size:15px"><span class="muted">${k}</span><span style="font-weight:600;text-align:right">${v}</span></div>`)}
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 0;border-bottom:1px solid var(--line);font-size:15px"><span class="muted">Compte</span><select aria-label="Compte" value=${w.account} onChange=${e => up({account: e.target.value})} style="width:auto;min-height:34px;height:34px;padding:0 24px 0 8px;font-size:14px;font-weight:600;border-radius:10px">${accList().filter(x => x.type !== "pret" && x.id !== w.to).map(x => html`<option value=${x.id}>${x.name}</option>`)}</select></div>
@@ -1050,7 +1058,7 @@ function prItems(k) {
       const monthly = s.freq?.u === "m" && (Number(s.freq.n) || 1) === 1;
       let v;
       if (monthly) { const [y, m] = k.split("-").map(Number), d = `${k}-${pad(Math.min(s.anchor || Number(s.next.slice(8)), dim(y, m)))}`;
-        if ((s.skips || []).includes(d)) continue; const o = s.ov?.[d] ? {...s, ...s.ov[d]} : s; v = r2([...accs].reduce((a, id) => a + amtFor(o, id), 0)); }
+        if ((s.skips || []).includes(d) || (s.end && d > s.end) || (s.start && d < s.start)) continue; const o = s.ov?.[d] ? {...s, ...s.ov[d]} : s; v = r2([...accs].reduce((a, id) => a + amtFor(o, id), 0)); }
       else v = r2([...accs].reduce((a, id) => a + amtFor(s, id), 0) * perMonth(s.freq));
       out.push({kind: "sch", id: s.id, name: s.name, acc: s.account, v: r2(-v), smooth: !monthly});
     }
@@ -1109,6 +1117,7 @@ const monthLabel = k => { const [y,m] = k.split("-").map(Number); return `${MOIS
 const monthShort = k => MOISC[Number(k.slice(5,7))-1];
 const dayLabel = s => P(s).toLocaleDateString("fr-FR", {weekday:"short", day:"numeric", month:"short"});
 const dayShort = s => P(s).toLocaleDateString("fr-FR", {day:"numeric", month:"short"});
+const dayY = s => s ? dayShort(s) + (s.slice(0, 4) !== today().slice(0, 4) ? " " + s.slice(0, 4) : "") : "";
 const daysBetween = (a, b) => Math.round((P(b) - P(a)) / 864e5);
 const r2 = x => Math.round((x + Number.EPSILON) * 100) / 100;
 const NF = new Intl.NumberFormat("fr-FR", {style:"currency", currency:"EUR"});
@@ -1138,10 +1147,11 @@ function calc(str) {
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
 /* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
-const APP_VERSION = 54;
+const APP_VERSION = 55;
 /* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
 const NEWS = {
   54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
+  55: ["Nouvelle échéance : choisis la date de la première fois et, si tu veux, une date de fin.", "La date de fin d'une échéance s'affiche dans l'échéancier."],
 };
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));
@@ -3725,14 +3735,14 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
     }
     if (isSch) {
       if (!f.date) return setErr("Indique la prochaine échéance.");
-      const s = {...(base || {}), k: "sch", id: base?.id || uid("sch"), ...common, freq: {n: Math.max(1, Number(f.freq.n) || 1), u: f.freq.u}, next: f.date, anchor: Number(f.date.slice(8)), end: f.end || null, left: f.left === "" || f.left == null ? null : Number(f.left), auto: f.auto, paused: f.paused};
+      const s = {...(base || {}), k: "sch", id: base?.id || uid("sch"), ...common, freq: {n: Math.max(1, Number(f.freq.n) || 1), u: f.freq.u}, next: f.date, anchor: Number(f.date.slice(8)), start: base ? (base.start ? (f.date < base.start ? f.date : base.start) : null) : f.date, end: f.end || null, left: f.left === "" || f.left == null ? null : Number(f.left), auto: f.auto, paused: f.paused};
       if (base && base.next !== f.date) s.skips = [];
       if (prSchOk(f.account, mode === "transfer" ? f.to : null) && f.prorata) s.prorata = true; else delete s.prorata;
       Store.put(s); close(); toast(base ? "Échéance modifiée" : "Échéance ajoutée"); return;
     }
     if (f.rep && !base && !occ) {
       if (mode !== "transfer" && !f.split && !f.cat) { const r = applyRules({k: "tx", ...common, date: f.date}, {isNew: true}); common.splits = r.splits || common.splits; }
-      Store.put({k: "sch", id: uid("sch"), ...common, freq: {n: Math.max(1, Number(f.freq.n) || 1), u: f.freq.u}, next: f.date, anchor: Number(f.date.slice(8)), end: f.end || null, left: null, auto: false});
+      Store.put({k: "sch", id: uid("sch"), ...common, freq: {n: Math.max(1, Number(f.freq.n) || 1), u: f.freq.u}, next: f.date, anchor: Number(f.date.slice(8)), start: f.date, end: f.end || null, left: null, auto: false});
       close(); toast(f.date > today() ? "Prévue à l'échéancier, 1re le " + dayShort(f.date) : "Prévue à l'échéancier, à valider dès aujourd'hui"); return;
     }
     if (f.vdate && f.vdate !== f.date) common.vdate = f.vdate; else common.vdate = null;
@@ -3747,7 +3757,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
     else Store.put(t);
     if (f.rep && !base) {
       const sid = uid("sch");
-      Store.put({k: "sch", id: sid, ...common, freq: {n: Math.max(1, Number(f.freq.n) || 1), u: f.freq.u}, next: step(f.date, f.freq, Number(f.date.slice(8))), anchor: Number(f.date.slice(8)), end: f.end || null, left: null, auto: false});
+      Store.put({k: "sch", id: sid, ...common, freq: {n: Math.max(1, Number(f.freq.n) || 1), u: f.freq.u}, next: step(f.date, f.freq, Number(f.date.slice(8))), anchor: Number(f.date.slice(8)), start: f.date, end: f.end || null, left: null, auto: false});
       toast("Opération enregistrée et ajoutée à l'échéancier");
     } else if (!occ) toast(base ? "Opération modifiée" : "Opération enregistrée");
     close();
@@ -4166,7 +4176,7 @@ function SchDetail({id, aid, close}) {
     <div style="text-align:center;padding:4px 0 6px">
       <div style=${"font-family:var(--display);font-size:40px;font-weight:700;letter-spacing:-0.02em;color:" + (v > 0 ? "var(--pos)" : "var(--ink)")}>${fmt(v, true)}</div>
       <div class="muted" style="font-size:14px">${when}</div>
-      ${x.left != null && html`<div class="muted" style="font-size:13px;margin-top:2px">Encore ${x.left} fois${x.end ? ", jusqu'au " + dayShort(x.end) : ""}</div>`}
+      ${(x.left != null || x.end) && html`<div class="muted" style="font-size:13px;margin-top:2px">${x.left != null ? "Encore " + x.left + " fois" + (x.end ? ", jusqu'au " + dayY(x.end) : "") : "Jusqu'au " + dayY(x.end)}</div>`}
     </div>
     ${list.length > 0 && html`<div><div class="fgh" style="padding:0 2px 8px">Prochaines dates</div><div style="display:flex;gap:8px">${list.map(d => html`<span style="flex:1;text-align:center;padding:10px 0;border-radius:12px;background:color-mix(in srgb,var(--ink) 7%,transparent);font-size:14px;font-weight:600">${dayShort(d)}${d.slice(0, 4) !== today().slice(0, 4) ? " " + d.slice(2, 4) : ""}</span>`)}</div></div>`}
     ${!np && html`<div class="help" style="text-align:center">${x.paused ? "Échéance suspendue." : "Plus de date à venir."}</div>`}
@@ -4207,7 +4217,7 @@ function Schedules() {
     ["Autres fréquences", act.filter(x => !isM(x)).sort((a, b) => npOf(a).localeCompare(npOf(b)))],
     ["Suspendues ou terminées", rec.filter(off).sort((a, b) => a.name.localeCompare(b.name, "fr"))]].filter(g => g[1].length);
   const Row = ({x}) => { const v = amtFor(x, sel), np = npOf(x), tr = (x.splits || []).find(sp => sp.to), dead = off(x);
-    const sub = (tr ? (x.account === sel ? "→ " + accName(tr.to) : "← " + accName(x.account)) : x.splits?.[0]?.cat ? catName(x.splits[0].cat) : "Sans catégorie") + " · " + (dead ? (x.paused ? "suspendue" : "terminée") : freqLabel(x.freq).toLowerCase()) + (x.left != null && !dead ? " · encore " + x.left + " fois" : "");
+    const sub = (tr ? (x.account === sel ? "→ " + accName(tr.to) : "← " + accName(x.account)) : x.splits?.[0]?.cat ? catName(x.splits[0].cat) : "Sans catégorie") + " · " + (dead ? (x.paused ? "suspendue" : "terminée") : freqLabel(x.freq).toLowerCase()) + (x.left != null && !dead ? " · encore " + x.left + " fois" : x.end && !dead ? " · jusqu'au " + dayY(x.end) : "");
     return html`<button class="row" style=${"min-height:64px" + (dead ? ";opacity:.55" : "")} onClick=${() => SHEET.open({type: "schDetail", id: x.id, aid: sel})}>
       <span class="dcirc">${np && !dead ? html`<b>${Number(np.slice(8))}</b><span>${monthShort(np)}</span>` : html`<b>–</b>`}</span>
       <span class="grow"><div class="t1">${x.name}</div><div class="t2">${sub}</div></span>

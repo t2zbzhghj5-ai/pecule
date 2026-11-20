@@ -53,6 +53,7 @@ reste sur la machine ; rien n'est écrit dans le dépôt (`tests/out/` est ignor
 | `reglages_clarte` | Réglages (passage clarté) : carte d'état (points à regarder, sauvegarde, tout est en ordre), parties Organisation / Partage / Données, menus Compte joint et Importer |
 | `accueil_debit_cartes` | Accueil (maquette K) : plus de « Prochaine rentrée » ; solde validé puis une tuile par carte du compte (débit différé, date) ; toucher une carte l'ouvre ; compte sans carte : une seule tuile |
 | `comptes_solde_valide_cartes` | Écran Comptes et en-tête d'une carte : solde validé (comme les comptes), l'encours en complément |
+| `echeance_date_de_fin` | Plus aucune occurrence après la date de fin (prochaine date, prévisions) ; fin visible dans l'échéancier ; au prorata, une échéance ne compte ni avant son début ni après sa fin |
 | `mise_a_jour` | Même numéro dans l'app et sw.js ; « Rechercher » quand tout est à jour ; bandeau sur l'accueil et ligne des Réglages quand une version plus récente est en ligne ; « Mettre à jour » recharge ; « Nouveautés » une seule fois |
 | `design_enveloppes` | Maquette R : restant dans un bloc jaune (rose sous zéro), tuiles et budgets pastel, Prévisions dans le bloc jaune ; clair et sombre lisibles |
 | `accueil_a_valider_solde` | Accueil, « À valider » : chaque opération en retard affiche « puis … », du solde validé à la dernière, enchaîné avec les suivantes |
