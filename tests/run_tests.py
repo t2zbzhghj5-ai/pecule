@@ -1471,6 +1471,28 @@ def accueil_debit_cartes(br, url):
 
 
 @test
+def design_enveloppes(br, url):
+    """Maquette R : restant dans un bloc jaune, tuiles et budgets pastel, Prévisions dans le bloc jaune ; en clair et en sombre, le texte des boutons principaux reste lisible."""
+    for dark in (False, True):
+        a = App(br, url, dark=dark)
+        a.import_ic(FICTIF)
+        pg = a.pg
+        a.pick("Joint")
+        blk = pg.locator("main .rblock").first
+        check(blk.count() == 1 and "Tu peux encore dépenser" in blk.inner_text(), "bloc du restant absent")
+        check(pg.locator("main .ktile.pc").count() == 3, "tuiles pastel : %d" % pg.locator("main .ktile.pc").count())
+        check(pg.locator("main .bpill.pc").count() >= 1, "budgets de l'accueil sans couleur")
+        a.js("D.NAV.tab('budgets')"); a.wait(600)
+        check(pg.locator(".benv.pc").count() == pg.locator(".benv-main").count() > 0, "enveloppes pastel")
+        a.js("D.NAV.tab('prev')"); a.wait(600)
+        check(pg.locator("main section.card.rblock button[aria-pressed]").count() > 0, "prévisions hors du bloc jaune")
+        bg, fg = a.js("const b = document.querySelector('.tab-plus button'), c = getComputedStyle(b); return [c.backgroundColor, c.color];")
+        check(bg != fg, "bouton + illisible (%s sur %s)" % (fg, bg))
+        a.no_errors("design R" + (" sombre" if dark else ""))
+        a.close()
+
+
+@test
 def accueil_a_valider_solde(br, url):
     """Accueil, « À valider » : chaque opération en retard affiche le solde « puis … », du solde validé à la dernière, qui s'enchaîne avec les suivantes."""
     a = App(br, url)
