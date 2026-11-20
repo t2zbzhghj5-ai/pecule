@@ -35,7 +35,7 @@ import fixture_icompta  # noqa: E402
 
 # ---------------------------------------------------------------- serveur (avec accès de test aux calculs)
 HOOK = ('window.__dbg = {A, S, Store, Hist, NAV, SHEET, occurrences, balance, amtFor, accList, today, budgets, lineAt, cardNext, cardPending, '
-        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf, parseBankText, half50, half50Due, half50Msg, halfBase, healthChecks, hKey, kidsOf, cardNext};\n')
+        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf, parseBankText, half50, half50Due, half50Msg, halfBase, healthChecks, hKey, kidsOf, cardNext, runBal, addDays};\n')
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -1467,6 +1467,39 @@ def accueil_debit_cartes(br, url):
     a.pick(liv)
     check(pg.locator("button.ktile").count() == 0 and "Solde validé" in pg.inner_text("main section"), "compte sans carte (%s)" % liv)
     a.no_errors("accueil, une tuile par carte")
+    a.close()
+
+
+@test
+def accueil_a_valider_solde(br, url):
+    """Accueil, « À valider » : chaque opération en retard affiche le solde « puis … », du solde validé à la dernière, qui s'enchaîne avec les suivantes."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    a.pick("Joint")
+    j = a.acc_id("Joint")
+    a.js("""const t = D.today();
+      D.Store.put({k: 'tx', id: 'tx_t_av1', account: arg, date: D.addDays(t, -6), name: 'Cantine test', amount: -45, splits: [{amount: -45, cat: null}], st: 'saisie'});
+      D.Store.put({k: 'tx', id: 'tx_t_av2', account: arg, date: D.addDays(t, -2), name: 'Boulangerie test', amount: -12.5, splits: [{amount: -12.5, cat: null}], st: 'saisie'});""", j)
+    a.wait(600)
+    num = lambda x: float(x.replace("puis", "").replace("\u202f", "").replace("\xa0", "").replace(" ", "").replace("€", "").replace("−", "-").replace("+", "").replace(",", "."))
+    groups = a.js("""const out = [];
+      for (const g of document.querySelectorAll('main .fgh')) { const c = g.nextElementSibling; if (!c) continue;
+        out.push([g.textContent.trim(), [...c.querySelectorAll('.amt')].map(s => [s.childNodes[0].textContent, s.querySelector('small')?.textContent || null])]); }
+      return out;""")
+    names = [g[0] for g in groups]
+    check("À valider" in names, "groupe À valider absent : %r" % names)
+    gi = names.index("À valider")
+    rows = groups[gi][1]
+    check(len(rows) >= 2 and all(r[1] and r[1].startswith("puis") for r in rows), "À valider sans solde : %r" % rows)
+    r = a.js("return D.balance(arg, {cleared: true});", j)
+    for amt, run in rows:
+        r = round(r + num(amt), 2)
+        check(near(num(run), r), "À valider : %s puis %s (attendu %.2f)" % (amt, run, r))
+    if gi + 1 < len(groups) and groups[gi + 1][1]:
+        amt, run = groups[gi + 1][1][0]
+        check(run and near(num(run), round(r + num(amt), 2)), "la suite ne s'enchaîne pas : %s puis %s après %.2f" % (amt, run, r))
+    a.no_errors("accueil, solde des opérations à valider")
     a.close()
 
 

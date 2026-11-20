@@ -2785,6 +2785,8 @@ function DashOps({id}) {
   const up = asc([...planned.filter(o => o.date >= t), ...all.filter(x => x.date >= t && x.date <= to && !isVal(x))]);
   const done = asc(all.filter(x => isVal(x) && x.date >= from && x.date <= to));
   const run = (S().runMode || "all") !== "none" ? runBal(id, to) : null;
+  /* « À valider » : le solde part du solde validé et ajoute chaque opération en retard, la plus ancienne d'abord ; la dernière donne le solde d'où repartent les suivantes */
+  const runV = {}; if (run) { let r = balance(id, {cleared: true}); for (const x of pend) { r += amtFor(x, id); runV[x.id] = r2(r); } }
   const sun = addDays(t, (7 - P(t).getDay()) % 7);
   const G = [];
   if (past) G.push({k: "p", l: "Validées depuis le " + dayShort(from), x: done});
@@ -2796,7 +2798,7 @@ function DashOps({id}) {
       <span style="display:flex;align-items:center;gap:10px"><button class="link" style="font-size:14px" aria-pressed=${past} onClick=${() => setPast(!past)}>${past ? "Masquer les validées" : "Afficher les validées"}</button>
       <select aria-label="Jusqu'où afficher les opérations" value=${sp} onChange=${e => Store.put({...S(), k: "set", id: "set_main", dashSpan: e.target.value})} style="width:auto;min-height:34px;height:34px;padding:0 26px 0 10px;font-size:13px;font-weight:700;border-radius:10px">
         <option value="m1">1 mois</option><option value="m3">3 mois</option><option value="m6">6 mois</option><option value="m9">9 mois</option><option value="m12">12 mois</option></select></span></div>
-    ${G.length ? G.map(g => html`<div style="margin-bottom:14px"><div class="fgh">${g.l}</div><div class="card">${g.x.length ? g.x.map(x => html`<${TxRow} t=${x} a=${id} dateCol=${g.k === "v" || g.k === "p" ? "m" : true} run=${run && g.k !== "p" && g.k !== "v" ? run[x.id] ?? null : null} />`) : html`<div class="empty">Aucune opération validée depuis le ${dayShort(from)}.</div>`}</div></div>`) : html`<div class="card"><div class="empty"><b>Rien de prévu sur la période</b></div></div>`}
+    ${G.length ? G.map(g => html`<div style="margin-bottom:14px"><div class="fgh">${g.l}</div><div class="card">${g.x.length ? g.x.map(x => html`<${TxRow} t=${x} a=${id} dateCol=${g.k === "v" || g.k === "p" ? "m" : true} run=${run && g.k !== "p" ? (g.k === "v" ? runV : run)[x.id] ?? null : null} />`) : html`<div class="empty">Aucune opération validée depuis le ${dayShort(from)}.</div>`}</div></div>`) : html`<div class="card"><div class="empty"><b>Rien de prévu sur la période</b></div></div>`}
   </section>`;
 }
 /* Prévisions : restant en fin de période, sur 12 mois, en barres */
