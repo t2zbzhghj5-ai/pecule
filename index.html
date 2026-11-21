@@ -1047,18 +1047,24 @@ const prAccs = () => { const j = halfJoint(); return new Set(j ? [j, ...Object.v
 const prSchOk = (acc, to) => prOn() && (prAccs().has(acc) || (!!to && prAccs().has(to)));
 const prLineOk = bid => { const b = A().bdg[bid]; if (!b || !prOn()) return false; const accs = prAccs(); return bAccs(b).some(x => accs.has(x)); };
 const perMonth = f => { const n = Number(f?.n) || 1; return f?.u === "y" ? 1 / (12 * n) : f?.u === "w" ? 52 / 12 / n : f?.u === "d" ? 365 / 12 / n : 1 / n; };
+/* Échéances qui ont déjà eu au moins une occurrence enregistrée dans Pécule (opérations tx_s_<échéance>_<date>) */
+const schOcc = () => memo("schOcc", () => { const set = new Set(); for (const id in A().tx) if (id.startsWith("tx_s_")) set.add(id.slice(5, id.lastIndexOf("_"))); return set; });
 function prItems(k) {
   return memo("pri" + k, () => {
-    const D = A(), accs = prAccs(), ps = k + "-01", pe = eom(k), out = []; if (!accs.size) return out;
+    const D = A(), accs = prAccs(), ps = k + "-01", pe = eom(k), out = [], cur = ym(today()); if (!accs.size) return out;
     for (const s of Object.values(D.sch)) {
       if (!s.prorata || s.prAuto || s.paused || !s.next || (s.end && s.end < ps)) continue;
       if (!accs.has(s.account) && !(s.splits || []).some(x => x.to && accs.has(x.to))) continue;
       /* montant vu depuis le joint et ses cartes : dépense = charge ; rentrée ou virement reçu = réduit le total */
       if (s.left != null) { if (s.left <= 0) continue; let d = s.next; for (let i = 1; i < s.left; i++) d = step(d, s.freq, s.anchor); if (d < ps) continue; }
       const monthly = s.freq?.u === "m" && (Number(s.freq.n) || 1) === 1;
+      /* la date de début est respectée : rien n'est compté avant (lissage compris) */
+      if (s.start && k < ym(s.start)) continue;
       let v;
       if (monthly) { const [y, m] = k.split("-").map(Number), d = `${k}-${pad(Math.min(s.anchor || Number(s.next.slice(8)), dim(y, m)))}`;
-        if ((s.skips || []).includes(d) || (s.end && d > s.end) || (s.start && d < s.start)) continue; const o = s.ov?.[d] ? {...s, ...s.ov[d]} : s; v = r2([...accs].reduce((a, id) => a + amtFor(o, id), 0)); }
+        /* échéance mensuelle créée avant que Pécule garde sa date de début, jamais encore passée : elle commence à sa prochaine date (mois à venir seulement) */
+        const notYet = !s.start && k > cur && d < s.next && !s.id.startsWith("sch_ic_") && !schOcc().has(s.id);
+        if ((s.skips || []).includes(d) || (s.end && d > s.end) || (s.start && d < s.start) || notYet) continue; const o = s.ov?.[d] ? {...s, ...s.ov[d]} : s; v = r2([...accs].reduce((a, id) => a + amtFor(o, id), 0)); }
       else v = r2([...accs].reduce((a, id) => a + amtFor(s, id), 0) * perMonth(s.freq));
       out.push({kind: "sch", id: s.id, name: s.name, acc: s.account, v: r2(-v), smooth: !monthly});
     }
@@ -1147,11 +1153,12 @@ function calc(str) {
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
 /* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
-const APP_VERSION = 55;
+const APP_VERSION = 56;
 /* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
 const NEWS = {
   54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
   55: ["Nouvelle échéance : choisis la date de la première fois et, si tu veux, une date de fin.", "La date de fin d'une échéance s'affiche dans l'échéancier."],
+  56: ["Compte joint au prorata : une échéance qui commence plus tard ne change les virements qu'à partir de son premier mois."],
 };
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));
@@ -5349,7 +5356,7 @@ function icompta2pecule(db, now, onlyPending) {
       if (x.comment) o.memo = x.comment; if (x.refund) o.refund = true; const b = occ[i] && bdgOf(occ[i].budgetItemPeriod); if (b) o.bdg = b; return o; });
     const u = U[s.frequencyUnit] || "m";
     const d = {k: "sch", id: "sch_ic_" + sid(s.ID).toLowerCase(), account: a, name: s.name.trim(), amount: Math.round(splits.reduce((x, y) => x + y.amount, 0) * 100) / 100, splits,
-      freq: {n: fn, u}, next: nextDate, anchor: Number(s.date.slice(8, 10)), left: nb ? nb - k : null, end: null, paused: false, auto: false,
+      freq: {n: fn, u}, next: nextDate, anchor: Number(s.date.slice(8, 10)), start: occDate(s.date, 0, fn, fu), left: nb ? nb - k : null, end: null, paused: false, auto: false,
       pay: links.length ? "virement" : "prelevement", payee: null, project: null, comment: "Importé d'iCompta", skips: []};
     /* montants modifiés à la main sur une occurrence future déjà créée par iCompta */
     const ov = {};

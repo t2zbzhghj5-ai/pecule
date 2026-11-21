@@ -1487,7 +1487,7 @@ def accueil_debit_cartes(br, url):
 
 @test
 def echeance_date_de_fin(br, url):
-    """Date de fin d'une échéance : plus aucune occurrence après (prévisions, prochaine date, terminée) ; visible dans l'échéancier ; au prorata, une échéance ne compte ni avant son début ni après sa fin."""
+    """Date de fin d'une échéance : plus aucune occurrence après (prévisions, prochaine date, terminée) ; visible dans l'échéancier ; au prorata, une échéance ne compte ni avant son début (mensuelle, annuelle lissée, ancienne échéance jamais passée) ni après sa fin."""
     a = App(br, url)
     a.import_ic(FICTIF)
     pg = a.pg
@@ -1516,6 +1516,13 @@ def echeance_date_de_fin(br, url):
     a.wait(300)
     has = lambda k: a.js("return D.prItems(arg).some(x => x.id === 'sch_t_pr');", k)
     check(not has("2026-12") and has("2027-01") and has("2027-03") and not has("2027-04"), "prorata hors période : déc %s janv %s mars %s avr %s" % (has("2026-12"), has("2027-01"), has("2027-03"), has("2027-04")))
+    # annuelle qui commence en juin : lissée à partir de juin seulement ; mensuelle créée sans date de début et jamais passée : à partir de sa 1re date
+    a.js("""D.Store.put({...D.A().sch.sch_t_pr, id: 'sch_t_an', name: 'Assurance', amount: -120, splits: [{amount: -120, cat: null}], freq: {n: 1, u: 'y'}, next: '2027-06-05', anchor: 5, start: '2027-06-05', end: null});
+      D.Store.put({...D.A().sch.sch_t_pr, id: 'sch_t_old', name: 'Ancienne', next: '2027-06-05', anchor: 5, start: undefined, end: null});""")
+    a.wait(300)
+    has = lambda k, sid: a.js("return D.prItems(arg[0]).some(x => x.id === arg[1]);", [k, sid])
+    check(not has("2027-05", "sch_t_an") and has("2027-06", "sch_t_an") and has("2027-09", "sch_t_an"), "annuelle lissée avant son début")
+    check(not has("2026-12", "sch_t_old") and not has("2027-05", "sch_t_old") and has("2027-06", "sch_t_old"), "ancienne échéance comptée avant sa 1re date")
     a.no_errors("date de fin")
     a.close()
 
