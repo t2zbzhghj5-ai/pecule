@@ -381,6 +381,19 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .rblock .rb-pill{margin-top:12px;min-height:34px;border-radius:17px;border:0;background:var(--track);color:inherit;font-size:14px;font-weight:600;padding:0 12px;display:inline-flex;align-items:center;gap:6px}
 .card.flat{background:none;border-radius:0;overflow:visible}
 .card.flat>.row{border-top:0;padding-left:4px;padding-right:4px}
+.offm{background:var(--pb);border-radius:22px;padding:14px 14px 12px;display:flex;flex-direction:column;gap:8px}
+.offm .t1{font-size:15.5px;font-weight:600;color:var(--ink)}
+.offm-n{font-size:13px;font-weight:600;color:var(--pi)}
+.offm-g{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+.offm-g button{height:40px;border-radius:14px;border:0;background:var(--track);color:var(--ink);font:inherit;font-size:14px;font-weight:600;padding:0}
+.offm-g button.on{background:var(--accent);color:var(--onacc);text-decoration:line-through}
+.offm-h{font-size:13px;color:var(--pi);line-height:1.4}
+.ystrip{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:4px}
+.ystrip .yc{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0}
+.ystrip .c{width:100%;height:30px;border-radius:10px;background:var(--p-mint);color:var(--pi-mint);display:grid;place-items:center;box-sizing:border-box}
+.ystrip .c.off{background:none;border:1.5px dashed var(--muted);color:var(--muted)}
+.ystrip .m{font-size:10px;color:var(--muted);white-space:nowrap;letter-spacing:-.02em}
+.ystrip .m.off{color:var(--ink);font-weight:700}
 .updb{display:flex;align-items:center;gap:10px;background:var(--p-mint);border-radius:22px;padding:10px 4px 10px 12px;margin-bottom:12px}
 .updb-ic{width:38px;height:38px;border-radius:13px;background:var(--track);color:var(--pi-mint);display:grid;place-items:center;flex:none}
 .updb .t1{font-size:15px;font-weight:600;white-space:nowrap}
@@ -1056,7 +1069,7 @@ function prItems(k) {
       if (!s.prorata || s.prAuto || s.paused || !s.next || (s.end && s.end < ps)) continue;
       if (!accs.has(s.account) && !(s.splits || []).some(x => x.to && accs.has(x.to))) continue;
       /* montant vu depuis le joint et ses cartes : dépense = charge ; rentrée ou virement reçu = réduit le total */
-      if (s.left != null) { if (s.left <= 0) continue; let d = s.next; for (let i = 1; i < s.left; i++) d = step(d, s.freq, s.anchor); if (d < ps) continue; }
+      if (s.left != null) { if (s.left <= 0) continue; let d = s.next, i = 1, g = 0; while (isOff(s, d) && g++ < 24) d = step(d, s.freq, s.anchor); while (i < s.left && g++ < 600) { d = step(d, s.freq, s.anchor); if (!isOff(s, d)) i++; } if (d < ps) continue; }
       const monthly = s.freq?.u === "m" && (Number(s.freq.n) || 1) === 1;
       /* la date de début est respectée : rien n'est compté avant (lissage compris) */
       if (s.start && k < ym(s.start)) continue;
@@ -1064,8 +1077,8 @@ function prItems(k) {
       if (monthly) { const [y, m] = k.split("-").map(Number), d = `${k}-${pad(Math.min(s.anchor || Number(s.next.slice(8)), dim(y, m)))}`;
         /* échéance mensuelle créée avant que Pécule garde sa date de début, jamais encore passée : elle commence à sa prochaine date (mois à venir seulement) */
         const notYet = !s.start && k > cur && d < s.next && !s.id.startsWith("sch_ic_") && !schOcc().has(s.id);
-        if ((s.skips || []).includes(d) || (s.end && d > s.end) || (s.start && d < s.start) || notYet) continue; const o = s.ov?.[d] ? {...s, ...s.ov[d]} : s; v = r2([...accs].reduce((a, id) => a + amtFor(o, id), 0)); }
-      else v = r2([...accs].reduce((a, id) => a + amtFor(s, id), 0) * perMonth(s.freq));
+        if ((s.skips || []).includes(d) || (s.end && d > s.end) || (s.start && d < s.start) || notYet || isOff(s, d)) continue; const o = s.ov?.[d] ? {...s, ...s.ov[d]} : s; v = r2([...accs].reduce((a, id) => a + amtFor(o, id), 0)); }
+      else v = r2([...accs].reduce((a, id) => a + amtFor(s, id), 0) * schPerMonth(s));
       out.push({kind: "sch", id: s.id, name: s.name, acc: s.account, v: r2(-v), smooth: !monthly});
     }
     for (const l of Object.values(D.acc)) { const L = l.loan; if (l.type !== "pret" || !L?.prorata || !L.payment || !accs.has(L.from)) continue;
@@ -1153,12 +1166,13 @@ function calc(str) {
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
 /* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
-const APP_VERSION = 56;
+const APP_VERSION = 57;
 /* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
 const NEWS = {
   54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
   55: ["Nouvelle échéance : choisis la date de la première fois et, si tu veux, une date de fin.", "La date de fin d'une échéance s'affiche dans l'échéancier."],
   56: ["Compte joint au prorata : une échéance qui commence plus tard ne change les virements qu'à partir de son premier mois."],
+  57: ["Échéance « sauf en » : une échéance mensuelle peut sauter certains mois chaque année (par exemple le Navigo, sauf en août). Dans Modifier, sous la fréquence."],
 };
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));
@@ -1345,6 +1359,21 @@ function interestFor(a, from, to, extra) {
   return r2(sum);
 }
 
+/* « Sauf en » : mois sans prélèvement (1 à 12), chaque année, pour une échéance en mois. Ces mois-là, l'échéance n'existe pas. */
+const MOIS_L = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+const MOIS_C = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+const offOf = s => s?.freq?.u === "m" && Array.isArray(s.offM) && s.offM.length ? s.offM : null;
+const isOff = (s, d) => { const o = offOf(s); return !!o && !!d && o.includes(Number(d.slice(5, 7))); };
+const monthsList = ms => { const l = [...ms].sort((a, b) => a - b).map(m => MOIS_L[m - 1]); return l.length > 1 ? l.slice(0, -1).join(", ") + " et " + l[l.length - 1] : l[0] || ""; };
+const offLabel = s => offOf(s) ? " sauf " + monthsList(offOf(s)) : "";
+/* part mensuelle d'une échéance (lissage) en tenant compte des mois sautés */
+function schPerMonth(s) {
+  const o = offOf(s); if (!o) return perMonth(s.freq);
+  let c = 0, d = s.next, g = 0; const lim = addMonths(s.next, 60, Number(s.next.slice(8)));
+  while (d < lim && g++ < 400) { if (!isOff(s, d)) c++; d = step(d, s.freq, s.anchor); }
+  return c / 60;
+}
+
 /* Occurrences prévues : échéancier, débits des cartes, prêts, intérêts d'épargne, restes de budget */
 function occurrences(until) {
   return memo("occ" + until, () => {
@@ -1355,6 +1384,7 @@ function occurrences(until) {
       while (d <= until && g++ < 500) {
         if (s.end && d > s.end) break;
         if (left != null && left <= 0) break;
+        if (isOff(s, d)) { d = step(d, s.freq, s.anchor); continue; }
         const id = "tx_s_" + s.id + "_" + d;
         if (!D.tx[id] && !(s.skips || []).includes(d)) out.push(fromSched(s, d, id));
         if (left != null) left--;
@@ -1447,6 +1477,7 @@ function nextPending(s) {
   while (g++ < 600) {
     if (s.end && d > s.end) return null;
     if (left != null && left <= 0) return null;
+    if (isOff(s, d)) { d = step(d, s.freq, s.anchor); continue; }
     if (!D.tx["tx_s_" + s.id + "_" + d] && !(s.skips || []).includes(d)) return d;
     if (left != null) left--;
     d = step(d, s.freq, s.anchor);
@@ -1459,7 +1490,7 @@ function advance(s, date) {
   const skips = s.skips || [], ov = {...(s.ov || {})}; delete ov[date];
   if (date !== s.next) { Store.put({...s, ov, skips: [...skips, date]}); return; }
   let next = step(s.next, s.freq, s.anchor), left = s.left != null ? s.left - 1 : null, g = 0;
-  while (A().tx["tx_s_" + s.id + "_" + next] && g++ < 50) { next = step(next, s.freq, s.anchor); if (left != null) left--; }
+  while ((A().tx["tx_s_" + s.id + "_" + next] || isOff(s, next)) && g++ < 60) { if (!isOff(s, next) && left != null) left--; next = step(next, s.freq, s.anchor); }
   Store.put({...s, next, left, ov, skips: skips.filter(x => x > next)});
 }
 function validateOcc(o, over) {
@@ -3688,7 +3719,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
     split: sp0.length > 1, splits: sp0.map(s => ({cat: s.cat || null, to: s.to || "", tr: !!s.to, amt: partStr(s.amount * (init.amount > 0 ? 1 : -1)), memo: s.memo || "", bm: s.bm || 0, nobud: !!s.nobud, refund: !!s.refund, noRep: !!s.noRep, noAvg: !!s.noAvg, owner: s.owner || null, bdg: s.bdg || null})),
     opt: (s => ({bm: s.bm || 0, nobud: !!s.nobud, refund: !!s.refund, noRep: !!s.noRep, noAvg: !!s.noAvg, owner: s.owner || null, bdg: s.bdg || null}))(sp0[0] || {}), vdate: init.vdate || "", payee: init.payee || "", project: init.project || "", hl: init.hl || "", more: !!(init.vdate || init.project || init.hl || init.payee || init.comment || init.shares?.length || init.repay || init.num || (init.st && init.st !== "saisie" && !(base && base.virtual)) || (sp0[0] && (sp0[0].bm || sp0[0].nobud || sp0[0].refund || sp0[0].noRep))),
     pay: init.pay || "cb", num: init.num || "", comment: init.comment || "", st: init.st || "saisie", st2: init.st2 || "saisie",
-    shares: init.shares || [], repay: init.repay || "", half: !!init.half, prorata: !!init.prorata, rep: false, freq: init.freq || {n: 1, u: "m"}, end: init.end || "", left: init.left ?? "",
+    shares: init.shares || [], repay: init.repay || "", half: !!init.half, prorata: !!init.prorata, rep: false, freq: init.freq || {n: 1, u: "m"}, offM: init.offM || [], end: init.end || "", left: init.left ?? "",
     auto: !!init.auto, paused: !!init.paused,
   }));
   const [err, setErr] = useState("");
@@ -3742,7 +3773,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
     }
     if (isSch) {
       if (!f.date) return setErr("Indique la prochaine échéance.");
-      const s = {...(base || {}), k: "sch", id: base?.id || uid("sch"), ...common, freq: {n: Math.max(1, Number(f.freq.n) || 1), u: f.freq.u}, next: f.date, anchor: Number(f.date.slice(8)), start: base ? (base.start ? (f.date < base.start ? f.date : base.start) : null) : f.date, end: f.end || null, left: f.left === "" || f.left == null ? null : Number(f.left), auto: f.auto, paused: f.paused};
+      const s = {...(base || {}), k: "sch", id: base?.id || uid("sch"), ...common, freq: {n: Math.max(1, Number(f.freq.n) || 1), u: f.freq.u}, next: f.date, anchor: Number(f.date.slice(8)), offM: f.freq.u === "m" && f.offM.length ? f.offM : null, start: base ? (base.start ? (f.date < base.start ? f.date : base.start) : null) : f.date, end: f.end || null, left: f.left === "" || f.left == null ? null : Number(f.left), auto: f.auto, paused: f.paused};
       if (base && base.next !== f.date) s.skips = [];
       if (prSchOk(f.account, mode === "transfer" ? f.to : null) && f.prorata) s.prorata = true; else delete s.prorata;
       Store.put(s); close(); toast(base ? "Échéance modifiée" : "Échéance ajoutée"); return;
@@ -3812,6 +3843,11 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
         <${Field} label="Tous les" id="op-fn"><input id="op-fn" type="number" min="1" inputmode="numeric" value=${f.freq.n} onInput=${e => set("freq", {...f.freq, n: e.target.value})} /></${Field}>
         <${Field} label="Unité" id="op-fu"><select id="op-fu" value=${f.freq.u} onChange=${e => set("freq", {...f.freq, u: e.target.value})}><option value="d">jours</option><option value="w">semaines</option><option value="m">mois</option><option value="y">ans</option></select></${Field}>
       </div>
+      ${f.freq.u === "m" && html`<div class="offm p-mint">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="t1">Sauf en</span>${f.offM.length > 0 && Number(f.freq.n) === 1 && html`<span class="offm-n">${12 - f.offM.length} mois sur 12</span>`}</div>
+        <div class="offm-g" role="group" aria-label="Mois sans prélèvement">${MOIS_C.map((m, i) => { const on = f.offM.includes(i + 1); return html`<button type="button" class=${on ? "on" : ""} aria-pressed=${on} aria-label=${(on ? "Ne plus sauter " : "Sauter ") + MOIS_L[i]} onClick=${() => on ? set("offM", f.offM.filter(x => x !== i + 1)) : f.offM.length < 11 && set("offM", [...f.offM, i + 1].sort((a, b) => a - b))}>${m}</button>`; })}</div>
+        <div class="offm-h">${f.offM.length ? "Pas de prélèvement en " + monthsList(f.offM) + ", chaque année." : "Touche un mois pour le sauter, chaque année."}</div>
+      </div>`}
       <div class="grid2">
         <${Field} label="Fin (facultatif)" id="op-end"><input id="op-end" type="date" value=${f.end || ""} onInput=${e => set("end", e.target.value)} /></${Field}>
         <${Field} label="Échéances restantes" id="op-left"><input id="op-left" type="number" min="0" inputmode="numeric" placeholder="illimité" value=${f.left} onInput=${e => set("left", e.target.value)} /></${Field}>
@@ -4176,15 +4212,16 @@ const SCH_ACC = {v: ""};
 function SchDetail({id, aid, close}) {
   const x = A().sch[id]; if (!x) { close(); return null; }
   const v = amtFor(x, aid || x.account), np = nextPending(x), list = [];
-  if (np) { let d = np, left = x.left != null ? x.left : null, g = 0; while (list.length < 3 && d && g++ < 60) { if (x.end && d > x.end) break; if (left != null && left <= 0) break; if (!(x.skips || []).includes(d) && !A().tx["tx_s_" + x.id + "_" + d]) list.push(d); if (left != null) left--; d = step(d, x.freq, x.anchor); } }
+  if (np) { let d = np, left = x.left != null ? x.left : null, g = 0; while (list.length < 3 && d && g++ < 60) { if (x.end && d > x.end) break; if (left != null && left <= 0) break; if (isOff(x, d)) { d = step(d, x.freq, x.anchor); continue; } if (!(x.skips || []).includes(d) && !A().tx["tx_s_" + x.id + "_" + d]) list.push(d); if (left != null) left--; d = step(d, x.freq, x.anchor); } }
   const isM = x.freq?.u === "m" && (Number(x.freq.n) || 1) === 1, tr = (x.splits || []).find(sp => sp.to);
-  const when = (isM && np ? "Le " + (Number(np.slice(8)) === 1 ? "1er" : Number(np.slice(8))) + " de chaque mois" : freqLabel(x.freq)) + " · " + (tr ? accName(x.account) + " → " + accName(tr.to) : accName(x.account));
+  const when = (isM && np ? "Le " + (Number(np.slice(8)) === 1 ? "1er" : Number(np.slice(8))) + " de chaque mois" + (offOf(x) ? "," + offLabel(x) : "") : freqLabel(x.freq) + offLabel(x)) + " · " + (tr ? accName(x.account) + " → " + accName(tr.to) : accName(x.account));
   return html`<${Sheet} title=${x.name} close=${close} left=${html`<button class="link" onClick=${close}>Fermer</button>`}>
     <div style="text-align:center;padding:4px 0 6px">
       <div style=${"font-family:var(--display);font-size:40px;font-weight:700;letter-spacing:-0.02em;color:" + (v > 0 ? "var(--pos)" : "var(--ink)")}>${fmt(v, true)}</div>
       <div class="muted" style="font-size:14px">${when}</div>
       ${(x.left != null || x.end) && html`<div class="muted" style="font-size:13px;margin-top:2px">${x.left != null ? "Encore " + x.left + " fois" + (x.end ? ", jusqu'au " + dayY(x.end) : "") : "Jusqu'au " + dayY(x.end)}</div>`}
     </div>
+    ${offOf(x) && isM && html`<div><div class="fgh" style="padding:0 2px 8px">Sur une année</div><div class="ystrip" role="img" aria-label=${"Prélevée " + (12 - offOf(x).length) + " mois sur 12, pas en " + monthsList(offOf(x))}>${MOIS_C.map((m, i) => { const off = offOf(x).includes(i + 1); return html`<span class="yc"><span class=${"c" + (off ? " off" : "")}><${Ic} n=${off ? "x" : "check"} s=${13} w=${2.4} /></span><span class=${"m" + (off ? " off" : "")}>${m.replace(".", "")}</span></span>`; })}</div></div>`}
     ${list.length > 0 && html`<div><div class="fgh" style="padding:0 2px 8px">Prochaines dates</div><div style="display:flex;gap:8px">${list.map(d => html`<span style="flex:1;text-align:center;padding:10px 0;border-radius:12px;background:color-mix(in srgb,var(--ink) 7%,transparent);font-size:14px;font-weight:600">${dayShort(d)}${d.slice(0, 4) !== today().slice(0, 4) ? " " + d.slice(2, 4) : ""}</span>`)}</div></div>`}
     ${!np && html`<div class="help" style="text-align:center">${x.paused ? "Échéance suspendue." : "Plus de date à venir."}</div>`}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px">
@@ -4214,7 +4251,8 @@ function Schedules() {
   const isM = x => x.freq?.u === "m" && (Number(x.freq.n) || 1) === 1;
   const npOf = x => nextPending(x) || x.next || "";
   const act = rec.filter(x => !off(x));
-  const incM = r2(act.reduce((s2, x) => s2 + Math.max(0, amtFor(x, sel)) * mEq(x.freq), 0)), outM = r2(act.reduce((s2, x) => s2 + Math.min(0, amtFor(x, sel)) * mEq(x.freq), 0));
+  const incM = r2(act.reduce((s2, x) => s2 + Math.max(0, amtFor(x, sel)) * (offOf(x) ? schPerMonth(x) : mEq(x.freq)), 0)), outM = r2(act.reduce((s2, x) => s2 + Math.min(0, amtFor(x, sel)) * (offOf(x) ? schPerMonth(x) : mEq(x.freq)), 0));
+  const offs = act.filter(x => offOf(x) && isM(x));
   const nx = act.filter(x => npOf(x)).sort((a, b) => npOf(a).localeCompare(npOf(b)))[0];
   const due = dueNow().filter(o => sides(o).some(([y]) => y === sel));
   const byDay = (a, b) => Number(npOf(a).slice(8)) - Number(npOf(b).slice(8)) || a.name.localeCompare(b.name, "fr");
@@ -4224,7 +4262,7 @@ function Schedules() {
     ["Autres fréquences", act.filter(x => !isM(x)).sort((a, b) => npOf(a).localeCompare(npOf(b)))],
     ["Suspendues ou terminées", rec.filter(off).sort((a, b) => a.name.localeCompare(b.name, "fr"))]].filter(g => g[1].length);
   const Row = ({x}) => { const v = amtFor(x, sel), np = npOf(x), tr = (x.splits || []).find(sp => sp.to), dead = off(x);
-    const sub = (tr ? (x.account === sel ? "→ " + accName(tr.to) : "← " + accName(x.account)) : x.splits?.[0]?.cat ? catName(x.splits[0].cat) : "Sans catégorie") + " · " + (dead ? (x.paused ? "suspendue" : "terminée") : freqLabel(x.freq).toLowerCase()) + (x.left != null && !dead ? " · encore " + x.left + " fois" : x.end && !dead ? " · jusqu'au " + dayY(x.end) : "");
+    const sub = (tr ? (x.account === sel ? "→ " + accName(tr.to) : "← " + accName(x.account)) : x.splits?.[0]?.cat ? catName(x.splits[0].cat) : "Sans catégorie") + " · " + (dead ? (x.paused ? "suspendue" : "terminée") : freqLabel(x.freq).toLowerCase() + offLabel(x)) + (x.left != null && !dead ? " · encore " + x.left + " fois" : x.end && !dead ? " · jusqu'au " + dayY(x.end) : "");
     return html`<button class="row" style=${"min-height:64px" + (dead ? ";opacity:.55" : "")} onClick=${() => SHEET.open({type: "schDetail", id: x.id, aid: sel})}>
       <span class="dcirc">${np && !dead ? html`<b>${Number(np.slice(8))}</b><span>${monthShort(np)}</span>` : html`<b>–</b>`}</span>
       <span class="grow"><div class="t1">${x.name}</div><div class="t2">${sub}</div></span>
@@ -4242,6 +4280,7 @@ function Schedules() {
           <div><div class="muted" style="font-size:12px">Rentrées</div><div style="font-size:20px;font-weight:700;color:var(--pos)">${fmt(incM, true)}</div></div>
           <div><div class="muted" style="font-size:12px">Sorties</div><div style="font-size:20px;font-weight:700">${fmt(outM, true)}</div></div>
         </div>
+        ${offs.length > 0 && html`<div class="muted" style="font-size:13px">${offs.map(x => x.name + " compté pour " + (12 - offOf(x).length) + " mois sur 12").join(", ")}.</div>`}
         <div style="font-size:14px;padding-top:10px;border-top:1px solid var(--line)">${nx ? html`Prochaine : <b>${nx.name}</b>, le ${dayShort(npOf(nx))} · ${fmt(amtFor(nx, sel), true)}` : "Aucune échéance à venir"}</div>
       </section>`}
       ${auto.length > 0 && html`<div class="sch-auto"><div class="fgh">Calculé par Pécule</div><div class="card">${auto.map(([n2, d]) => html`<div class="row" style="min-height:56px"><span class="dcirc"><b style="font-size:14px">⚙︎</b></span><span class="grow"><div class="t1">${n2}</div><div class="t2" style="white-space:normal">${d}</div></span></div>`)}</div></div>`}</div>

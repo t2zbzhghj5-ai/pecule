@@ -1528,6 +1528,50 @@ def echeance_date_de_fin(br, url):
 
 
 @test
+def echeance_sauf_mois(br, url):
+    """« Sauf en » : une échéance mensuelle qui saute août chaque année (Navigo) ; réglée dans Modifier ; aucune occurrence en août (prévisions, prochaine date après validation) ; ligne et fiche de l'échéancier ; au prorata, août compte 0 €."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    j, cour = a.acc_id("Joint"), a.acc_id("Courant")
+    a.js("""D.Store.put({k: 'sch', id: 'sch_t_nav', account: arg, name: 'Navigo', amount: -88.8, splits: [{amount: -88.8, cat: null}], freq: {n: 1, u: 'm'}, next: '2026-12-05', anchor: 5, start: '2026-12-05', end: null, left: null, auto: false, paused: false, skips: [], pay: 'prelevement'});""", cour)
+    a.wait(300)
+    a.js("D.SHEET.open({type: 'op', kind: 'sch', src: D.A().sch.sch_t_nav});"); a.wait(500)
+    blk = pg.locator(".sheet .offm")
+    check(blk.count() == 1 and "Sauf en" in blk.inner_text(), "bloc « Sauf en » absent")
+    blk.locator('button[aria-label="Sauter août"]').click(); a.wait(200)
+    check("11 mois sur 12" in blk.inner_text() and "Pas de prélèvement en août" in blk.inner_text(), "bloc après le choix : %r" % blk.inner_text())
+    pg.locator('.sheet button:has-text("Enregistrer")').last.click(); a.wait(500)
+    check(a.js("return D.A().sch.sch_t_nav.offM;") == [8], "mois sautés non enregistrés")
+    occ = a.js("return D.occurrences('2027-12-31').filter(o => o.name === 'Navigo').map(o => o.date);")
+    check(len(occ) == 12 and "2027-08-05" not in occ and "2027-07-05" in occ and "2027-09-05" in occ, "occurrences : %s" % occ)
+    a.js("D.NAV.tab('echeancier')"); a.wait(400)
+    a.pick("Courant")
+    row = pg.locator("main button.row", has_text="Navigo").first
+    check("chaque mois sauf août" in row.inner_text(), "ligne : %r" % row.inner_text())
+    check("Navigo compté pour 11 mois sur 12" in pg.locator("main").inner_text(), "total du mois sans la mention 11/12")
+    row.click(); a.wait(400)
+    sh = pg.locator(".sheet")
+    check("de chaque mois, sauf août" in sh.inner_text() and sh.locator(".ystrip .c.off").count() == 1 and sh.locator(".ystrip .c").count() == 12, "fiche : %r" % sh.inner_text()[:200])
+    a.js("D.SHEET.close()"); a.wait(200)
+    # valider juillet : la prochaine date passe directement à septembre
+    a.js("D.Store.put({...D.A().sch.sch_t_nav, next: '2027-07-05'});"); a.wait(200)
+    a.js("D.Store.put({k: 'tx', id: 'tx_s_sch_t_nav_2027-07-05', account: arg, date: '2027-07-05', name: 'Navigo', amount: -88.8, splits: [{amount: -88.8, cat: null}], st: 'saisie'});", cour); a.wait(200)
+    check(a.js("return D.nextPending(D.A().sch.sch_t_nav);") == "2027-09-05", "prochaine date après juillet : %s" % a.js("return D.nextPending(D.A().sch.sch_t_nav);"))
+    # prorata : une échéance du joint sauf août compte 0 € en août
+    a.js("D.NAV.push({v: 'joint'});"); a.wait(400)
+    pg.click('main button:has-text("Configurer")'); a.wait(400)
+    sh = pg.locator(".sheet")
+    sh.locator("#pr-f").select_option(cour); sh.locator("#pr-n").fill("Claire"); sh.locator("#pr-m").fill("3000"); sh.locator("#pr-p").fill("2000")
+    sh.locator('button:has-text("Enregistrer")').last.click(); a.wait(500)
+    a.js("D.Store.put({...D.A().sch.sch_t_nav, id: 'sch_t_navj', account: arg, next: '2026-12-05', prorata: true});", j); a.wait(300)
+    has = lambda k: a.js("return D.prItems(arg).some(x => x.id === 'sch_t_navj');", k)
+    check(has("2027-07") and not has("2027-08") and has("2027-09"), "prorata en août : juil %s août %s sept %s" % (has("2027-07"), has("2027-08"), has("2027-09")))
+    a.no_errors("sauf en")
+    a.close()
+
+
+@test
 def mise_a_jour(br, url):
     """Mise à jour : numéro identique dans l'app et sw.js ; « Rechercher » quand tout est à jour ; bandeau sur l'accueil et ligne des Réglages quand une version plus récente est en ligne ; « Mettre à jour » recharge l'app ; fenêtre « Nouveautés » une seule fois."""
     import re as _re
