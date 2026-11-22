@@ -28,6 +28,7 @@ reste sur la machine ; rien n'est écrit dans le dépôt (`tests/out/` est ignor
 | `ecrans_mac_sombre` | Idem sur grand écran, thème sombre, menu latéral |
 | `saisie_assistant` | Bouton + : dépense, revenu, virement ; catégorie et soldes |
 | `pas_de_zoom_saisie` | iPhone (écran tactile) : tous les champs du + et du formulaire sont en 16 px au moins, pour que Safari ne zoome pas en les touchant |
+| `fiche_saisie` | Fiche de saisie (maquette A) : bloc du montant, 4 lignes, options ; champs retirés absents ; « Déjà passée à la banque » valide ; date de débit seulement pour une carte |
 | `saisie_autre_date` | Bouton + : « Autre date » dans un autre mois (dépense) et 1re date d'une échéance gardées même si le champ change sans événement (comme sur l'iPhone) |
 | `saisie_texte_et_suggestions` | Texte collé « Boulangerie 4,20 € hier » ; libellés proposés dès la 1re lettre |
 | `saisie_echeance` | Bouton + › Échéance : création et occurrences |

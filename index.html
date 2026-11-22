@@ -176,7 +176,7 @@ input,select,textarea{font:inherit;font-size:16px;color:var(--ink);background:va
 select{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-right:32px}
 textarea{min-height:70px;resize:vertical}
 /* iPhone : un champ écrit en dessous de 16 px fait zoomer Safari quand on le touche, et la page reste agrandie (barre du bas coupée) */
-@media (hover: none) and (pointer: coarse){input,select,textarea{font-size:16px !important}}
+@media (hover: none) and (pointer: coarse){input:not(.amount-in):not(.big-in),select,textarea{font-size:16px !important}} /* les grands champs (montants, code) restent grands */
 input[type=date],input[type=month]{-webkit-appearance:none;appearance:none;display:block;min-width:0;max-width:100%;text-align:left;line-height:1.3}
 input[type=date]::-webkit-date-and-time-value{text-align:left;margin:0}
 input[type=date]:disabled{opacity:.45}
@@ -381,6 +381,41 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .rblock .rb-pill{margin-top:12px;min-height:34px;border-radius:17px;border:0;background:var(--track);color:inherit;font-size:14px;font-weight:600;padding:0 12px;display:inline-flex;align-items:center;gap:6px}
 .card.flat{background:none;border-radius:0;overflow:visible}
 .card.flat>.row{border-top:0;padding-left:4px;padding-right:4px}
+/* Fiche opération (maquette A « la fiche ») */
+.famt{background:var(--pb);border-radius:28px;padding:14px 16px 18px;display:flex;flex-direction:column;align-items:center;gap:6px}
+.famt-seg .seg{background:none;border:0;gap:6px;padding:0}
+.famt-seg .seg button{border-radius:18px;background:var(--track);color:var(--ink);font-weight:600;min-height:36px;padding:0 14px}
+.famt-seg .seg button.on{background:var(--accent);color:var(--onacc)}
+.famt-l{font-size:13px;font-weight:600;color:var(--pi);margin-top:8px}
+.famt-v{display:flex;align-items:baseline;justify-content:center;gap:6px;max-width:100%}
+.famt-box{display:inline-grid;min-width:0;max-width:calc(100% - 44px)}
+.famt-box>*{grid-area:1/1;font-family:var(--display);font-size:50px !important;font-weight:700;letter-spacing:-.035em;padding:0 2px;line-height:1.2}
+.famt-sz{visibility:hidden;white-space:pre;overflow:hidden;padding:0 10px !important}
+.famt .amount-in{background:none;border:0;color:var(--ink);text-align:center;min-height:60px;width:0;min-width:100%;padding:0 !important}
+.famt-eur{font-family:var(--display);font-size:34px;font-weight:700;color:var(--ink)}
+.famt-h{font-size:12.5px;color:var(--pi)}
+.fsugg{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -2px;padding:0 2px}
+.fsugg::-webkit-scrollbar{display:none}
+.fsugg .chip{flex:none;display:inline-flex;align-items:center;gap:6px;padding:0 12px 0 6px;min-height:36px}
+.fcard{background:var(--card);border-radius:22px;display:flex;flex-direction:column}
+.fcard>*+*{border-top:1px solid var(--line)}
+.frow{display:flex;align-items:center;gap:12px;min-height:60px;padding:8px 14px;width:100%;box-sizing:border-box;background:none;border:0;color:var(--ink);font:inherit;text-align:left}
+.fic{width:36px;height:36px;border-radius:12px;background:var(--pb);color:var(--pi);display:grid;place-items:center;flex:none}
+.frow .fl{flex-grow:1;font-size:15.5px;color:var(--muted);white-space:nowrap}
+.frow .fv{font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%}
+.frow input.fin,.frow select{border:0;background:none;color:var(--ink);font-weight:600;text-align:right;padding:0 4px;min-height:44px;width:auto;max-width:62%;flex:0 1 auto;box-shadow:none}
+.frow input.fin{flex:1 1 auto;min-width:0}
+.frow select{background-image:none;padding-right:4px;text-align-last:right}
+.frow input[type=date].fin{flex:0 0 auto}
+.frow-col{display:flex;flex-direction:column}
+.frow-grid{padding:4px 12px 14px}
+.fsel{margin:0 14px 12px;width:calc(100% - 28px)}
+.fcard>.fsel{border-top:0}
+.flink{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;min-height:40px;font-weight:600}
+.fhead{font-size:13px;font-weight:600;color:var(--muted);padding:6px 6px 0}
+.fopts .toggle,.fmore .toggle{background:none;border:0;border-radius:0;box-shadow:none}
+.fopts>.grid2,.fopts>.grid3,.fopts>.offm,.fmore>.field,.fmore>div{padding:12px 14px}
+.fopts>.offm{margin:10px 12px;padding:14px 14px 12px}
 .offm{background:var(--pb);border-radius:22px;padding:14px 14px 12px;display:flex;flex-direction:column;gap:8px}
 .offm .t1{font-size:15.5px;font-weight:600;color:var(--ink)}
 .offm-n{font-size:13px;font-weight:600;color:var(--pi)}
@@ -1177,7 +1212,7 @@ function calc(str) {
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
 /* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
-const APP_VERSION = 61;
+const APP_VERSION = 62;
 /* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
 const NEWS = {
   54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
@@ -1188,6 +1223,7 @@ const NEWS = {
   59: ["La barre du bas reste entière après une saisie."],
   60: ["Saisie avec le + : la date choisie dans « Autre date » est bien gardée, même dans un autre mois."],
   61: ["Plus de zoom quand tu touches un champ de saisie : la page garde sa taille et la barre du bas reste entière."],
+  62: ["Nouvelle fiche de saisie : le montant en couleur, l'essentiel en quatre lignes (libellé, catégorie, compte, date), tes libellés habituels en raccourcis et les options regroupées."],
 };
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));
@@ -1819,6 +1855,7 @@ const I = {
   trash: "M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13",
   edit: "M4 20h4L19 9l-4-4L4 16zM14 6l4 4",
   refresh: "M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6",
+  split: "M6 3.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM6 15.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM8 7.5L20 18M8 16.5L20 6",
   swap: "M7 7h13l-4-4M17 17H4l4 4",
   more: "M5 12h.01M12 12h.01M19 12h.01",
   repeat: "M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3",
@@ -1966,6 +2003,16 @@ function CatGrid({v, income, onPick}) {
       </div></div>`; })}
     ${!tops.length && html`<div class="help">Aucune catégorie${qq ? " ne correspond" : ""}. <button type="button" class="link" onClick=${() => SHEET.open({type: "cat"})}>Créer une catégorie</button></div>`}
     ${income !== undefined && !all && html`<button type="button" class="link" style="align-self:flex-start" onClick=${() => setAll(true)}>Afficher aussi les catégories de ${income ? "dépenses" : "revenus"}</button>`}
+  </div>`;
+}
+/* Fiche opération (maquette A) : la catégorie en ligne, la grille s'ouvre dessous */
+function CatRow({v, set, income, label = "Catégorie", clear}) {
+  const [open, setOpen] = useState(false), c = v && cat(v);
+  return html`<div class="frow-col">
+    <button type="button" id="op-cat" class="frow frow-btn" aria-expanded=${open ? "true" : "false"} onClick=${() => setOpen(!open)}>
+      ${v ? html`<${CatGlyph} id=${v} box=${36} s=${18} />` : html`<span class="fic p-mint"><${Ic} n="tag" s=${18} /></span>`}
+      <span class="fl">${label}</span><span class="fv">${c ? c.name : "Choisir"}</span><span class="muted" aria-hidden="true" style=${"transition:transform .2s;transform:rotate(" + (open ? 90 : 0) + "deg)"}>›</span></button>
+    ${open && html`<div class="frow-grid"><${CatGrid} v=${v} income=${income} onPick=${x => { set(x); setOpen(false); }} />${clear && v && html`<button type="button" class="link" style="align-self:flex-start;margin-top:8px" onClick=${() => { set(null); setOpen(false); }}>Retirer la catégorie</button>`}</div>`}
   </div>`;
 }
 function CatField({v, set, id, income}) {
@@ -3707,6 +3754,10 @@ function nameSuggest(v, max = 5) {
     return Object.values(m).sort((a, b) => b.n - a.n || b.date.localeCompare(a.date)); });
   return all.filter(e => e.k.startsWith(n) || e.k.split(/[\s\-']+/).some(w => w.startsWith(n))).filter(e => e.k !== n).slice(0, max).map(e => e.t);
 }
+/* Libellés les plus fréquents, proposés avant de taper (nouvelle opération) */
+const topNames = (max = 6) => memo("topn", () => { const m = {};
+  for (const t of Object.values(A().tx)) { const k = norm(t.name || "").trim(); if (!k || t.kind || t.date < addDays(today(), -120)) continue; const e = m[k] || (m[k] = {n: 0, t}); e.n++; if (t.date >= e.t.date) e.t = t; }
+  return Object.values(m).filter(e => e.n >= 2).sort((a, b) => b.n - a.n).map(e => e.t); }).slice(0, max);
 const suggest = field => memo("sg" + field, () => { const c = {}; for (const t of Object.values(A().tx)) if (t[field]) c[t[field]] = (c[t[field]] || 0) + 1; return Object.entries(c).sort((a, b) => b[1] - a[1]).map(x => x[0]).slice(0, 60); });
 const HL = ["", "#F2643D", "#F0A52E", "#3BA55C", "#2F6FED", "#7B61FF"];
 function SplitOpts({o, set}) {
@@ -3778,7 +3829,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
       amount = r2(splits.reduce((a, s) => a + s.amount, 0));
     } else { amount = sg * total; splits = [withOpt({cat: f.cat || null, amount}, f.opt)]; }
     if (!f.split && splits.length === 1 && f.splits?.length === 1 && f.splits[0].memo && !splits[0].memo) splits[0].memo = f.splits[0].memo;
-    const common = {account: f.account, name: f.name.trim() || (mode === "transfer" ? "Virement" : "Opération"), amount: r2(amount), splits, pay: f.pay, payee: f.payee.trim() || null, project: f.project.trim() || null};
+    const common = {account: f.account, name: f.name.trim() || (mode === "transfer" ? "Virement" : "Opération"), amount: r2(amount), splits, pay: base && !base.virtual ? f.pay : (mode !== "expense" ? "virement" : f.pay), payee: f.payee.trim() || null, project: f.project.trim() || null}; /* moyen de paiement déduit (v62 : plus de champ) */
     if (f.comment) common.comment = f.comment; else common.comment = null;
     if (f.shares.length && mode === "expense") common.shares = f.shares.filter(s => s.per && s.pct > 0); else common.shares = null;
     if (asOv === true && occ?.kind === "sch") {
@@ -3824,22 +3875,24 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
     ${fut && html`<div class="help" style="text-align:center;margin-top:-4px">Prévue le ${dayShort(occ.odate || occ.date)} · rien n'est débité tant que tu ne la valides pas.</div>`}
     ${locked && html`<div class="banner"><${Ic} n="lock" s=${18} /><span class="grow">Verrouillée par un relevé. <button class="link" onClick=${() => { Store.put({...base, st: "pointee"}); close(); toast("Déverrouillée"); }}>Déverrouiller</button></span></div>`}
     <fieldset disabled=${locked} style="border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:16px;min-width:0">
-    ${!(occ && occ.kind !== "sch") && html`<${Seg} cls=${mode === "expense" ? "exp" : mode === "income" ? "inc" : ""} v=${mode} set=${m => { setMode(m); if (m === "transfer") set("split", false); }} opts=${[["expense","Dépense"],["income","Revenu"],["transfer","Virement"]]} />`}
-    <div class="field" style="align-items:center">
-      <input id="op-amt" class="amount-in" inputmode="decimal" placeholder="0,00" value=${f.amt} onInput=${e => set("amt", e.target.value)} onBlur=${() => { const v = calc(f.amt); if (!isNaN(v)) set("amt", amtStr(v)); }} aria-label="Montant en euros" style=${`color:${mode === "income" ? "var(--pos)" : "var(--ink)"}`} />
-      ${/[+*/]|.-/.test(f.amt) && !isNaN(total) && html`<div class="help">= ${fmt(total)}</div>`}
+    <div class=${"famt p-" + (mode === "income" ? "mint" : mode === "transfer" ? "sky" : "peach")}>
+      ${!(occ && occ.kind !== "sch") && html`<div class="famt-seg"><${Seg} cls=${mode === "expense" ? "exp" : mode === "income" ? "inc" : ""} v=${mode} set=${m => { setMode(m); if (m === "transfer") set("split", false); }} opts=${[["expense","Dépense"],["income","Revenu"],["transfer","Virement"]]} /></div>`}
+      <label class="famt-l" for="op-amt">Montant</label>
+      <div class="famt-v"><span class="famt-box"><span class="famt-sz" aria-hidden="true">${f.amt || "0,00"}</span><input id="op-amt" class="amount-in" inputmode="decimal" placeholder="0,00" value=${f.amt} onInput=${e => set("amt", e.target.value)} onBlur=${() => { const v = calc(f.amt); if (!isNaN(v)) set("amt", amtStr(v)); }} aria-label="Montant en euros"  /></span><span class="famt-eur" aria-hidden="true">€</span></div>
+      ${/[+*/]|.-/.test(f.amt) && !isNaN(total) && html`<div class="famt-h">= ${fmt(total)}</div>`}
+      ${!/[+*/]|.-/.test(f.amt) && html`<div class="famt-h">Tu peux taper un calcul : 40 + 2,10</div>`}
     </div>
-    <${Field} label="Libellé" id="op-name"><input id="op-name" value=${f.name} onInput=${e => onName(e.target.value)} placeholder=${mode === "transfer" ? "Virement" : "Monoprix, loyer…"} autocomplete="off" />
-      ${sugg.length > 0 && html`<div class="chips">${sugg.map(t => html`<button type="button" class="chip" onClick=${() => pickSugg(t)}><${CatGlyph} id=${t.splits?.[0]?.cat} box=${20} s=${13} /> ${t.name}</button>`)}</div>`}</${Field}>
-    ${f.more && mode !== "transfer" && showF("payee") && html`<${Field} label="Tiers" id="op-payee"><input id="op-payee" list="dl-payee" value=${f.payee} onInput=${e => set("payee", e.target.value)} placeholder="Facultatif : enseigne, personne, organisme" autocomplete="off" /><datalist id="dl-payee">${suggest("payee").map(x => html`<option value=${x} />`)}</datalist></${Field}>`}
-    <div class="grid2">
-      <${Field} label=${isSch ? "Prochaine échéance" : "Date"} id="op-date"><input id="op-date" type="date" value=${f.date} onInput=${e => set("date", e.target.value)} /></${Field}>
-      <${Field} label=${mode === "transfer" ? "Depuis" : "Compte"} id="op-acc"><${AccSelect} id="op-acc" v=${f.account} set=${v => set("account", v)} /></${Field}>
+    ${(sugg.length > 0 || (!base && !isSch && !f.name.trim() && topNames(6).length > 0)) && html`<div class="fsugg" aria-label="Libellés habituels">${(sugg.length ? sugg : topNames(6)).map(t => html`<button type="button" class="chip" onClick=${() => pickSugg(t)}><${CatGlyph} id=${t.splits?.[0]?.cat} box=${24} s=${14} /> ${t.name}</button>`)}</div>`}
+    <div class="fcard">
+      <div class="frow"><span class="fic p-butter"><${Ic} n="tag" s=${18} /></span><label class="fl" for="op-name">Libellé</label><input id="op-name" class="fin" value=${f.name} onInput=${e => onName(e.target.value)} placeholder=${mode === "transfer" ? "Virement" : "Monoprix, loyer…"} autocomplete="off" /></div>
+      ${mode === "transfer" && html`<div class="frow"><span class="fic p-sky"><${Ic} n="swap" s=${18} /></span><label class="fl" for="op-to">Vers</label><${AccSelect} id="op-to" v=${f.to} set=${v => set("to", v)} none="Choisir…" exclude=${f.account} /></div>`}
+      ${!f.split && html`<${CatRow} v=${f.cat} set=${v => set("cat", v)} income=${mode === "income"} label=${mode === "transfer" ? "Catégorie (facultatif)" : "Catégorie"} clear=${mode === "transfer"} />`}
+      ${!f.split && mode !== "transfer" && (bs => bs.length > 1 && html`<select aria-label="Budget concerné" value=${f.opt?.bdg || ""} onChange=${e => set("opt", {...f.opt, bdg: e.target.value || null})} class="fsel"><option value="">Budget : tous ceux de cette catégorie</option>${bs.map(b => html`<option value=${b.id}>Budget : ${b.name}</option>`)}</select>`)(budgetsFor(f.account, f.cat))}
+      <div class="frow"><span class="fic p-sky"><${Ic} n="wallet" s=${18} /></span><label class="fl" for="op-acc">${mode === "transfer" ? "Depuis" : "Compte"}</label><${AccSelect} id="op-acc" v=${f.account} set=${v => set("account", v)} /></div>
+      <div class="frow"><span class="fic p-lilac"><${Ic} n="cal" s=${18} /></span><label class="fl" for="op-date">${isSch ? "Prochaine échéance" : "Date"}</label><input id="op-date" class="fin" type="date" value=${f.date} onInput=${e => set("date", e.target.value)} onChange=${e => e.target.value && set("date", e.target.value)} /></div>
     </div>
-    ${mode === "transfer" ? html`<${Field} label="Vers" id="op-to"><${AccSelect} id="op-to" v=${f.to} set=${v => set("to", v)} none="Choisir…" exclude=${f.account} /></${Field}>
-      <${Field} label="Catégorie (facultatif)" id="op-cat" help=${f.cat ? "Compte dans les budgets « " + catName(f.cat) + " »." : null}><${CatField} id="op-cat" v=${f.cat} set=${v => set("cat", v)} />${f.cat && html`<button type="button" class="link" style="align-self:flex-start" onClick=${() => set("cat", null)}>Retirer la catégorie</button>`}</${Field}>`
-      : !f.split ? html`<div class="field"><div style="display:flex;justify-content:space-between;align-items:baseline"><label class="lb" for="op-cat">Catégorie</label><button type="button" class="link" style="font-size:14px" onClick=${startSplit}>✂️ Plusieurs catégories</button></div><${CatField} id="op-cat" v=${f.cat} set=${v => set("cat", v)} income=${mode === "income"} />${(bs => bs.length > 1 && html`<select aria-label="Budget concerné" value=${f.opt?.bdg || ""} onChange=${e => set("opt", {...f.opt, bdg: e.target.value || null})} style="margin-top:6px"><option value="">Budget : tous ceux de cette catégorie</option>${bs.map(b => html`<option value=${b.id}>Budget : ${b.name}</option>`)}</select>`)(budgetsFor(f.account, f.cat))}</div>`
-      : html`<div class="field"><span class="lb">Ventilation</span>
+    ${mode !== "transfer" && !f.split && html`<button type="button" class="link flink" onClick=${startSplit}><${Ic} n="split" s=${16} />Répartir sur plusieurs catégories</button>`}
+    ${mode !== "transfer" && f.split && html`<div class="field"><span class="lb">Ventilation</span>
           ${f.splits.map((s, i) => html`<div class="split">
             ${s.tr ? html`<div style="display:flex;flex-direction:column;gap:2px;min-width:0"><select aria-label="Virement vers" value=${s.to} onChange=${e => { const n = [...f.splits]; n[i] = {...s, to: e.target.value}; set("splits", n); }}><option value="">Virement vers…</option>${accList().filter(a => a.id !== f.account).map(a => html`<option value=${a.id}>${a.name}</option>`)}</select>${(s.memo || s.cat) && html`<span class="t2" style="font-size:12px;padding-left:6px">${s.memo || catName(s.cat)}</span>`}</div>` : html`<div style="display:flex;flex-direction:column;gap:2px;min-width:0"><${CatField} v=${s.cat} set=${v => { const n = [...f.splits]; n[i] = {...s, cat: v}; set("splits", n); }} income=${mode === "income"} />${s.memo && html`<span class="t2" style="font-size:12px;padding-left:6px">${s.memo}</span>`}</div>`}
             ${html`<button type="button" class="ibtn plain" aria-label="Inverser le signe de la part" title="Part en négatif" style=${"font-weight:700;font-size:17px" + (String(s.amt).trim().startsWith("-") ? ";color:var(--neg)" : "")} onClick=${() => { const n = [...f.splits], v = String(s.amt || "").trim(); n[i] = {...s, amt: v.startsWith("-") ? v.slice(1) : "-" + v}; set("splits", n); }}>±</button>`}
@@ -3853,6 +3906,8 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
             <button type="button" class="link" onClick=${() => set("splits", [...f.splits, {cat: null, to: "", tr: true, amt: total > 0 ? amtStr(Math.max(0, total - splitSum)) : "", memo: ""}])}>+ Ajouter un virement</button></span>
             <span class=${"pill " + (Math.abs(splitSum - (total || 0)) < 0.005 ? "ok" : "bad")}>${Math.abs(splitSum - (total || 0)) < 0.005 ? "Équilibrée" : "Reste " + fmt((total || 0) - splitSum)}</span>
           </div></div>`}
+    <div class="fhead">Options</div>
+    <div class="fcard fopts">
     ${isSch ? html`
       <div class="grid2">
         <${Field} label="Tous les" id="op-fn"><input id="op-fn" type="number" min="1" inputmode="numeric" value=${f.freq.n} onInput=${e => set("freq", {...f.freq, n: e.target.value})} /></${Field}>
@@ -3871,36 +3926,23 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
       ${base && html`<${Toggle} on=${f.paused} set=${v => set("paused", v)} label="Suspendre" sub="Plus d'occurrences prévues tant que c'est activé." />`}
       ${prSchOk(f.account, mode === "transfer" ? f.to : null) && html`<${Toggle} on=${!!f.prorata} set=${v => set("prorata", v)} label="Au prorata des salaires" sub=${f.prorata ? `Comptée chaque mois dans ton virement au ${accName(halfJoint())} et la ligne ${(PR().name || "").trim() || "de l'autre personne"} (${Math.round(prRatio(ym(today())) * 100)} / ${100 - Math.round(prRatio(ym(today())) * 100)})` : "Partager cette échéance au prorata de vos salaires"} />`}`
     : html`
-      ${f.more && mode !== "transfer" && showF("pay") && html`<div class="grid2">
-        <${Field} label="Moyen de paiement" id="op-pay"><select id="op-pay" value=${f.pay} onChange=${e => set("pay", e.target.value)}>${Object.entries(PAY).map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select></${Field}>
-        ${f.pay === "cheque" ? html`<${Field} label="N° de chèque" id="op-num"><input id="op-num" inputmode="numeric" value=${f.num} onInput=${e => set("num", e.target.value)} /></${Field}>` : html`<span></span>`}
-      </div>`}
-      ${f.more && html`<${Field} label=${mode === "transfer" ? "Statut côté " + accName(f.account) : "Statut"}><${Seg} v=${f.st === "verrouillee" ? "pointee" : f.st} set=${v => set("st", v)} opts=${[["prevue","Prévue"], ["saisie","Créée"], ...(f.st === "importee" ? [["importee","Importée"]] : []), ["pointee","Validée"],["annulee","Annulée"]]} /></${Field}>`}
-      ${f.more && mode === "transfer" && f.to && html`<${Field} label=${"Statut côté " + accName(f.to)}><${Seg} v=${f.st2 === "verrouillee" ? "pointee" : f.st2} set=${v => set("st2", v)} opts=${[["prevue","Prévue"],["saisie","Créée"],["pointee","Validée"]]} /></${Field}>`}
-    ${!isSch && !occ && mode === "expense" && isJointAcc(f.account) && html`<${Toggle} on=${!!f.half} set=${v => set("half", v)} label="Remboursement 50/50" sub=${f.half ? `Moitié sur ton virement vers le joint, moitié sur « ${halfName()} », le ${dayShort(halfDate(ym(f.date)))}.` : null} />`}
+      ${!occ && html`<${Toggle} on=${f.st === "pointee" || f.st === "verrouillee"} set=${v => set("st", v ? "pointee" : "saisie")} label="Déjà passée à la banque" sub=${f.st === "pointee" || f.st === "verrouillee" ? "Comptée dans le solde validé" : f.st === "prevue" ? "Prévue : rien n'est encore débité" : "Comptée dans le solde validé une fois cochée"} />`}
+      ${!isSch && !occ && mode === "expense" && isJointAcc(f.account) && html`<${Toggle} on=${!!f.half} set=${v => set("half", v)} label="Remboursement 50/50" sub=${f.half ? `Moitié sur ton virement vers le joint, moitié sur « ${halfName()} », le ${dayShort(halfDate(ym(f.date)))}.` : null} />`}
       ${!base && !occ && html`<${Toggle} on=${f.rep} set=${v => set("rep", v)} label="Répéter" sub=${f.rep ? "Devient une échéance prévue, 1re le " + dayShort(f.date) + "." : null} />
         ${f.rep && html`<div class="grid3">
           <${Field} label="Tous les" id="op-rn"><input id="op-rn" type="number" min="1" value=${f.freq.n} onInput=${e => set("freq", {...f.freq, n: e.target.value})} /></${Field}>
           <${Field} label="Unité" id="op-ru"><select id="op-ru" value=${f.freq.u} onChange=${e => set("freq", {...f.freq, u: e.target.value})}><option value="d">jours</option><option value="w">semaines</option><option value="m">mois</option><option value="y">ans</option></select></${Field}>
           <${Field} label="Jusqu'au" id="op-re"><input id="op-re" type="date" value=${f.end} onInput=${e => set("end", e.target.value)} /></${Field}>
         </div>`}`}`}
-    ${f.more && mode === "expense" && showF("shares") && html`<div class="field"><span class="lb">Dépense partagée</span>
-      ${per.length === 0 ? html`<div class="help">Ajoute des personnes dans Réglages pour savoir qui te doit quoi.</div>` : html`
-        ${f.shares.map((s, i) => html`<div class="split" style="grid-template-columns:1fr 90px 36px">
-          <select value=${s.per} aria-label="Personne" onChange=${e => { const n = [...f.shares]; n[i] = {...s, per: e.target.value}; set("shares", n); }}>${per.map(p => html`<option value=${p.id}>${p.name}</option>`)}</select>
-          <input inputmode="decimal" value=${s.pct} aria-label="Pourcentage" onInput=${e => { const n = [...f.shares]; n[i] = {...s, pct: calc(e.target.value) || 0}; set("shares", n); }} style="text-align:right" />
-          <button type="button" class="ibtn plain" aria-label="Retirer" onClick=${() => set("shares", f.shares.filter((_, j) => j !== i))}><${Ic} n="x" s=${16} /></button></div>`)}
-        <div class="help">${f.shares.map(s => `${A().per[s.per]?.name || "?"} te doit ${fmt((total || 0) * (s.pct || 0) / 100)}`).join(" · ")}</div>
-        <button type="button" class="link" style="align-self:flex-start" onClick=${() => set("shares", [...f.shares, {per: per[0].id, pct: 50}])}>+ Partager avec quelqu'un</button>`}
-    </div>`}
-    ${f.more && !isSch && mode === "income" && per.length > 0 && html`<${Field} label="Remboursement de" id="op-rp"><select id="op-rp" value=${f.repay} onChange=${e => set("repay", e.target.value)}><option value="">Personne</option>${per.map(p => html`<option value=${p.id}>${p.name}</option>`)}</select></${Field}>`}
-    ${f.more && showF("comment") && html`<${Field} label="Commentaire" id="op-com"><textarea id="op-com" value=${f.comment} onInput=${e => set("comment", e.target.value)} placeholder="Facultatif"></textarea></${Field}>`}
-    <button type="button" class="link" style="align-self:flex-start" onClick=${() => set("more", !f.more)}>${f.more ? "Moins d'options" : "Plus d'options"}</button>
-    ${f.more && html`
-      ${!isSch && html`<${Field} label="Date de valeur" id="op-vd" help="Pour une carte à débit différé, c'est elle qui décide sur quel débit l'achat tombe."><input id="op-vd" type="date" value=${f.vdate || f.date} onInput=${e => set("vdate", e.target.value)} /></${Field}>`}
-      <${Field} label="Projet" id="op-pj" help="Regroupe des dépenses de catégories différentes, ex. « travaux cuisine »."><input id="op-pj" list="dl-pj" value=${f.project} onInput=${e => set("project", e.target.value)} autocomplete="off" /><datalist id="dl-pj">${suggest("project").map(x => html`<option value=${x} />`)}</datalist></${Field}>
+    </div>
+    <button type="button" class="link flink" onClick=${() => set("more", !f.more)}>${f.more ? "Moins d'options" : "Plus d'options"}</button>
+    ${f.more && html`<div class="fcard fmore">
+      ${!isSch && html`      ${html`<${Field} label=${mode === "transfer" ? "Statut côté " + accName(f.account) : "Statut"}><${Seg} v=${f.st === "verrouillee" ? "pointee" : f.st} set=${v => set("st", v)} opts=${[["prevue","Prévue"], ["saisie","Créée"], ...(f.st === "importee" ? [["importee","Importée"]] : []), ["pointee","Validée"],["annulee","Annulée"]]} /></${Field}>`}
+      ${mode === "transfer" && f.to && html`<${Field} label=${"Statut côté " + accName(f.to)}><${Seg} v=${f.st2 === "verrouillee" ? "pointee" : f.st2} set=${v => set("st2", v)} opts=${[["prevue","Prévue"],["saisie","Créée"],["pointee","Validée"]]} /></${Field}>`}`}
+      <${Field} label="Note" id="op-com"><textarea id="op-com" value=${f.comment} onInput=${e => set("comment", e.target.value)} placeholder="Facultatif"></textarea></${Field}>
+      ${!isSch && (A().acc[f.account]?.type === "carte" || f.vdate) && html`<${Field} label="Date de débit (carte)" id="op-vd" help="Elle décide sur quel débit de la carte l'achat tombe."><input id="op-vd" type="date" value=${f.vdate || f.date} onInput=${e => set("vdate", e.target.value)} /></${Field}>`}
       ${mode !== "transfer" && !f.split && html`<${SplitOpts} o=${f.opt} set=${o => set("opt", o)} />`}
-      ${!isSch && html`<div class="field"><span class="lb">Surlignage</span><div class="chips">${HL.map(c => html`<button type="button" aria-label=${c ? "Couleur " + c : "Aucune couleur"} onClick=${() => set("hl", c)} style=${`width:32px;height:32px;border-radius:10px;border:3px solid ${f.hl === c ? "var(--ink)" : "var(--line)"};background:${c || "var(--surface)"}`}></button>`)}</div></div>`}`}
+    </div>`}
     </fieldset>
     ${err && html`<div class="banner" role="alert" style="background:color-mix(in srgb,var(--neg) 14%,var(--surface))">${err}</div>`}
     ${!locked && (fut ? html`<button class="btn pri" onClick=${() => save(true)}>Enregistrer pour cette fois</button>
@@ -5002,8 +5044,7 @@ function Prefs() {
     <${Toggle} on=${!s.hidePlanned} set=${v => up("hidePlanned", !v)} label="Afficher les opérations prévues dans les comptes" sub="En italique, avec une horloge." />
     ${!s.hidePlanned && html`<${Field} label="Afficher les prévues jusqu'à" id="pf-pu"><select id="pf-pu" value=${s.planUntil || "m3"} onChange=${e => up("planUntil", e.target.value)}><option value="m1">1 mois</option><option value="m3">3 mois</option><option value="m6">6 mois</option><option value="m9">9 mois</option><option value="m12">12 mois</option><option value="eom">la fin du mois</option><option value="eonm">la fin du mois prochain</option><option value="d30">dans 30 jours</option><option value="d90">dans 90 jours</option><option value="eoy">la fin de l'année</option></select></${Field}>`}
     <${Field} label="Solde affiché sous chaque opération" id="pf-rm" help="Le cumul « opérations affichées » suit la recherche et les filtres."><select id="pf-rm" value=${s.runMode || "all"} onChange=${e => up("runMode", e.target.value)}><option value="all">Ce qui reste sur le compte après l'opération</option><option value="shown">Cumul des opérations affichées</option><option value="none">Ne pas afficher</option></select></${Field}>
-    <div class="field"><span class="lb">Champs affichés dans la fiche opération</span><div class="chips">${Object.entries(FIELDS).map(([k, l]) => html`<button type="button" class=${"chip" + (showF(k) ? " on" : "")} onClick=${() => up("fields", {...(s.fields || {}), [k]: !showF(k)})}>${l}</button>`)}</div><div class="help">Touche un champ pour le masquer ou le réafficher dans la fiche, si tu ne t'en sers pas.</div></div>
-    <${PinPref} />
+        <${PinPref} />
     <${Field} label="Début de la comptabilité dans Pécule" id="pf-s" help="Les soldes de départ des comptes sont ceux de la veille."><input id="pf-s" type="date" value=${s.start} onChange=${e => e.target.value && up("start", e.target.value)} /></${Field}>
   </main>`;
 }
@@ -5021,7 +5062,7 @@ function LockScreen({onOk}) {
   const [v, setV] = useState(""), [err, setErr] = useState(false);
   const tryIt = async val => { if ((await pinHash(val)) === S().pin) { UNLOCKED = S().pin; try { sessionStorage.setItem("pecule-unlock", S().pin); } catch {} onOk(); } else { setErr(true); setV(""); } };
   return html`<div class="ob" style="align-items:center;text-align:center;padding-top:22vh"><h1>Pécule</h1><p class="lead">Saisis ton code</p>
-    <input type="password" inputmode="numeric" autofocus aria-label="Code" value=${v} style="max-width:220px;text-align:center;font-size:28px;letter-spacing:.4em" onInput=${e => { setV(e.target.value); setErr(false); if (e.target.value.length >= 4 && e.target.value.length === (S().pinLen || e.target.value.length)) {} }} onKeyDown=${e => e.key === "Enter" && tryIt(v)} />
+    <input type="password" class="big-in" inputmode="numeric" autofocus aria-label="Code" value=${v} style="max-width:220px;text-align:center;font-size:28px;letter-spacing:.4em" onInput=${e => { setV(e.target.value); setErr(false); if (e.target.value.length >= 4 && e.target.value.length === (S().pinLen || e.target.value.length)) {} }} onKeyDown=${e => e.key === "Enter" && tryIt(v)} />
     <button class="btn pri" style="min-width:220px" onClick=${() => tryIt(v)}>Déverrouiller</button>
     ${err && html`<div class="help" style="color:var(--neg)">Code incorrect.</div>`}</div>`;
 }

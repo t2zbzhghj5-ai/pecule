@@ -455,7 +455,48 @@ def pas_de_zoom_saisie(br, url):
     a.js("D.SHEET.close()"); a.wait(300)
     a.js("D.SHEET.open({type: 'op', kind: 'tx'})"); a.wait(500)
     check(not small(".sheet input, .sheet textarea, .sheet select"), "champs trop petits dans le formulaire : %s" % small(".sheet input, .sheet textarea, .sheet select"))
+    big = a.js("return parseFloat(getComputedStyle(document.querySelector('#op-amt')).fontSize);")
+    check(big >= 40, "montant de la fiche réduit à %s px sur iPhone" % big)
     a.no_errors("zoom")
+    a.close()
+
+
+@test
+def fiche_saisie(br, url):
+    """Fiche de saisie (maquette A) : montant dans un bloc de couleur, quatre lignes (libellé, catégorie, compte, date), options en interrupteurs ; plus de Tiers, Projet, Surlignage, Moyen de paiement ni Dépense partagée ; « Déjà passée à la banque » valide ; date de débit seulement pour une carte."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    a.js("D.SHEET.open({type: 'op', kind: 'tx'})"); a.wait(500)
+    sh = pg.locator(".sheet")
+    check(sh.locator(".famt").count() == 1 and "Montant" in sh.locator(".famt").inner_text(), "bloc du montant absent")
+    rows = sh.locator(".fcard").first.inner_text()
+    check(all(x in rows for x in ("Libellé", "Catégorie", "Compte", "Date")), "lignes de la fiche : %r" % rows)
+    sh.locator("button", has_text="Plus d'options").first.click(); a.wait(300)
+    txt = sh.inner_text()
+    gone = [x for x in ("Tiers", "Projet", "Surlignage", "Moyen de paiement", "Dépense partagée", "Remboursement de") if x in txt]
+    check(not gone, "champs retirés encore visibles : %s" % gone)
+    check("Statut" in txt and "Note" in txt, "Statut ou Note absents de « Plus d'options »")
+    check("Date de débit" not in txt, "date de débit proposée hors carte")
+    sh.locator("#op-amt").fill("12")
+    sh.locator("#op-name").fill("Fiche test")
+    sh.locator("#op-cat").click(); a.wait(300)
+    sh.locator(".frow-grid .catbtn", has_text="Courses").first.click(); a.wait(200)
+    check("Courses" in sh.locator("#op-cat").inner_text(), "catégorie non choisie")
+    sh.locator('[role=switch]:has-text("Déjà passée à la banque")').click(); a.wait(200)
+    sh.locator(".btn.pri").last.click(); a.wait(600)
+    t = a.js("return Object.values(D.A().tx).find(t => t.name === 'Fiche test');")
+    check(t and t["st"] == "pointee" and t["amount"] == -12 and a.js("return D.A().cat[arg]?.name;", t["splits"][0]["cat"]) == "Courses" and t["pay"] == "cb", "opération enregistrée : %s" % t)
+    # virement : ligne « Vers » ; carte : date de débit dans « Plus d'options »
+    a.js("D.SHEET.open({type: 'op', kind: 'tx'})"); a.wait(500)
+    sh = pg.locator(".sheet").last
+    sh.locator(".famt .seg button", has_text="Virement").click(); a.wait(200)
+    check(sh.locator('label[for="op-to"]').count() == 1, "ligne « Vers » absente pour un virement")
+    sh.locator(".famt .seg button", has_text="Dépense").click(); a.wait(200)
+    sh.locator("#op-acc").select_option(label="Carte Perso"); a.wait(200)
+    sh.locator("button", has_text="Plus d'options").first.click(); a.wait(300)
+    check("Date de débit" in sh.inner_text(), "date de débit absente pour une carte")
+    a.no_errors("fiche")
     a.close()
 
 
