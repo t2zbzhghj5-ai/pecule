@@ -61,6 +61,7 @@ reste sur la machine ; rien n'est écrit dans le dépôt (`tests/out/` est ignor
 | `barre_du_bas_apres_saisie` | Après une saisie validée, barre du bas entière ; page plus haute que l'écran (bogue d'iOS après le clavier) : la barre remonte d'autant ; clavier ouvert : rien ne bouge |
 | `mise_a_jour` | Même numéro dans l'app et sw.js ; « Rechercher » quand tout est à jour ; bandeau sur l'accueil et ligne des Réglages quand une version plus récente est en ligne ; « Mettre à jour » recharge ; « Nouveautés » une seule fois |
 | `design_enveloppes` | Maquette R : restant dans un bloc jaune (rose sous zéro), tuiles et budgets pastel, Prévisions dans le bloc jaune ; clair et sombre lisibles |
+| `soldes_courants_ordre` | Opérations d'un compte sur 12 mois, tri ancien → récent puis l'inverse : chaque « puis … » = ligne d'avant + montant, même avec plusieurs opérations prévues le même jour |
 | `accueil_a_valider_solde` | Accueil, « À valider » : chaque opération en retard affiche « puis … », du solde validé à la dernière, enchaîné avec les suivantes |
 | `budgets_enveloppe` | Budgets façon enveloppe : liste avec « Il te reste à dépenser », montant changé d'un geste (ce mois-ci seulement, à partir de ce mois, à partir du mois prochain), barres des derniers mois, report, budget à plusieurs catégories, autre mois |
 | `budgets_report` | Report du reste : rien n'est reporté depuis les mois d'avant Pécule ; un dépassement du mois en cours se reporte |

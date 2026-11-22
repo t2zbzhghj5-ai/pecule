@@ -1212,7 +1212,7 @@ function calc(str) {
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
 /* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
-const APP_VERSION = 62;
+const APP_VERSION = 63;
 /* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
 const NEWS = {
   54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
@@ -1224,6 +1224,7 @@ const NEWS = {
   60: ["Saisie avec le + : la date choisie dans « Autre date » est bien gardée, même dans un autre mois."],
   61: ["Plus de zoom quand tu touches un champ de saisie : la page garde sa taille et la barre du bas reste entière."],
   62: ["Nouvelle fiche de saisie : le montant en couleur, l'essentiel en quatre lignes (libellé, catégorie, compte, date), tes libellés habituels en raccourcis et les options regroupées."],
+  63: ["Opérations d'un compte triées des plus anciennes aux plus récentes : le solde « puis … » se suit maintenant ligne après ligne, même pour plusieurs opérations le même jour."],
 };
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));
@@ -3330,7 +3331,7 @@ function AccountView({id}) {
   VISIBLE[id] = list.filter(x => !x.virtual).map(x => x.id);
   const groups = []; if (byDate) { for (const x of list) { const k = ym(x.date); if (!groups.length || groups[groups.length - 1][0] !== k) groups.push([k, []]); groups[groups.length - 1][1].push(x); } } else if (list.length) groups.push(["", list]);
   const runMode = S().runMode || "all";
-  if (runMode === "shown") { let r = 0; for (const x of list.filter(x => !x.virtual && x.st !== "annulee").sort((p, q2) => p.date.localeCompare(q2.date) || (p.id < q2.id ? -1 : 1))) { r += amtFor(x, id); runMap[x.id] = r2(r); } }
+  if (runMode === "shown") { let r = 0; for (const x of sortTx(list.filter(x => !x.virtual && x.st !== "annulee"), "dd", id).reverse()) { r += amtFor(x, id); runMap[x.id] = r2(r); } }
   const runShow = runMode !== "none" && (runMode === "all" || byDate);
   const toggleSel = x => { if (x.virtual) return; const n = new Set(sel); n.has(x.id) ? n.delete(x.id) : n.add(x.id); setSel(n); };
   const selected = () => [...sel].map(i => A().tx[i]).filter(Boolean);
@@ -3386,7 +3387,9 @@ function runBal(id, until) {
     return m;
   });
 }
-const sortTx = (list, k, acc) => list.slice().sort((p, q) => {
+/* « Date, anciennes d'abord » = exactement l'ordre inverse de « récentes d'abord », y compris entre opérations du même jour :
+   c'est l'ordre dans lequel le solde « puis … » est cumulé (runBal), sinon les sous-totaux d'un même jour paraissent faux (v63) */
+const sortTx = (list, k, acc) => k === "da" ? sortTx(list, "dd", acc).reverse() : list.slice().sort((p, q) => {
   const vp = acc ? amtFor(p, acc) : p.amount, vq = acc ? amtFor(q, acc) : q.amount;
   switch (k) { case "da": return p.date.localeCompare(q.date); case "ad": return vp - vq; case "aa": return vq - vp; case "n": return p.name.localeCompare(q.name, "fr"); default: return q.date.localeCompare(p.date) || (q.virtual ? 1 : 0) - (p.virtual ? 1 : 0); }
 });

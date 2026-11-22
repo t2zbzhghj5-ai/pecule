@@ -1777,6 +1777,30 @@ def design_enveloppes(br, url):
 
 
 @test
+def soldes_courants_ordre(br, url):
+    """Opérations d'un compte sur 12 mois, triées des plus anciennes aux plus récentes puis l'inverse : le solde « puis … » de chaque ligne = celui de la ligne d'avant + son montant, même avec plusieurs opérations prévues le même jour (cas du LDDS de Nicolas)."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    liv = a.acc_id("Livret")
+    a.js("""for (const [id, n, v] of [['sch_t_o1', 'Épargne', 1000], ['sch_t_o2', 'Voyage', -900], ['sch_t_o3', 'Cadeau', -50]])
+      D.Store.put({k: 'sch', id, account: arg, name: n, amount: v, splits: [{amount: v, cat: null}], freq: {n: 1, u: 'm'}, next: '2026-12-01', anchor: 1, start: '2026-12-01', end: null, left: null, auto: false, paused: false, skips: [], pay: 'prelevement'});""", liv)
+    num = lambda x: None if not x else float(x.replace("puis", "").replace("\u202f", "").replace("\xa0", "").replace(" ", "").replace("€", "").replace("−", "-").replace("+", "").replace(",", "."))
+    for srt in ("da", "dd"):
+        a.js("D.Store.put({...D.S(), accSort: arg, planUntil: 'm12'});", srt); a.wait(300)
+        a.js("D.NAV.push({v: 'acc', id: arg});", liv); a.wait(500)
+        pg.locator(".seg button", has_text="Opérations").first.click(); a.wait(600)
+        rows = a.js("return [...document.querySelectorAll('main .card .row')].map(r => { const am = r.querySelector('.amt'); return [(r.querySelector('.t1') || r).textContent.trim(), am ? am.childNodes[0].textContent : null, am?.querySelector('small')?.textContent || null]; }).filter(x => x[2]);")
+        if srt == "dd": rows = rows[::-1]
+        check(len(rows) > 20, "trop peu de lignes (%d)" % len(rows))
+        bad = [(n, v, r) for (pn, pv, pr), (n, v, r) in zip(rows, rows[1:]) if abs(num(pr) + num(v) - num(r)) > 0.005]
+        check(not bad, "tri %s : sous-totaux incohérents %s" % (srt, bad[:3]))
+        a.js("D.NAV.tab('comptes')"); a.wait(300)
+    a.no_errors("ordre des soldes")
+    a.close()
+
+
+@test
 def accueil_a_valider_solde(br, url):
     """Accueil, « À valider » : chaque opération en retard affiche le solde « puis … », du solde validé à la dernière, qui s'enchaîne avec les suivantes."""
     a = App(br, url)
