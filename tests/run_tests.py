@@ -35,7 +35,7 @@ import fixture_icompta  # noqa: E402
 
 # ---------------------------------------------------------------- serveur (avec accès de test aux calculs)
 HOOK = ('window.__dbg = {A, S, Store, Hist, NAV, SHEET, occurrences, balance, amtFor, accList, today, budgets, lineAt, cardNext, cardPending, '
-        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf, parseBankText, half50, half50Due, half50Msg, halfBase, healthChecks, hKey, kidsOf, cardNext, runBal, addDays, updCheck, UPD, APP_VERSION, prItems, nextPending, fitViewport};\n')
+        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf, parseBankText, half50, half50Due, half50Msg, halfBase, healthChecks, hKey, kidsOf, cardNext, runBal, addDays, updCheck, UPD, APP_VERSION, prItems, nextPending, fitViewport, bdgGroups};\n')
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -1774,6 +1774,83 @@ def design_enveloppes(br, url):
         check(bg != fg, "bouton + illisible (%s sur %s)" % (fg, bg))
         a.no_errors("design R" + (" sombre" if dark else ""))
         a.close()
+
+
+@test
+def regrouper_budgets(br, url):
+    """Trois budgets annuels sur la même catégorie « Vacances » (cas de Nicolas) : une dépense sans budget précis est déduite des trois. Budgets › « Regrouper » : un budget, une sous-catégorie par ancien budget, l'échéance rattachée suit sa ligne, la dépense à classer va dans le séjour choisi, chaque enveloppe n'est plus consommée que par ses dépenses ; la fiche et le + demandent « Pour quel séjour ? »."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    liv = a.acc_id("Livret")
+    a.js("""const t = D.today(), y = Number(t.slice(0, 4)), nx = D.addDays(t, 60), ops = [['put', {k: 'cat', id: 'cat_t_vac', name: 'Vacances', type: 'both', parent: null, color: '#5B6B8C'}]];
+      for (const [id, n, m, amt] of [['h', 'Vacances d’hiver', 3, 500], ['p', 'Vacances de printemps', 5, 400], ['e', 'Vacances d’été', 7, 3000]]) {
+        const st = (y - 1) + '-' + String(m).padStart(2, '0') + '-01';
+        ops.push(['put', {k: 'bdg', id: 'bdg_t_' + id, name: n, accounts: [arg], remaining: true, remAcc: arg, hidden: false, order: 20, start: st, end: null}]);
+        ops.push(['put', {k: 'bud', id: 'bud_t_' + id, budget: 'bdg_t_' + id, cat: 'cat_t_vac', amount: amt, income: false, start: st, end: null, dur: {n: 1, u: 'y'}, carry: false, hist: []}]); }
+      ops.push(['put', {k: 'sch', id: 'sch_t_loc', account: arg, name: 'Location été', amount: -1200, splits: [{amount: -1200, cat: 'cat_t_vac', bdg: 'bdg_t_e'}], freq: {n: 1, u: 'y'}, next: nx, anchor: Number(nx.slice(8)), start: nx, end: null, left: null, auto: false, paused: false, skips: [], pay: 'virement'}]);
+      ops.push(['put', {k: 'tx', id: 'tx_t_ski', account: arg, date: D.addDays(t, 20), name: 'Forfaits ski', amount: -100, splits: [{amount: -100, cat: 'cat_t_vac'}], st: 'prevue', pay: 'cb'}]);
+      return D.Store.bulk(ops);""", liv); a.wait(600)
+    rest = lambda: a.js("const t = D.today(); return Object.fromEntries(Object.values(D.A().bud).filter(l => /^bud_t_/.test(l.id)).map(l => [l.id.slice(6), D.lineAt(D.linesOf(l.budget).find(x => x.id === l.id), t)?.rest]));")
+    r0 = rest()
+    check(r0 == {"h": 400, "p": 300, "e": 1700}, "avant : la dépense sans budget devait être déduite des trois enveloppes : %s" % r0)
+    check(len(a.js("return D.bdgGroups();")) == 1, "groupe de budgets non détecté")
+    a.js("D.NAV.tab('budgets')"); a.wait(600)
+    ban = pg.locator(".prow", has_text="3 budgets suivent la catégorie Vacances")
+    check(ban.count() == 1, "bandeau « Regrouper » absent")
+    ban.click(); a.wait(500)
+    sh = pg.locator(".sheet").last
+    names = [sh.locator(".grp-row input").nth(i).input_value() for i in range(sh.locator(".grp-row input").count())]
+    check(sorted(names) == ["Hiver", "Printemps", "Été"], "noms proposés : %s" % names)
+    sel = sh.locator('select[aria-label="Ligne pour Forfaits ski"]')
+    check(sel.count() == 1 and sel.evaluate("e => e.selectedOptions[0].textContent") == "Hiver", "dépense à classer absente ou mauvais séjour proposé")
+    sel.select_option(label="Printemps"); a.wait(200)
+    sh.locator(".btn.pri", has_text="Regrouper").click(); a.wait(1200)
+    st = a.js("""const A = D.A(), sub = Object.fromEntries(Object.values(A.cat).filter(c => c.parent === 'cat_t_vac').map(c => [c.name, c.id]));
+      const b = Object.values(A.bdg).filter(x => x.name === 'Vacances');
+      return {sub, nb: b.length, old: ['h', 'p', 'e'].filter(k => A.bdg['bdg_t_' + k]).length, lines: Object.values(A.bud).filter(l => /^bud_t_/.test(l.id)).map(l => [l.id.slice(6), l.budget === b[0]?.id, A.cat[l.cat]?.name]),
+        loc: A.sch.sch_t_loc.splits[0], ski: A.tx.tx_t_ski.splits[0], grp: D.bdgGroups().length,
+        rem: D.occurrences(D.addDays(D.today(), 400)).filter(o => o.kind === 'bud' && o.account === arg).map(o => o.name)};""", liv)
+    check(sorted(st["sub"]) == ["Hiver", "Printemps", "Été"] and st["nb"] == 1 and st["old"] == 0 and st["grp"] == 0, "regroupement : %s" % st)
+    check(sorted(st["lines"]) == [["e", True, "Été"], ["h", True, "Hiver"], ["p", True, "Printemps"]], "lignes : %s" % st["lines"])
+    check(st["loc"]["cat"] == st["sub"]["Été"] and "bdg" not in st["loc"], "échéance rattachée : %s" % st["loc"])
+    check(st["ski"]["cat"] == st["sub"]["Printemps"], "dépense classée : %s" % st["ski"])
+    check(any(n == "Budget Vacances · Hiver (reste)" for n in st["rem"]), "nom des lignes de reste : %s" % st["rem"][:4])
+    r1 = rest()
+    check(r1 == {"h": 500, "p": 300, "e": 1800}, "après : chaque enveloppe ne compte que ses dépenses : %s" % r1)
+    a.js("D.NAV.tab('budgets')"); a.wait(600)
+    wide = pg.locator(".bwide", has_text="Vacances")
+    check(wide.count() == 1 and wide.locator(".bwide-r").count() == 3, "carte Vacances avec une ligne par séjour absente")
+    # fiche : catégorie Vacances → « Pour quel séjour ? »
+    a.js("D.SHEET.open({type: 'op', kind: 'tx', acc: arg})", liv); a.wait(500)
+    sh = pg.locator(".sheet").last
+    sh.locator("#op-amt").fill("45"); sh.locator("#op-name").fill("Luge")
+    sh.locator("#op-cat").click(); a.wait(300)
+    sh.locator(".frow-grid .catbtn", has_text="Vacances").first.click(); a.wait(300)
+    check(sh.locator(".fkids").count() == 1 and "Pour quel séjour ?" in sh.locator(".fkids").inner_text(), "question « Pour quel séjour ? » absente de la fiche")
+    sh.locator(".chip-k", has_text="Hiver").click(); a.wait(200)
+    check("Vacances › Hiver" in sh.locator(".fkh").inner_text(), "séjour non choisi dans la fiche")
+    sh.locator(".btn.pri").last.click(); a.wait(600)
+    t = a.js("return Object.values(D.A().tx).find(t => t.name === 'Luge');")
+    check(t and t["splits"][0]["cat"] == st["sub"]["Hiver"], "fiche : opération enregistrée %s" % t)
+    # + : Vacances, puis le séjour ; les séjours ne sont pas dans la grille
+    pg.click('[aria-label="Saisir"]'); a.wait(300)
+    pg.click(".wiz >> text=Dépense"); a.wait(300)
+    for k in "28": pg.click('.wiz button:text-is("%s")' % k)
+    pg.locator("#wz-acc, .wiz select[aria-label=Compte]").first.select_option(liv); a.wait(200)
+    pg.click(".wgo"); a.wait(300)
+    check(pg.locator('.wiz .wbig:text-is("Hiver")').count() == 0, "les séjours sont dans la grille des catégories")
+    pg.locator('.wiz .wbig:has-text("Vacances")').first.click(); a.wait(300)
+    check("Pour quel séjour ?" in pg.locator(".wiz").inner_text(), "+ : question « Pour quel séjour ? » absente")
+    pg.locator('.wiz .wbig:has-text("Été")').first.click(); a.wait(300)
+    check("Quand" in pg.locator(".wiz").inner_text(), "+ : étape Quand absente après le séjour")
+    pg.click(".wgo"); a.wait(300)
+    check("Vacances › Été" in pg.locator(".wiz").inner_text(), "+ : récapitulatif sans le séjour")
+    pg.click('.wgo:has-text("Enregistrer")'); a.wait(700)
+    t = a.js("return Object.values(D.A().tx).find(t => t.amount === -28);")
+    check(t and t["splits"][0]["cat"] == st["sub"]["Été"], "+ : opération enregistrée %s" % t)
+    a.no_errors("regrouper")
+    a.close()
 
 
 @test

@@ -369,6 +369,22 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 /* Maquette R : blocs pastel. .pc + --pb (fond) / --pi (texte de la couleur) posés en ligne ou par .p-xxx */
 .p-butter{--pb:var(--p-butter);--pi:var(--pi-butter)}.p-sky{--pb:var(--p-sky);--pi:var(--pi-sky)}.p-lilac{--pb:var(--p-lilac);--pi:var(--pi-lilac)}
 .p-peach{--pb:var(--p-peach);--pi:var(--pi-peach)}.p-mint{--pb:var(--p-mint);--pi:var(--pi-mint)}.p-rose{--pb:var(--p-rose);--pi:var(--pi-rose)}
+/* v64 : budget à plusieurs enveloppes (séjours) en pleine largeur ; choix du séjour dans la fiche */
+.bwide{grid-column:1/-1;background:var(--card);border-radius:26px;display:flex;flex-direction:column;min-width:0}
+.bwide-h{display:flex;align-items:center;gap:10px;padding:16px 16px 6px;border:0;background:none;text-align:left;color:inherit;font:inherit;width:100%}
+.bwide-h .k{font-size:12.5px;color:var(--muted)}
+.bwide-r{display:flex;align-items:center;gap:12px;padding:12px 14px;border:0;border-top:1px solid var(--line);background:none;text-align:left;color:inherit;font:inherit;width:100%}
+.bwide-r .bw-t{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.bwide-r .bw-s{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--muted)}
+.fkids{margin:0 10px 10px;background:var(--pb);border-radius:18px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.fkq{font-size:14px;font-weight:700;color:var(--pi)}
+.fkch{display:flex;flex-wrap:wrap;gap:6px}
+.chip-k{display:inline-flex;align-items:center;gap:7px;min-height:42px;border-radius:21px;padding:0 14px 0 6px;border:0;background:var(--surface);color:var(--ink);font:inherit;font-size:14.5px;font-weight:600;cursor:pointer}
+.chip-k.on{background:var(--accent);color:var(--onacc)}
+.fkh{font-size:12.5px;color:var(--pi)}
+.grp-row{display:flex;align-items:center;gap:10px;padding:8px 14px;border-top:1px solid var(--line)}
+.grp-row:first-child{border-top:0}
+.grp-row input{width:120px;flex:none;min-height:40px;font-weight:600}
 .tile.pc{background:var(--pb)}.tile.pc .l,.tile.pc .s,.tile.pc .k{color:var(--pi);font-weight:600}.tile.pc .s{font-weight:500}
 .bpill .bpn{color:var(--pi,var(--ink))}
 .rblock{background:var(--p-butter);color:var(--pi-butter);border-radius:28px;padding:22px 22px 18px;display:flex;flex-direction:column;align-items:flex-start;text-align:left}
@@ -688,11 +704,13 @@ function QuickSheet({acc, close}) {
   const inc = w.type === "rev" || (w.type === "ech" && w.sens === "rev"), isTr = w.type === "vir" || (w.type === "ech" && w.sens === "vir");
   const kind = kind0 === "cat" && isTr ? "dest" : kind0;
   const next = () => up({step: w.step + (kind0 === "amount" && w.pre && w.step === 0 && (w.type === "dep" || w.type === "rev") ? 2 : 1)});
-  const back = () => kind === "pick" ? close() : w.step === 0 ? up({type: null, step: 0}) : up({step: w.step - 1});
+  const back = () => kind === "pick" ? close() : kind === "cat" && w.subOf ? up({subOf: null}) : w.step === 0 ? up({type: null, step: 0}) : up({step: w.step - 1});
   const press = k => up({amt: (a => { if (k === "⌫") return a.slice(0, -1); if (k === ",") return a.includes(",") ? a : (a || "0") + ","; if (a.includes(",") && a.split(",")[1].length >= 2) return a; if (a.replace(",", "").length >= 7) return a; return a === "0" ? k : a + k; })(w.amt)});
   const whenD = [t, addDays(t, -1), addDays(t, 1)];
   const date = w.when === 3 ? w.date : whenD[w.when];
-  const catsK = cats().filter(c => { const ty = c.type || cat(c.parent)?.type || "dep"; return ty === "both" || ty === (inc ? "rev" : "dep"); });
+  /* Les séjours d'un budget regroupé (sous-catégories de « Vacances ») ne sont proposés qu'après leur catégorie : « Pour quel séjour ? » (v64) */
+  const catsK = cats().filter(c => { const ty = c.type || cat(c.parent)?.type || "dep"; return (ty === "both" || ty === (inc ? "rev" : "dep")) && !(c.parent && budKids(c.parent).length); });
+  const pickCat = c => budKids(c.id).length ? up({cat: c.id, subOf: c.id}) : up({cat: c.id, subOf: null, step: w.step + 1});
   const others = accList().filter(x => x.id !== w.account && x.type !== "pret");
   const label = w.type ? WZ_T[w.type][0] : "";
   const autoName = () => isTr ? "Virement vers " + accName(w.to) : w.cat ? (catName(w.cat).charAt(0).toUpperCase() + catName(w.cat).slice(1)) : label;
@@ -710,11 +728,11 @@ function QuickSheet({acc, close}) {
     if (!isTr && !w.cat) tx = applyRules(tx, {isNew: true});
     Store.put(tx); close(); toast(label + (w.type === "dep" ? " enregistrée" : " enregistré"));
   };
-  const Q = {pick: ["Nouveau", "Que veux-tu ajouter ?"], sens: ["Échéance", "Qu'est-ce qui revient ?"], amount: [label, w.type === "ech" ? "Combien à chaque fois ?" : "Combien ?"], cat: [label, inc ? "D'où vient cet argent ?" : "Pour quoi ?"], dest: ["Virement", "Vers quel compte ?"], when: [label, "Quand ?"], start: ["Échéance", "Quand commence-t-elle ?"], recap: ["Dernière étape", "On vérifie ?"]}[kind];
+  const Q = {pick: ["Nouveau", "Que veux-tu ajouter ?"], sens: ["Échéance", "Qu'est-ce qui revient ?"], amount: [label, w.type === "ech" ? "Combien à chaque fois ?" : "Combien ?"], cat: [label, w.subOf ? kidQ(w.subOf) : inc ? "D'où vient cet argent ?" : "Pour quoi ?"], dest: ["Virement", "Vers quel compte ?"], when: [label, "Quand ?"], start: ["Échéance", "Quand commence-t-elle ?"], recap: ["Dernière étape", "On vérifie ?"]}[kind];
   const icon = d => html`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d=${d} /></svg>`;
   const sign = isTr ? "" : inc ? "+" : "−";
   const recap = w.type ? [["Type", w.type === "ech" ? "Échéance · " + {dep: "dépense", rev: "revenu", vir: "virement"}[w.sens] : label], ["Montant", sign + fmt(n)],
-    isTr ? ["Vers", w.to ? accName(w.to) : "—"] : ["Catégorie", w.cat ? catName(w.cat) : "Sans catégorie"],
+    isTr ? ["Vers", w.to ? accName(w.to) : "—"] : ["Catégorie", w.cat ? (cat(w.cat)?.parent ? catName(cat(w.cat).parent) + " › " : "") + catName(w.cat) : "Sans catégorie"],
     ["Quand", w.type === "ech" ? "Dès le " + dayY(w.start) + ", puis " + {m1: "chaque mois", m2: "tous les 2 mois", m3: "tous les 3 mois", y1: "chaque année", w1: "chaque semaine"}[w.freq] : dayLabel(date) + (w.rep ? ", puis chaque mois" : "")],
     ...(w.type === "ech" ? [["Fin", w.hasEnd && w.end ? "Le " + dayY(w.end) : "Jamais"]] : [])] : [];
   const startD = [t, addDays(t, 1), ymAdd(ym(t), 1) + "-01"], endErr = w.hasEnd && !!w.end && w.end < w.start;
@@ -742,7 +760,9 @@ function QuickSheet({acc, close}) {
         <label style="font-size:14px;color:var(--muted);display:inline-flex;justify-content:center;align-items:center;gap:6px">${isTr ? "Depuis le" : "Sur le"}<select aria-label="Compte" value=${w.account} onChange=${e => up({account: e.target.value, to: null})} style="width:auto;min-height:32px;height:32px;padding:0 24px 0 8px;font-size:14px;font-weight:600;border-radius:10px">${accList().filter(x => x.type !== "pret").map(x => html`<option value=${x.id}>${x.name}</option>`)}</select></label></div>
       <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px">${["1", "2", "3", "4", "5", "6", "7", "8", "9", ",", "0", "⌫"].map(k => html`<button class="wkey" aria-label=${k === "⌫" ? "Effacer" : k === "," ? "Virgule" : k} onClick=${() => press(k)}>${k}</button>`)}</div>
       <button class="wgo" disabled=${!(n > 0)} onClick=${next}>Continuer</button>`}
-    ${kind === "cat" && html`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${catsK.map(c => html`<button class=${"wbig" + (w.cat === c.id ? " on" : "")} onClick=${() => up({cat: c.id, step: w.step + 1})}><${CatGlyph} id=${c.id} box=${34} s=${19} /><span style="overflow:hidden;text-overflow:ellipsis">${catName(c.id)}</span></button>`)}
+    ${kind === "cat" && w.subOf && html`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${budKids(w.subOf).map(c => html`<button class=${"wbig" + (w.cat === c.id ? " on" : "")} onClick=${() => up({cat: c.id, subOf: null, step: w.step + 1})}><${CatGlyph} id=${c.id} box=${34} s=${19} /><span style="overflow:hidden;text-overflow:ellipsis">${c.name}</span></button>`)}
+      <button class="wbig" style="grid-column:1/-1;justify-content:center;color:var(--muted)" onClick=${() => up({cat: w.subOf, subOf: null, step: w.step + 1})}>Sans préciser (ne compte dans aucune enveloppe)</button></div>`}
+    ${kind === "cat" && !w.subOf && html`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${catsK.map(c => html`<button class=${"wbig" + (w.cat === c.id ? " on" : "")} onClick=${() => pickCat(c)}><${CatGlyph} id=${c.id} box=${34} s=${19} /><span style="overflow:hidden;text-overflow:ellipsis">${catName(c.id)}</span></button>`)}
       <button class=${"wbig" + (w.cat === null && w.step > 0 ? "" : "")} style="grid-column:1/-1;justify-content:center;color:var(--muted)" onClick=${() => up({cat: null, step: w.step + 1})}>Sans catégorie</button></div>`}
     ${kind === "dest" && html`<div style="display:flex;flex-direction:column;gap:10px">${others.map(x => html`<button class=${"wbig" + (w.to === x.id ? " on" : "")} onClick=${() => up({to: x.id, step: w.step + 1})}><${AccIcon} a=${x} sm /><span class="grow">${x.name}</span><span class="muted" style="font-size:13px;font-weight:500">${fmt(shownBal(x))}</span></button>`)}</div>`}
     ${kind === "when" && html`<div style="display:flex;flex-direction:column;gap:10px">
@@ -1212,7 +1232,7 @@ function calc(str) {
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
 /* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
-const APP_VERSION = 63;
+const APP_VERSION = 64;
 /* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
 const NEWS = {
   54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
@@ -1225,6 +1245,7 @@ const NEWS = {
   61: ["Plus de zoom quand tu touches un champ de saisie : la page garde sa taille et la barre du bas reste entière."],
   62: ["Nouvelle fiche de saisie : le montant en couleur, l'essentiel en quatre lignes (libellé, catégorie, compte, date), tes libellés habituels en raccourcis et les options regroupées."],
   63: ["Opérations d'un compte triées des plus anciennes aux plus récentes : le solde « puis … » se suit maintenant ligne après ligne, même pour plusieurs opérations le même jour."],
+  64: ["Budgets : plusieurs budgets sur la même catégorie (tes budgets Vacances) peuvent être regroupés en un seul, avec une ligne par séjour. Une dépense ne compte plus que pour un séjour.", "En saisissant une dépense de vacances, Pécule demande « Pour quel séjour ? »."],
 };
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));
@@ -1516,7 +1537,7 @@ function occurrences(until) {
         if (pe < t || pe > until) continue;
         const id = "tx_b_" + l.id + "_" + ps;
         const rem = r2(lineBudget(l, ps) - lineActual(l, ps, pe) - linePlanned(l, ps, pe, base));
-        if (rem > 0.004 && !D.tx[id]) { const v = l.income ? rem : -rem; const dd = pc && !l.income ? cardDebitFor(pc, pe) : pe; if (dd > until) continue; out.push({virtual:true, kind:"bud", line:l.id, id, date:dd, account:acc, name:"Budget " + lineName(l) + (pc && !l.income ? " (reste, débit " + pc.name + ")" : " (reste)"), amount:v, splits:[{cat:l.cat === "__other__" ? null : l.cat, amount:v}], pay:"autre"}); }
+        if (rem > 0.004 && !D.tx[id]) { const v = l.income ? rem : -rem; const dd = pc && !l.income ? cardDebitFor(pc, pe) : pe; if (dd > until) continue; out.push({virtual:true, kind:"bud", line:l.id, id, date:dd, account:acc, name:"Budget " + remName(l) + (pc && !l.income ? " (reste, débit " + pc.name + ")" : " (reste)"), amount:v, splits:[{cat:l.cat === "__other__" ? null : l.cat, amount:v}], pay:"autre"}); }
       }
     }
     return out.sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
@@ -1575,6 +1596,8 @@ const normLine = l => ({...l, start: !l.start ? ym(S().start || today()) + "-01"
 const linesOf = bid => memo("lines" + bid, () => Object.values(A().bud).map(normLine).filter(l => l.budget === bid).sort((a, b) => (a.income ? 1 : 0) - (b.income ? 1 : 0) || (a.cat === "__other__" ? 1 : 0) - (b.cat === "__other__" ? 1 : 0) || lineName(a).localeCompare(lineName(b), "fr")));
 const lineById = id => A().bud[id] ? normLine(A().bud[id]) : null;
 const lineName = l => l.label || (l.cat === "__other__" ? "autres catégories" : catName(l.cat));
+/* Nom des lignes « Budget … (reste) » : le budget, puis la ligne s'il en a plusieurs (« Budget Vacances · Hiver ») (v64) */
+const remName = l => { const b = A().bdg[l.budget]; if (!b) return lineName(l); return linesOf(b.id).length > 1 ? b.name + " · " + capF(lineName(l)) : b.name; };
 const budgetOf = l => A().bdg[l.budget] || {id: "__legacy", name: "Budget", emoji: "🎯", accounts: l.accounts || []};
 const bAccs = b => memo("ba" + b.id + (b.accounts || []).join(",") + (b.noCards ? 1 : 0), () => { const own = (b.accounts || []).filter(id => A().acc[id]); if (!own.length || b.noCards) return own; const cards = Object.values(A().acc).filter(a => a.type === "carte" && own.includes(a.linked) && !own.includes(a.id)).map(a => a.id); return [...own, ...cards]; });
 function cardCutOf(c, k) { const close = c.closeDay ? Number(c.closeDay) : 0; if (!close) return eom(ymAdd(k, -1)); const kk = close < c.debitDay ? k : ymAdd(k, -1); const [yy, mm] = kk.split("-").map(Number); return `${kk}-${pad(Math.min(close, dim(yy, mm)))}`; }
@@ -1613,6 +1636,61 @@ function baseAmt(l, ps) {
   return a;
 }
 /* budgets pouvant recevoir une dépense de cette catégorie sur ce compte */
+/* Budgets d'une ligne qui suivent la même catégorie sur les mêmes comptes (cas des 5 budgets « Vacances ») : une dépense
+   de cette catégorie est déduite de chacun. Pécule propose de les regrouper : un budget, une sous-catégorie par ancien budget (v64) */
+const bdgGroups = () => memo("bgrp", () => {
+  const by = {}, ign = new Set(S().grpIgnore || []);
+  for (const b of budgets(true)) { const ls = linesOf(b.id); if (ls.length !== 1) continue; const l = ls[0];
+    if (l.income || !l.cat || l.cat === "__other__" || !cat(l.cat)) continue;
+    const k = l.cat + "|" + (b.accounts || []).filter(id => A().acc[id]).sort().join(","); (by[k] = by[k] || []).push(b); }
+  return Object.entries(by).filter(([k, v]) => v.length > 1 && !ign.has(k)).map(([key, list]) => ({key, cat: linesOf(list[0].id)[0].cat, list: list.slice().sort((x, y) => (x.order ?? 99) - (y.order ?? 99))}));
+});
+/* « Vacances d’hiver » + catégorie « Vacances » → « Hiver » ; « Louis - Anniversaire » + « Anniversaires » → « Louis » */
+const grpSubName = (bn, cn) => { const c = norm(cn).trim(), c1 = c.replace(/s$/, ""), stop = new Set(["de", "d", "du", "des", "la", "le", "les", "l", "pour", "et"]);
+  const w = String(bn || "").split(/[\s\-–—’'·:,]+/).filter(x => x && !stop.has(norm(x)) && norm(x).replace(/s$/, "") !== c1);
+  return w.length ? capF(w.join(" ")) : String(bn || "").trim(); };
+/* Sous-catégories qui servent de lignes de budget (les séjours de « Vacances ») : la fiche et le + demandent lequel */
+const budKids = par => memo("bk" + par, () => { const ks = par ? kids(par) : []; if (ks.length < 2) return []; const used = new Set(Object.values(A().bud).map(l => l.cat)); return ks.some(k => used.has(k.id)) ? ks : []; });
+const kidQ = par => /vacance|voyage|sejour/.test(norm(catName(par))) ? "Pour quel séjour ?" : "Lequel ?";
+/* Opérations de la catégorie, sur les comptes du groupe, rattachées à aucun budget : à classer au regroupement */
+function grpLoose(g) {
+  const par = g.cat, acc = new Set(g.list.flatMap(b => bAccs(b))), t = today(), out = [];
+  const from = g.list.map(b => { const l = linesOf(b.id)[0]; return (l && (periodAt(l, t) || [l.start])[0]) || t; }).sort()[0];
+  const free = sp => sp.cat === par && sp.amount < 0 && !(sp.bdg && A().bdg[sp.bdg]);
+  for (const d of Object.values(A().tx)) { if (d.date < from || d.st === "annulee" || !acc.has(d.account)) continue; (d.splits || []).forEach((sp, i) => { if (free(sp)) out.push({key: d.id + "#" + i, d, sp, date: d.date}); }); }
+  for (const d of Object.values(A().sch)) { if (d.prAuto || !acc.has(d.account)) continue; (d.splits || []).forEach((sp, i) => { if (free(sp)) out.push({key: d.id + "#" + i, d, sp, date: d.next || d.date, sch: true}); }); }
+  return out.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+}
+/* Séjour proposé pour une opération : celui dont l'enveloppe en cours à cette date se termine le plus tôt */
+const grpGuess = (g, date) => { let best = "", be = null; for (const b of g.list) { const l = linesOf(b.id)[0], p = l && date && periodAt(l, date); if (p && (!be || p[1] < be)) { be = p[1]; best = b.id; } } return best; };
+async function mergeBudgets(g, names, pick) {
+  const par = g.cat, pc = cat(par), ids = new Set(g.list.map(b => b.id)), ex = kids(par), ops = [], sub = {}, used = new Set();
+  g.list.forEach((b, i) => {
+    let n = String(names[b.id] || "").trim() || grpSubName(b.name, pc.name);
+    if (used.has(norm(n))) n = b.name.trim(); while (used.has(norm(n))) n += " " + (i + 1);
+    used.add(norm(n));
+    const old = ex.find(k => norm(k.name) === norm(n)), id = old ? old.id : uid("cat");
+    if (!old) ops.push(["put", {k: "cat", id, name: n, icon: null, color: BUD_COLORS[i % BUD_COLORS.length], parent: par, type: pc.type || "both", order: i}]);
+    sub[b.id] = id;
+  });
+  const b0 = g.list[0], nb = uid("bdg"), starts = g.list.map(b => b.start).filter(Boolean).sort();
+  ops.push(["put", {k: "bdg", id: nb, name: capF(pc.name), emoji: b0.emoji || "🎯", color: b0.color || null, accounts: (b0.accounts || []).filter(id => A().acc[id]), noCards: !!b0.noCards, hidden: false,
+    remaining: g.list.every(b => b.remaining !== false), remAcc: b0.remAcc || null, payWith: b0.payWith || null, prorata: g.list.some(b => b.prorata), order: b0.order ?? Object.keys(A().bdg).length, start: starts[0] || null, end: null}]);
+  for (const b of g.list) { for (const l of linesOf(b.id)) ops.push(["put", {...A().bud[l.id], budget: nb, cat: sub[b.id]}]); ops.push(["del", A().bdg[b.id]]); }
+  /* Les parts rattachées à un des anciens budgets passent dans leur séjour ; celles à classer, dans le séjour choisi */
+  for (const k of ["tx", "sch"]) for (const d of Object.values(A()[k])) {
+    let ch = false;
+    const fix = (arr, tag) => (arr || []).map((sp, i) => { let o = sp;
+      if (sp && sp.bdg && ids.has(sp.bdg)) { o = {...sp}; if (sp.cat === par) o.cat = sub[sp.bdg]; delete o.bdg; }
+      else if (sp && sp.cat === par && pick[d.id + "#" + tag + i]) o = {...sp, cat: sub[pick[d.id + "#" + tag + i]] || sp.cat};
+      if (o !== sp) ch = true; return o; });
+    const nd = {...d, splits: fix(d.splits, "")};
+    if (d.ov) { nd.ov = {}; for (const [dt, v] of Object.entries(d.ov)) nd.ov[dt] = v && v.splits ? {...v, splits: fix(v.splits, dt + ":")} : v; }
+    if (ch) ops.push(["put", nd]);
+  }
+  await Store.bulk(ops);
+  return nb;
+}
 const budgetsFor = (acc, cat) => !cat || !acc ? [] : budgets(true).filter(b => !b.hidden && (!bAccs(b).length || bAccs(b).includes(acc)) && linesOf(b.id).some(l => lineMatcher(l)(cat)));
 function bSplits(b) {
   return memo("bsp" + b.id + bAccs(b).join(","), () => {
@@ -1868,6 +1946,7 @@ const I = {
   shield: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4",
   cal: "M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
   magic: "M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z",
+  layers: "M12 3l9 5-9 5-9-5zM3 13l9 5 9-5",
 };
 const Ic = ({n, s = 22, w = 2}) => html`<svg width=${s} height=${s} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width=${w} stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d=${I[n]} /></svg>`;
 
@@ -1939,6 +2018,9 @@ const CAT_IC = {
   bank: ["Banque", "M3 10h18 M12 3l9 5H3z M5 10v8 M9.5 10v8 M14.5 10v8 M19 10v8 M3 21h18"],
   receipt: ["Impôts, taxes", "M6 2h12v20l-3-2-3 2-3-2-3 2z M9 7h6 M9 11h6 M9 15h4"],
   building: ["Copropriété", "M4 21V5l8-3 8 3v16 M2 21h20 M9 9h1 M14 9h1 M9 13h1 M14 13h1 M10 21v-4h4v4"],
+  snow: ["Neige, hiver", "M12 2v20 M3.3 7l17.4 10 M3.3 17l17.4-10 M9.5 3.5L12 5.5l2.5-2 M9.5 20.5L12 18.5l2.5 2"],
+  flower: ["Printemps", "M9 8a3 3 0 1 0 6 0a3 3 0 1 0 -6 0 M12 11v10 M12 17c-3 0-5-2-5-4.5 M12 17c3 0 5-2 5-4.5"],
+  leaf: ["Automne", "M5 19c0-8 5-14 15-14 0 10-6 15-14 15 M5 19l8-8"],
   tree: ["Noël", "M12 2l5 7h-3l4 6h-3l4 6H5l4-6H6l4-6H7z"],
   cake: ["Anniversaire", "M4 21h16 M5 21v-7h14v7 M5 16c2 1.5 4 1.5 7 0s5-1.5 7 0 M12 14v-4 M12 6.5c-1 1-1 2 0 2.5c1-.5 1-1.5 0-2.5"],
   gift: ["Cadeaux", "M3 9h18v4H3z M5 13v8h14v-8 M12 9v12 M12 9c-2-4-6-4-6-1.5S10 9 12 9z M12 9c2-4 6-4 6-1.5S14 9 12 9z"],
@@ -1963,7 +2045,7 @@ const CAT_GUESS = [
   [/natation|piscine/, "swim"], [/\bsport|yoga|\bgym|fitness|\bclub\b|\bdanse/, "sport"], [/etude|universite|formation|\bfac\b/, "grad"], [/scolarit|ecole|fourniture|rentree|college|lycee/, "backpack"],
   [/energie|electricit|\bgaz\b|\bedf\b|engie/, "bolt"], [/\beau\b/, "drop"], [/internet|mobile|telephone|\btel\b|sosh|\bbox\b|forfait|high.?tech/, "phone"],
   [/abonnement|streaming|netflix|spotify|\btele\b|\btv\b/, "screen"], [/avion|\bvols?\b/, "plane"], [/transport|train|sncf|navigo|metro|\bbus\b|ratp/, "train"],
-  [/voiture|carburant|essence|parking|peage|\bauto\b|garage/, "car"], [/velo/, "bike"], [/vacance|voyage|sejour|hotel|\bete\b|week.?end/, "beach"],
+  [/voiture|carburant|essence|parking|peage|\bauto\b|garage/, "car"], [/velo/, "bike"], [/\bhiver\b|\bski\b|neige/, "snow"], [/printemps|paques/, "flower"], [/automne|toussaint/, "leaf"], [/vacance|voyage|sejour|hotel|\bete\b|week.?end/, "beach"],
   [/loyer|logement|habitation|maison|appart|sous.?location|charges/, "home"], [/appel de fonds|copro|syndic/, "building"],
   [/cash|retrait|espece|liquide/, "cash"], [/salaire|revenu|paie|indemnit|chomage|pension|retraite|\bprime/, "euro"], [/epargne|livret|ldds|economie/, "piggy"],
   [/\bcaf\b|allocation|famille/, "people"], [/sante|medecin|pharmacie|mutuelle|optique|dentaire|docteur|kine|hopital/, "health"],
@@ -3891,6 +3973,9 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
       ${mode === "transfer" && html`<div class="frow"><span class="fic p-sky"><${Ic} n="swap" s=${18} /></span><label class="fl" for="op-to">Vers</label><${AccSelect} id="op-to" v=${f.to} set=${v => set("to", v)} none="Choisir…" exclude=${f.account} /></div>`}
       ${!f.split && html`<${CatRow} v=${f.cat} set=${v => set("cat", v)} income=${mode === "income"} label=${mode === "transfer" ? "Catégorie (facultatif)" : "Catégorie"} clear=${mode === "transfer"} />`}
       ${!f.split && mode !== "transfer" && (bs => bs.length > 1 && html`<select aria-label="Budget concerné" value=${f.opt?.bdg || ""} onChange=${e => set("opt", {...f.opt, bdg: e.target.value || null})} class="fsel"><option value="">Budget : tous ceux de cette catégorie</option>${bs.map(b => html`<option value=${b.id}>Budget : ${b.name}</option>`)}</select>`)(budgetsFor(f.account, f.cat))}
+      ${!f.split && mode !== "transfer" && f.cat && (par => { const ks = budKids(par); return ks.length > 0 && html`<div class="fkids pc p-sky" role="group" aria-label=${kidQ(par)}><span class="fkq">${kidQ(par)}</span>
+        <span class="fkch">${ks.map(k => html`<button type="button" class=${"chip-k" + (f.cat === k.id ? " on" : "")} aria-pressed=${f.cat === k.id ? "true" : "false"} onClick=${() => set("cat", k.id)}><${CatGlyph} id=${k.id} box=${28} s=${15} />${k.name}</button>`)}</span>
+        <span class="fkh">${f.cat === par ? "Sans choix, elle ne compte dans aucune de ces enveloppes." : "Elle ne comptera que dans " + catName(par) + " › " + catName(f.cat) + "."}</span></div>`; })(cat(f.cat)?.parent || f.cat)}
       <div class="frow"><span class="fic p-sky"><${Ic} n="wallet" s=${18} /></span><label class="fl" for="op-acc">${mode === "transfer" ? "Depuis" : "Compte"}</label><${AccSelect} id="op-acc" v=${f.account} set=${v => set("account", v)} /></div>
       <div class="frow"><span class="fic p-lilac"><${Ic} n="cal" s=${18} /></span><label class="fl" for="op-date">${isSch ? "Prochaine échéance" : "Date"}</label><input id="op-date" class="fin" type="date" value=${f.date} onInput=${e => set("date", e.target.value)} onChange=${e => e.target.value && set("date", e.target.value)} /></div>
     </div>
@@ -4434,6 +4519,19 @@ function Budgets() {
     const soon = !e.main.length && lines.filter(l => l.start > d).map(l => l.start).sort()[0];
     /* Maquette R : une enveloppe pastel par budget, en mosaïque */
     const fam = pfam(col), left = e.income ? (e.rest > 0 ? "Encore " + fmt0(e.rest) + " attendus" : "Objectif atteint") : null;
+    /* Plusieurs enveloppes aux dates différentes (séjours de « Vacances ») : une carte en largeur, une ligne par enveloppe (maquette 1a, v64) */
+    if (!e.income && e.main.length > 1 && new Set(e.main.map(x => x.pe)).size > 1) {
+      const yr = e.main.every(x => x.l.dur?.u === "y" && (x.l.dur?.n || 1) === 1);
+      return html`<div class="bwide">
+        <button class="bwide-h" onClick=${open}>${(par => par ? html`<${CatGlyph} id=${par} box=${34} s=${18} />` : lineGlyph(first, null, 34, 18))(e.main.every(x => cat(x.l.cat)?.parent && cat(x.l.cat).parent === cat(e.main[0].l.cat).parent) ? cat(e.main[0].l.cat).parent : null)}<span class="grow" style="min-width:0;display:flex;flex-direction:column"><span style="font-size:18px;font-weight:700">${b.name}${b.hidden ? html`<span class="tag">masqué</span>` : ""}</span><span class="k">${e.main.length} enveloppes${yr ? " · " + fmt0(e.base) + " par an" : ""}</span></span>
+          <span style="display:flex;flex-direction:column;align-items:flex-end;flex:none"><span class="k">${e.rest >= 0 ? "Il reste" : "Dépassé de"}</span><span class="amt" style=${"font-size:20px;font-weight:700;color:" + (e.rest < 0 ? "var(--neg)" : "var(--ink)")}>${fmt0(Math.abs(e.rest))}</span></span></button>
+        ${e.main.slice().sort((p, q) => p.pe.localeCompare(q.pe)).map(x => { const sub = [x.spent > .004 ? fmt0(x.spent) + " dépensés" : "", x.plan > .004 ? fmt0(x.plan) + " prévus" : "", "jusqu'au " + dayShort(x.pe)].filter(Boolean).join(" · ");
+          return html`<button class="bwide-r" onClick=${() => NAV.push({v: "line", id: x.l.id, d: x.ps})}>${lineGlyph(x.l, null, 40, 19)}
+            <span class="grow" style="min-width:0;display:flex;flex-direction:column;gap:5px"><span class="bw-t"><span style="font-size:15.5px;font-weight:600">${capF(lineName(x.l))}</span><span class="amt" style=${"font-size:15.5px;font-weight:700;color:" + (x.rest < 0 ? "var(--neg)" : "var(--ink)")}>${x.rest < 0 ? "−" : ""}${fmt0(Math.abs(x.rest))}</span></span>
+            <${BudBar} col=${catColor(x.l.cat)} pct=${x.bud > 0 ? x.spent / x.bud : x.spent > 0 ? 1 : 0} ppct=${x.bud > 0 ? x.plan / x.bud : 0} over=${x.act > x.bud + .004} h=${6} />
+            <span class="bw-s"><span>${sub}</span><span style="flex:none">sur ${fmt0(x.bud)}</span></span></span></button>`; })}
+      </div>`;
+    }
     return html`<div class=${"card benv pc p-" + fam}>
       <button class="benv-main" onClick=${open}>
         <span class="benv-n">${lineGlyph(first, "var(--pi)", 28, 16)}<span class="t1">${b.name}${b.hidden ? html`<span class="tag">masqué</span>` : ""}</span></span>
@@ -4460,6 +4558,7 @@ function Budgets() {
         <span class="hint">${fmt0(hs)} dépensés${hp > .004 ? " et " + fmt0(hp) + " à venir" : ""} sur ${fmt0(hb)} prévus${dl > 0 && hr > 0 ? ", environ " + fmt0(hr / dl) + " par jour" : ""}</span>
       </section>`}
       ${m !== curM && html`<button class="link" style="align-self:center" onClick=${() => setM(curM)}>Revenir à ce mois-ci</button>`}
+      ${!del && bdgGroups().filter(g => g.list.some(mine)).map(g => html`<button class="row prow p-peach" onClick=${() => SHEET.open({type: "regroup", gkey: g.key})}><${Ic} n="layers" /><span class="grow"><div class="t1" style="white-space:normal">${g.list.length} budgets suivent la catégorie ${catName(g.cat)}</div><div class="t2" style="white-space:normal">Une dépense est déduite de chacun. Regroupe-les en un seul budget.</div></span><span style="color:var(--pi)">›</span></button>`)}
       ${list.length > 0 && html`<div class="bgrid">${list.map(card)}</div>`}
       ${!list.length && sel && budgets(true).length > 0 && html`<div class="card"><div class="empty"><b>Aucun budget sur ${accName(sel)}</b>Les budgets suivent les comptes choisis dans leurs réglages.<div class="btns" style="margin-top:14px;justify-content:center"><button class="btn" onClick=${() => setSel(null)}>Tous les comptes</button><button class="btn pri" onClick=${() => SHEET.open({type: "bdg"})}>Créer un budget</button></div></div></div>`}
       ${!list.length && !(sel && budgets(true).length > 0) && html`<div class="card"><div class="empty"><b>Pas encore de budget</b>Un budget est une enveloppe : un montant par mois (ou par an) pour une ou plusieurs catégories, sur les comptes que tu choisis. Ce qui reste à dépenser alimente ton Cash.<div style="margin-top:14px"><button class="btn pri" onClick=${() => SHEET.open({type: "bdg"})}>Créer un budget</button></div></div></div>`}
@@ -4492,6 +4591,8 @@ function EnvDetail({b, lines, line, d0}) {
   const [all, setAll] = useState(false);
   const e = envAt(lines, d), ref = e.l || lines[0], w = durWords(ref?.dur), col = e.income ? "var(--pos)" : budColor(b);
   const cur = !!e.ps && e.ps <= t && e.pe >= t, single = e.main.length === 1, x1 = single ? e.main[0] : null;
+  /* Lignes aux périodes différentes (séjours d'un budget regroupé) : pas de période commune à afficher (v64) */
+  const mixed = new Set(e.main.map(x => x.pe)).size > 1;
   const pr = envPr(b, lines), off = lines.filter(l => !periodAt(l, d));
   /* Dépenses de la période : opérations passées et échéances à venir */
   const txs = [], seen = new Set();
@@ -4504,13 +4605,13 @@ function EnvDetail({b, lines, line, d0}) {
     while (p && bars.length < 6) { const s = envAt(lines, p[0]); if (s.main.length) bars.unshift({ps: p[0], pe: p[1], bud: s.bud, act: s.act, name: budPer(ref, p[0], p[1]), short: perShort(ref, p[0])}); p = prevPeriod(ref, p[0]); } }
   const pick = x => setD(x.ps <= t && x.pe >= t ? t : x.pe < t ? x.pe : x.ps);
   const dl = cur ? daysBetween(t, e.pe) + 1 : 0, carry = x1 ? r2(x1.bud - baseAmt(x1.l, x1.ps)) : 0;
-  const heroTxt = !e.ps ? "" : e.income ? (e.rest > 0 ? `Encore ${fmt(e.rest)} attendus` : "Objectif atteint")
+  const heroTxt = !e.ps ? "" : mixed ? fmt(e.spent) + " dépensés" + (e.plan > .004 ? " · " + fmt(e.plan) + " prévus" : "") + " · " + e.main.length + " enveloppes en cours" : e.income ? (e.rest > 0 ? `Encore ${fmt(e.rest)} attendus` : "Objectif atteint")
     : e.ps > t ? (e.plan > .004 ? fmt(e.plan) + " déjà prévus" : "Pas encore commencé")
     : fmt(e.spent) + " dépensés" + (e.plan > .004 ? " · " + fmt(e.plan) + " à venir" : "") + (cur && e.rest > 0 && dl > 0 ? ` · environ ${fmt0(e.rest / dl)} par jour jusqu'au ${e.pe.slice(0, 7) === t.slice(0, 7) ? P(e.pe).getDate() : dayShort(e.pe)}` : "");
   const amtRow = x => html`<button class="benv-amt" aria-label=${"Modifier le montant de " + lineName(x.l) + " : " + fmt0(baseAmt(x.l, x.ps)) + " " + durLabel(x.l.dur)} onClick=${() => SHEET.open({type: "amt", line: x.l.id, d})}>${fmt0(baseAmt(x.l, x.ps))}<${Ic} n="edit" s=${14} /></button>`;
   const lineRows = xs => html`<div class="card">${xs.map(x => html`<div class="row" style="padding:0 6px 0 0;gap:0">
     <button class="benv-li" onClick=${() => NAV.push({v: "line", id: x.l.id, d: x.ps})}>${lineGlyph(x.l, x.l.income ? "var(--pos)" : budColor(b))}
-      <span class="grow" style="min-width:0;display:flex;flex-direction:column;gap:5px"><span><div class="t1">${capF(lineName(x.l))}</div><div class="t2" style=${!x.l.income && x.rest < 0 ? "color:var(--neg)" : ""}>${fmt0(x.act)} ${x.l.income ? "reçus" : "dépensés"} · ${x.l.income ? (x.rest > 0 ? "encore " + fmt0(x.rest) : "atteint") : x.rest >= 0 ? "reste " + fmt0(x.rest) : "dépassé de " + fmt0(-x.rest)}</div></span>
+      <span class="grow" style="min-width:0;display:flex;flex-direction:column;gap:5px"><span><div class="t1">${capF(lineName(x.l))}</div><div class="t2" style=${!x.l.income && x.rest < 0 ? "color:var(--neg)" : ""}>${mixed ? "jusqu'au " + dayShort(x.pe) + " · " : ""}${fmt0(x.act)} ${x.l.income ? "reçus" : "dépensés"} · ${x.l.income ? (x.rest > 0 ? "encore " + fmt0(x.rest) : "atteint") : x.rest >= 0 ? "reste " + fmt0(x.rest) : "dépassé de " + fmt0(-x.rest)}</div></span>
       <${BudBar} col=${x.l.income ? "var(--pos)" : budColor(b)} pct=${x.bud > 0 ? x.spent / x.bud : x.spent > 0 ? 1 : 0} ppct=${x.bud > 0 ? x.plan / x.bud : 0} over=${!x.l.income && x.act > x.bud + .004} h=${6} /></span></button>
     ${amtRow(x)}</div>`)}</div>`;
   /* Réglages */
@@ -4526,20 +4627,20 @@ function EnvDetail({b, lines, line, d0}) {
       : html`<button class="ibtn" aria-label="Actions du budget" onClick=${() => SHEET.open({type: "bdgActions", id: b.id})}><${Ic} n="more" /></button>`} />
     <main class="scr">
       ${e.main.length > 0 && html`<section class="card" style="padding:16px 18px;display:flex;flex-direction:column;gap:10px" aria-label="Situation">
-        <span class="t2" style="margin:0">${capF(budPer(ref, e.ps, e.pe))} · ${e.income ? "reçu" : e.rest >= 0 ? "il reste" : "dépassé de"}</span>
+        <span class="t2" style="margin:0">${mixed ? "En cours" : capF(budPer(ref, e.ps, e.pe))} · ${e.income ? "reçu" : e.rest >= 0 ? "il reste" : "dépassé de"}</span>
         <span style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span class="amt" style=${"font-size:38px;text-align:left;letter-spacing:-.02em;line-height:1.05;color:" + (e.income ? "var(--ink)" : remCol(e.rest, e.bud))}>${fmt0(e.income ? e.act : Math.abs(e.rest))}</span><span class="muted" style="font-size:14px;font-weight:600">sur ${fmt0(e.bud)}</span></span>
         <${BudBar} col=${col} pct=${e.bud > 0 ? e.spent / e.bud : e.spent > 0 ? 1 : 0} ppct=${e.bud > 0 ? e.plan / e.bud : 0} over=${!e.income && e.act > e.bud + .004} h=${10} />
         <span class="t2" style="margin:0;white-space:normal">${heroTxt}${carry ? ` · dont report ${fmt(carry, true)}` : ""}</span>
         ${single && html`<button class="benv-mrow" onClick=${() => SHEET.open({type: "amt", line: x1.l.id, d})}><span class="grow">Montant : <b>${fmt0(baseAmt(x1.l, x1.ps))} ${durLabel(x1.l.dur)}</b>${x1.l.ov && x1.l.ov[x1.ps] != null ? html`<span class="t2" style="display:block">ajusté pour ${budPer(ref, x1.ps, x1.pe)}, d'habitude ${fmt0(baseAmt({...x1.l, ov: {}}, x1.ps))}</span>` : ""}</span><span class="benv-go"><${Ic} n="edit" s=${15} />Modifier</span></button>`}
       </section>`}
       ${e.ps && !cur && html`<button class="link" style="align-self:center;margin-top:-8px" onClick=${() => setD(t)}>Revenir ${w.cur === "ce mois-ci" ? "à ce mois-ci" : "à aujourd'hui"}</button>`}
-      ${!single && e.main.length > 0 && html`<section><div class="sec-h"><h2>${e.income ? "Revenus attendus" : "Catégories"}</h2><span class="t2">touche le montant pour le changer</span></div>${lineRows(e.main)}</section>`}
+      ${!single && e.main.length > 0 && html`<section><div class="sec-h"><h2>${e.income ? "Revenus attendus" : mixed ? "Enveloppes" : "Catégories"}</h2><span class="t2">touche le montant pour le changer</span></div>${lineRows(mixed ? e.main.slice().sort((p, q) => p.pe.localeCompare(q.pe)) : e.main)}</section>`}
       ${!e.income && e.inc.length > 0 && html`<section><div class="sec-h"><h2>Revenus attendus</h2></div>${lineRows(e.inc)}</section>`}
-      ${e.ps && html`<section class="card" style="padding-top:4px"><div class="sec-h" style="margin:12px 16px 6px"><h2>${(e.income ? "Rentrées " : "Dépenses ") + perOf(ref, e.ps, e.pe)}</h2>${txs.length > 0 && html`<span class="t2">${txs.length} opération${txs.length > 1 ? "s" : ""}</span>`}</div>
+      ${e.ps && html`<section class="card" style="padding-top:4px"><div class="sec-h" style="margin:12px 16px 6px"><h2>${mixed ? "Dépenses des enveloppes en cours" : (e.income ? "Rentrées " : "Dépenses ") + perOf(ref, e.ps, e.pe)}</h2>${txs.length > 0 && html`<span class="t2">${txs.length} opération${txs.length > 1 ? "s" : ""}</span>`}</div>
         ${txs.length ? (all ? txs : txs.slice(0, 6)).map(tx => html`<${TxRow} t=${tx} showAcc />`) : html`<div class="empty" style="padding:14px 18px 20px;font-size:14px">Rien pour l'instant.</div>`}
         ${txs.length > 6 && !all && html`<button class="row" style="justify-content:center;color:var(--accent);font-weight:600;min-height:48px" onClick=${() => setAll(true)}>Voir les ${txs.length} opérations</button>`}
       </section>`}
-      ${bars.length > 1 && html`<section class="card" style="padding:12px 16px 14px"><div class="sec-h" style="margin:0 0 8px"><h2>${w.hist}</h2></div>
+      ${bars.length > 1 && !mixed && html`<section class="card" style="padding:12px 16px 14px"><div class="sec-h" style="margin:0 0 8px"><h2>${w.hist}</h2></div>
         <${HistBars} bars=${bars} sel=${e.ps} col=${col} income=${e.income} onPick=${pick} />
         <p class="help" style="margin:10px 0 0">Pointillés : le montant prévu. Touche une barre pour revoir cette période.</p></section>`}
       ${!lines.length && html`<div class="card"><div class="empty"><b>Aucune catégorie</b>Ajoute la catégorie que ce budget doit suivre.<div class="btns" style="margin-top:14px"><button class="btn" onClick=${() => addMissing(b)}>Toutes les catégories</button><button class="btn pri" onClick=${() => SHEET.open({type: "line", budget: b.id})}>Ajouter une catégorie</button></div></div></div>`}
@@ -4601,6 +4702,40 @@ function BdgLines({budget, close}) {
     <div class="help">« ${b?.name || "Budget"} » suit les opérations de ces catégories. Touche une ligne pour changer sa catégorie, sa période ou ses dates.</div>
     <div class="card">${ls.map(l => html`<button class="row" onClick=${() => go(() => SHEET.open({type: "line", id: l.id}))}>${lineGlyph(l, l.income ? "var(--pos)" : b ? budColor(b) : null)}<span class="grow"><div class="t1">${capF(lineName(l))}</div><div class="t2">${fmt0(baseAmt(l, (periodAt(l, t) || [l.start])[0]))} ${durLabel(l.dur)}${l.income ? " · revenu attendu" : ""}</div></span><span class="muted">›</span></button>`)}</div>
     <button class="btn" onClick=${() => go(() => SHEET.open({type: "line", budget}))}><${Ic} n="plus" s=${18} />Ajouter une catégorie</button>
+  </${Sheet}>`;
+}
+/* Regrouper des budgets qui suivent la même catégorie (maquette 1b « Regrouper », v64) */
+function RegroupSheet({gkey, close}) {
+  const [g] = useState(() => bdgGroups().find(x => x.key === gkey) || null);
+  const [names, setNames] = useState(() => g ? Object.fromEntries(g.list.map(b => [b.id, grpSubName(b.name, catName(g.cat))])) : {});
+  const [loose] = useState(() => g ? grpLoose(g) : []);
+  const [pick, setPick] = useState(() => g ? Object.fromEntries(loose.map(x => [x.key, grpGuess(g, x.date)])) : {});
+  const [busy, setBusy] = useState(false);
+  if (!g) return html`<${Sheet} title="Regrouper" close=${close}><div class="empty">Ces budgets sont déjà regroupés.</div></${Sheet}>`;
+  const cn = catName(g.cat), seen = new Set(), clash = g.list.some(b => { const n = norm((names[b.id] || "").trim()); if (!n || seen.has(n)) return true; seen.add(n); return false; });
+  const go = async () => { if (clash || busy) return; setBusy(true); const id = await mergeBudgets(g, names, pick); close(); toast("Budgets regroupés dans « " + capF(cn) + " »"); setTimeout(() => NAV.push({v: "budget", id}), 40); };
+  const ignore = () => { Store.put({...S(), k: "set", id: "set_main", grpIgnore: [...(S().grpIgnore || []), g.key]}); close(); };
+  const n = g.list.length, nl = loose.length;
+  return html`<${Sheet} title="Regrouper" close=${close} left=${html`<button class="link" onClick=${close}>Plus tard</button>`}>
+    <div class="row prow p-peach" style="align-items:flex-start;cursor:default;flex:none"><${Ic} n="layers" /><span class="grow"><div class="t1" style="white-space:normal">${n} budgets suivent la catégorie ${cn}</div><div class="t2" style="white-space:normal;line-height:1.45">Une dépense de cette catégorie est déduite de chacun d'eux. Regroupés, chaque dépense ne compte que pour une seule enveloppe.</div></span></div>
+    <div class="fgh" style="padding:4px 4px 0">Chaque budget devient une ligne de « ${capF(cn)} »</div>
+    <div class="card" style="padding:4px 0;flex:none">${g.list.map(b => html`<div class="grp-row">${lineGlyph(linesOf(b.id)[0], null, 34, 17)}<span class="grow" style="min-width:0;font-size:14.5px">${b.name}</span><span class="muted" aria-hidden="true">›</span>
+      <input aria-label=${"Nouveau nom pour " + b.name} value=${names[b.id]} onInput=${e => { const v = e.target.value; setNames(o => ({...o, [b.id]: v})); }} /></div>`)}</div>
+    ${clash && html`<div class="help" role="alert" style="color:var(--neg)">Donne un nom différent à chaque ligne.</div>`}
+    <ol style="flex:none;margin:0;padding:0 4px 0 22px;display:flex;flex-direction:column;gap:8px;font-size:14.5px;line-height:1.45">
+      <li>Chaque ligne devient une sous-catégorie de ${cn}.</li>
+      <li>Les ${n} budgets deviennent un seul budget « ${capF(cn)} », avec les mêmes montants et les mêmes dates.</li>
+      <li>Les opérations et échéances rattachées à un de ces budgets passent dans leur ligne.</li>
+      ${nl > 0 && html`<li>${nl === 1 ? "Une opération" : nl + " opérations"} de ${cn} sans budget précis : choisis ci-dessous.</li>`}
+    </ol>
+    ${nl > 0 && html`<div class="fgh" style="padding:4px 4px 0">À classer</div><div class="card" style="padding:4px 0;flex:none">${loose.map(x => html`<div class="grp-row" style="flex-wrap:wrap">
+      <span class="grow" style="min-width:0"><div class="t1">${x.d.name}</div><div class="t2">${x.sch ? "échéance · " : ""}${dayShort(x.date)} ${(x.date || "").slice(0, 4)} · ${fmt(x.sp.amount)}</div></span>
+      <select aria-label=${"Ligne pour " + x.d.name} value=${pick[x.key] || ""} onChange=${e => { const v = e.target.value; setPick(o => ({...o, [x.key]: v})); }} style="width:auto;min-height:40px">
+        ${g.list.map(b => html`<option value=${b.id}>${(names[b.id] || "").trim() || b.name}</option>`)}<option value="">Aucune</option></select></div>`)}</div>
+      <div class="help">« Aucune » : elle reste dans ${cn} et ne compte dans aucune enveloppe.</div>`}
+    <div class="help">Tu peux revenir en arrière : Réglages › Annuler une modification.</div>
+    <button class="btn pri" disabled=${clash || busy} onClick=${go}><${Ic} n="layers" s=${18} />Regrouper en un budget « ${capF(cn)} »</button>
+    <button class="link" style="align-self:center" onClick=${ignore}>Ne plus le proposer pour ces budgets</button>
   </${Sheet}>`;
 }
 function LineTxView({id, ps, pe}) {
@@ -5673,6 +5808,7 @@ function SheetHost({s, close}) {
     case "news": return html`<${NewsSheet} ...${p} />`;
     case "half50": return html`<${Half50Sheet} ...${p} />`;
     case "bdgLines": return html`<${BdgLines} ...${p} />`;
+    case "regroup": return html`<${RegroupSheet} ...${p} />`;
     case "lineDates": return html`<${LineDates} ...${p} />`;
     case "fillAvg": return html`<${FillAvg} ...${p} />`;
     case "bdgFromTx": return html`<${BdgFromTx} ...${p} />`;
