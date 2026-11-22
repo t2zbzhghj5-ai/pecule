@@ -1777,6 +1777,31 @@ def design_enveloppes(br, url):
 
 
 @test
+def budgets_ordre(br, url):
+    """Budgets › « Réorganiser » : ↑/↓ change l'ordre des vignettes parmi celles du même compte, et l'ordre est gardé."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    liv = a.acc_id("Livret")
+    a.js("""const ops = []; ['Alpha', 'Bravo', 'Charlie'].forEach((n, i) => { ops.push(['put', {k: 'bdg', id: 'bdg_o_' + i, name: n, accounts: [arg], remaining: true, hidden: false, order: 50 + i}]);
+      ops.push(['put', {k: 'bud', id: 'bud_o_' + i, budget: 'bdg_o_' + i, cat: null, amount: 100, income: false, start: D.today().slice(0, 8) + '01', end: null, dur: {n: 1, u: 'm'}, carry: false, hist: []}]); });
+      ops.push(['put', {...D.S(), k: 'set', id: 'set_main', bdgAcc: arg}]); return D.Store.bulk(ops);""", liv); a.wait(500)
+    a.js("D.NAV.tab('budgets')"); a.wait(600)
+    names = lambda: [x for x in a.js("return [...document.querySelectorAll('main .benv .t1, main .bwide-h .grow > span:first-child')].map(e => e.textContent.trim());") if x in ("Alpha", "Bravo", "Charlie")]
+    check(names() == ["Alpha", "Bravo", "Charlie"], "ordre de départ : %s" % names())
+    pg.locator("main button.link", has_text="Réorganiser").click(); a.wait(400)
+    check(pg.locator('[aria-label="Monter Alpha"]').is_disabled(), "le premier budget peut encore monter")
+    pg.click('[aria-label="Monter Charlie"]'); a.wait(400)
+    pg.click('[aria-label="Monter Charlie"]'); a.wait(400)
+    pg.click('[aria-label="Terminer la réorganisation"]'); a.wait(500)
+    check(names() == ["Charlie", "Alpha", "Bravo"], "ordre après ↑ ↑ : %s" % names())
+    a.js("D.NAV.tab('comptes')"); a.wait(300); a.js("D.NAV.tab('budgets')"); a.wait(600)
+    check(names() == ["Charlie", "Alpha", "Bravo"], "ordre non gardé : %s" % names())
+    a.no_errors("ordre des budgets")
+    a.close()
+
+
+@test
 def regrouper_budgets(br, url):
     """Trois budgets annuels sur la même catégorie « Vacances » (cas de Nicolas) : une dépense sans budget précis est déduite des trois. Budgets › « Regrouper » : un budget, une sous-catégorie par ancien budget, l'échéance rattachée suit sa ligne, la dépense à classer va dans le séjour choisi, chaque enveloppe n'est plus consommée que par ses dépenses ; la fiche et le + demandent « Pour quel séjour ? »."""
     a = App(br, url)

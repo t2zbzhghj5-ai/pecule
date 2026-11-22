@@ -1232,7 +1232,7 @@ function calc(str) {
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
 /* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
-const APP_VERSION = 64;
+const APP_VERSION = 65;
 /* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
 const NEWS = {
   54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
@@ -1246,6 +1246,7 @@ const NEWS = {
   62: ["Nouvelle fiche de saisie : le montant en couleur, l'essentiel en quatre lignes (libellé, catégorie, compte, date), tes libellés habituels en raccourcis et les options regroupées."],
   63: ["Opérations d'un compte triées des plus anciennes aux plus récentes : le solde « puis … » se suit maintenant ligne après ligne, même pour plusieurs opérations le même jour."],
   64: ["Budgets : plusieurs budgets sur la même catégorie (tes budgets Vacances) peuvent être regroupés en un seul, avec une ligne par séjour. Une dépense ne compte plus que pour un séjour.", "En saisissant une dépense de vacances, Pécule demande « Pour quel séjour ? »."],
+  65: ["Budgets : « Réorganiser » (en bas de l'écran) pour choisir l'ordre des vignettes."],
 };
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));
@@ -4493,7 +4494,7 @@ function setLineAmount(id, v, mode, ps, pe) {
   return Store.put({...o, amount: v, hist: [...hist, {from, amount: v}], ov});
 }
 function Budgets() {
-  const [showHidden, setSH] = useState(false), [del, setDel] = useState(false), [m, setM] = useState(() => ym(today()));
+  const [showHidden, setSH] = useState(false), [del, setDel] = useState(false), [ord, setOrd] = useState(false), [m, setM] = useState(() => ym(today()));
   useEffect(() => { migrateBudgets(); }, []);
   const t = today(), curM = ym(t), d = m === curM ? t : m < curM ? eom(m) : m + "-01";
   const sel = S().bdgAcc && A().acc[S().bdgAcc] ? S().bdgAcc : null, setSel = v => Store.put({...S(), k: "set", id: "set_main", bdgAcc: v || null});
@@ -4503,6 +4504,17 @@ function Budgets() {
   const keep = a => a.type !== "pret" && budgets(true).some(b => inScope(b, scopeOf(a.id)));
   const order = accList(true).map(a => a.id), pos = b => { const own = (b.accounts || []).filter(id => A().acc[id]).map(id => order.indexOf(id)); return own.length ? Math.min(...own) : 1e6; };
   const list = budgets(true).filter(mine).filter(b => showHidden || !b.hidden).sort((x, y) => pos(x) - pos(y));
+  /* Réorganiser (v65, demande de Nicolas) : un budget monte ou descend parmi ceux affichés du même compte ; l'ordre est gardé (b.order) */
+  const sibsOf = b => list.filter(x => pos(x) === pos(b));
+  const move = async (b, dir) => {
+    const sib = sibsOf(b), i = sib.findIndex(x => x.id === b.id), j = i + dir; if (i < 0 || j < 0 || j >= sib.length) return;
+    const sw = [...sib]; [sw[i], sw[j]] = [sw[j], sw[i]];
+    const ids = new Set(sib.map(x => x.id)); let q = 0;
+    const seq = budgets(true).map(x => ids.has(x.id) ? sw[q++] : x);
+    await Store.bulk(seq.map((x, k) => x.order === k ? null : ["put", {...A().bdg[x.id], order: k}]).filter(Boolean));
+  };
+  const ordRow = b => { const sib = sibsOf(b), i = sib.findIndex(x => x.id === b.id), l = linesOf(b.id)[0];
+    return html`<div class="row">${lineGlyph(l, null, 34, 18)}<span class="grow t1">${b.name}${b.hidden ? html`<span class="tag">masqué</span>` : ""}</span><button class="ibtn plain" aria-label=${"Monter " + b.name} disabled=${i <= 0} onClick=${() => move(b, -1)}>↑</button><button class="ibtn plain" aria-label=${"Descendre " + b.name} disabled=${i < 0 || i >= sib.length - 1} onClick=${() => move(b, 1)}>↓</button></div>`; };
   /* En tête : les enveloppes mensuelles des budgets affichés */
   let hb = 0, ha = 0, hs = 0, hp = 0;
   for (const b of budgets(false).filter(mine)) for (const l of linesOf(b.id)) { if (l.income || !isMonthly(l)) continue; const x = lineAt(l, d); if (!x) continue; hb += x.bud; ha += x.act; hs += x.spent; hp += x.plan; }
@@ -4546,23 +4558,25 @@ function Budgets() {
     </div>`;
   };
   return html`
-    <${Top} title="Budgets" sub=${sub} right=${list.length > 0 && html`<button class=${"ibtn" + (del ? " on" : "")} aria-label=${del ? "Terminer" : "Supprimer des budgets"} onClick=${() => setDel(!del)}>${del ? html`<${Ic} n="check" />` : html`<${Ic} n="trash" />`}</button>`} />
+    <${Top} title="Budgets" sub=${sub} right=${ord ? html`<button class="ibtn" aria-label="Terminer la réorganisation" onClick=${() => setOrd(false)}><${Ic} n="check" /></button>` : list.length > 0 && html`<button class=${"ibtn" + (del ? " on" : "")} aria-label=${del ? "Terminer" : "Supprimer des budgets"} onClick=${() => setDel(!del)}>${del ? html`<${Ic} n="check" />` : html`<${Ic} n="trash" />`}</button>`} />
     <main class="scr wide">
       <div style="display:flex;align-items:center;gap:10px"><span style="flex:1;min-width:0;display:flex"><${AccPill} cur=${sel} onPick=${setSel} allLbl="Tous les comptes" keep=${keep} /></span>
         <label class="chip" style="position:relative;display:inline-flex;align-items:center;gap:4px;text-transform:capitalize;font-weight:600;flex:none">${mName}<span style="display:inline-flex;transform:rotate(-90deg)"><${Ic} n="back" s=${14} /></span>
         <input type="month" value=${m} onInput=${e => e.target.value && setM(e.target.value)} aria-label="Choisir le mois" style="position:absolute;inset:0;opacity:0;min-height:0;width:100%" /></label></div>
-      ${hb > 0 && !del && html`<section class="bhero" aria-label=${hLbl}>
+      ${hb > 0 && !del && !ord && html`<section class="bhero" aria-label=${hLbl}>
         <span class="lbl">${hLbl}</span>
         <span class="big">${fmt0(Math.abs(hr))}</span>
         <span class="bhbar" aria-hidden="true"><i style=${`width:${Math.min(100, hb > 0 ? ha / hb * 100 : 0)}%`}></i></span>
         <span class="hint">${fmt0(hs)} dépensés${hp > .004 ? " et " + fmt0(hp) + " à venir" : ""} sur ${fmt0(hb)} prévus${dl > 0 && hr > 0 ? ", environ " + fmt0(hr / dl) + " par jour" : ""}</span>
       </section>`}
       ${m !== curM && html`<button class="link" style="align-self:center" onClick=${() => setM(curM)}>Revenir à ce mois-ci</button>`}
-      ${!del && bdgGroups().filter(g => g.list.some(mine)).map(g => html`<button class="row prow p-peach" onClick=${() => SHEET.open({type: "regroup", gkey: g.key})}><${Ic} n="layers" /><span class="grow"><div class="t1" style="white-space:normal">${g.list.length} budgets suivent la catégorie ${catName(g.cat)}</div><div class="t2" style="white-space:normal">Une dépense est déduite de chacun. Regroupe-les en un seul budget.</div></span><span style="color:var(--pi)">›</span></button>`)}
-      ${list.length > 0 && html`<div class="bgrid">${list.map(card)}</div>`}
+      ${!del && !ord && bdgGroups().filter(g => g.list.some(mine)).map(g => html`<button class="row prow p-peach" onClick=${() => SHEET.open({type: "regroup", gkey: g.key})}><${Ic} n="layers" /><span class="grow"><div class="t1" style="white-space:normal">${g.list.length} budgets suivent la catégorie ${catName(g.cat)}</div><div class="t2" style="white-space:normal">Une dépense est déduite de chacun. Regroupe-les en un seul budget.</div></span><span style="color:var(--pi)">›</span></button>`)}
+      ${ord && html`<div class="help">Monte ou descends les budgets : les vignettes suivent cet ordre.${new Set(list.map(pos)).size > 1 ? " Chaque budget se range parmi ceux de son compte." : ""}</div><div class="card">${list.map(ordRow)}</div>`}
+      ${list.length > 0 && !ord && html`<div class="bgrid">${list.map(card)}</div>`}
       ${!list.length && sel && budgets(true).length > 0 && html`<div class="card"><div class="empty"><b>Aucun budget sur ${accName(sel)}</b>Les budgets suivent les comptes choisis dans leurs réglages.<div class="btns" style="margin-top:14px;justify-content:center"><button class="btn" onClick=${() => setSel(null)}>Tous les comptes</button><button class="btn pri" onClick=${() => SHEET.open({type: "bdg"})}>Créer un budget</button></div></div></div>`}
       ${!list.length && !(sel && budgets(true).length > 0) && html`<div class="card"><div class="empty"><b>Pas encore de budget</b>Un budget est une enveloppe : un montant par mois (ou par an) pour une ou plusieurs catégories, sur les comptes que tu choisis. Ce qui reste à dépenser alimente ton Cash.<div style="margin-top:14px"><button class="btn pri" onClick=${() => SHEET.open({type: "bdg"})}>Créer un budget</button></div></div></div>`}
-      ${list.length > 0 && !del && html`<p class="help" style="text-align:center">Touche un budget pour voir ses dépenses. Touche le montant ✎ pour le changer.</p>`}
+      ${list.length > 1 && !del && html`<button class="link" style="align-self:center" onClick=${() => { setOrd(!ord); appTop(); }}>${ord ? "Terminer" : "Réorganiser"}</button>`}
+      ${list.length > 0 && !del && !ord && html`<p class="help" style="text-align:center">Touche un budget pour voir ses dépenses. Touche le montant ✎ pour le changer.</p>`}
       <${QuickEntry} kind="bdg" acc=${mainAcc()} />
       ${budgets(true).filter(mine).some(b => b.hidden) && html`<button class="link" onClick=${() => setSH(!showHidden)}>${showHidden ? "Cacher les budgets masqués" : "Afficher les budgets masqués"}</button>`}
     </main>`;
