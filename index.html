@@ -219,7 +219,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .toggle .sw::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .2s}
 .toggle.on .sw{background:var(--pos)}
 .toggle.on .sw::after{transform:translateX(18px)}
-.undobar{position:fixed;left:12px;right:12px;bottom:calc(96px + env(safe-area-inset-bottom));z-index:41;display:flex;align-items:center;gap:12px;background:var(--ink);color:var(--surface);padding:12px 16px;border-radius:16px;font-size:14px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.25);animation:up .2s;max-width:560px;margin:0 auto}
 .toasts{position:fixed;left:0;right:0;bottom:calc(140px + env(safe-area-inset-bottom));z-index:40;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
 .toast{background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:14px;font-size:14px;font-weight:600;max-width:90%;box-shadow:0 10px 30px rgba(0,0,0,.25);animation:up .2s}
 .catgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
@@ -287,7 +286,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
   .sheet{max-width:620px;max-height:88vh;border-radius:24px;animation:fade .18s ease}
   .wiz{background:rgba(9,13,24,.45);align-items:center;padding:24px}
   .wiz-in{background:var(--surface);border-radius:28px;max-height:min(860px,94vh);padding:24px 28px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
-  .undobar{left:calc(var(--side) + 24px);right:24px;bottom:24px}
   .toasts{left:var(--side);bottom:40px}
   .selbar{left:var(--side);bottom:24px}
   .fab{right:32px;bottom:32px}
@@ -1166,13 +1164,14 @@ function calc(str) {
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
 /* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
-const APP_VERSION = 57;
+const APP_VERSION = 58;
 /* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
 const NEWS = {
   54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
   55: ["Nouvelle échéance : choisis la date de la première fois et, si tu veux, une date de fin.", "La date de fin d'une échéance s'affiche dans l'échéancier."],
   56: ["Compte joint au prorata : une échéance qui commence plus tard ne change les virements qu'à partir de son premier mois."],
   57: ["Échéance « sauf en » : une échéance mensuelle peut sauter certains mois chaque année (par exemple le Navigo, sauf en août). Dans Modifier, sous la fréquence."],
+  58: ["Plus de bandeau « Annuler » après chaque modification : pour revenir en arrière, Réglages › Annuler une modification."],
 };
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));
@@ -5673,12 +5672,7 @@ function View({v}) {
   }
   return null;
 }
-function UndoBar() {
-  const [, setN] = useState(0); useEffect(() => { const f = () => setN(n => n + 1); Hist.ls.add(f); return () => Hist.ls.delete(f); }, []);
-  const l = Hist.last, c = l && l.until > Date.now() && Hist.list.find(x => x.id === l.id);
-  if (!c) return null;
-  return html`<div class="undobar" role="status"><span class="grow" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.label}</span><button class="link" style="color:#8FB2FF;font-weight:800" onClick=${() => Hist.undo(c)}>Annuler</button><button class="link" aria-label="Fermer" style="color:var(--surface);opacity:.6" onClick=${() => { Hist.last = null; Hist.emit(); }}>✕</button></div>`;
-}
+/* Plus de bandeau « Annuler » après une modification (demande de Nicolas, v58) : l'historique reste dans Réglages › Annuler une modification */
 function HistView() {
   const [, setN] = useState(0); useEffect(() => { const f = () => setN(n => n + 1); Hist.ls.add(f); return () => Hist.ls.delete(f); }, []);
   const L = Hist.list;
@@ -5716,7 +5710,7 @@ function App() {
     ${content}
     <nav class="tabbar" aria-label="Navigation"><div class="tabbar-in"><div class="side side-brand" aria-hidden="true">Pécule</div>${[...TABS.slice(0, 2), null, ...TABS.slice(2), "sep", ...TABS_SIDE].map(x => x === "sep" ? html`<div class="side side-sep"></div>` : x ? (([k, l, ic, side]) => html`<button class=${"tab" + (side ? " side" : "") + (tab === k && !top ? " on" : "")} aria-current=${tab === k && !top ? "page" : null} onClick=${() => NAV.tab(k)}><${Ic} n=${ic} s=${22} />${l}</button>`)(x) : html`<div class="tab-plus" style="position:relative"><button aria-label="Saisir" onClick=${() => SHEET.open({type: "quick"})}><${Ic} n="plus" s=${22} w=${2.6} /><span class="plus-l" aria-hidden="true">Saisir</span></button></div>`)}</div></nav>
     ${sheets.map((s, i) => html`<${SheetHost} key=${s.key} s=${s} close=${() => setSheets(x => x.filter(y => y.key !== s.key))} />`)}
-    <${ToastHost} /><${UndoBar} />
+    <${ToastHost} />
   </div>`;
 }
 /* 50/50 : les dépenses cochées s'ajoutent au virement et à l'opération de la partenaire du mois */

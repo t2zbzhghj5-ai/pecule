@@ -1543,6 +1543,8 @@ def echeance_sauf_mois(br, url):
     check("11 mois sur 12" in blk.inner_text() and "Pas de prélèvement en août" in blk.inner_text(), "bloc après le choix : %r" % blk.inner_text())
     pg.locator('.sheet button:has-text("Enregistrer")').last.click(); a.wait(500)
     check(a.js("return D.A().sch.sch_t_nav.offM;") == [8], "mois sautés non enregistrés")
+    check(pg.locator(".undobar").count() == 0 and "Annuler" not in pg.locator('[role="status"]').all_inner_texts().__str__(), "bandeau « Annuler » affiché après une modification")
+    check(a.js("return D.Hist.list.length > 0;"), "modification absente de l'historique des annulations")
     occ = a.js("return D.occurrences('2027-12-31').filter(o => o.name === 'Navigo').map(o => o.date);")
     check(len(occ) == 12 and "2027-08-05" not in occ and "2027-07-05" in occ and "2027-09-05" in occ, "occurrences : %s" % occ)
     a.js("D.NAV.tab('echeancier')"); a.wait(400)
