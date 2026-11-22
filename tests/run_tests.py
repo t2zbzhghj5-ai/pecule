@@ -393,6 +393,44 @@ def saisie_assistant(br, url):
 
 
 @test
+def saisie_autre_date(br, url):
+    """Bouton + › Dépense › « Autre date » dans un autre mois : la date est gardée, même si l'iPhone ne signale pas le changement (champ modifié sans événement)."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    pg.click('[aria-label="Saisir"]'); a.wait(300)
+    pg.click(".wiz >> text=Dépense"); a.wait(300)
+    for k in "37": pg.click('.wiz button:text-is("%s")' % k)
+    pg.click(".wgo"); a.wait(300)
+    pg.locator('.wiz .wbig:has-text("Courses")').first.click(); a.wait(300)
+    check("Quand" in pg.locator(".wiz").inner_text(), "étape Quand absente")
+    # comme sur l'iPhone : la valeur change sans événement « input »
+    a.js("document.querySelector('[aria-label=\"Autre date\"]').value = '2026-10-05';")
+    pg.click(".wgo"); a.wait(300)
+    check("5 oct" in pg.locator(".wiz").inner_text(), "récapitulatif sans la date choisie : %r" % pg.locator(".wiz").inner_text()[-200:])
+    pg.click('.wgo:has-text("Enregistrer")'); a.wait(700)
+    t = a.js("return Object.values(D.A().tx).find(t => t.amount === -37);")
+    check(t and t["date"] == "2026-10-05", "date enregistrée : %s" % (t and t["date"]))
+    # échéance : 1re date choisie dans un autre mois, sans événement
+    pg.click('[aria-label="Saisir"]'); a.wait(300)
+    pg.click(".wiz >> text=Échéance"); a.wait(300)
+    pg.click(".wiz >> text=Une dépense"); a.wait(300)
+    for k in "9": pg.click('.wiz button:text-is("%s")' % k)
+    pg.click(".wgo"); a.wait(300)
+    pg.locator('.wiz .wbig:has-text("Divers")').first.click(); a.wait(300)
+    a.js("document.querySelector('[aria-label=\"Date de la première échéance\"]').value = '2027-02-14';")
+    pg.click(".wgo"); a.wait(300)
+    for _ in range(3):
+        if pg.locator('.wgo:has-text("Enregistrer")').count(): break
+        pg.click(".wgo"); a.wait(300)
+    pg.click('.wgo:has-text("Enregistrer")'); a.wait(700)
+    sc = a.js("return Object.values(D.A().sch).find(s => s.amount === -9);")
+    check(sc and sc["next"] == "2027-02-14" and sc.get("anchor") == 14, "1re échéance : %s" % (sc and sc["next"]))
+    a.no_errors("autre date")
+    a.close()
+
+
+@test
 def saisie_texte_et_suggestions(br, url):
     """Saisie par texte collé et libellés proposés dès la 1re lettre."""
     a = App(br, url)
