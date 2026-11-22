@@ -50,7 +50,7 @@
 html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
 /* La page elle-même ne défile jamais (bogue d'iOS 26 : les barres fixées en bas se décalent quand la page défile) : c'est #app qui défile.
    #app reste dans le flux (pas en position fixe) : sinon, sur iPhone, il passait un peu sous la barre d'état. */
-#app{height:100%;overflow-x:hidden;overflow-y:auto;overscroll-behavior-y:contain}
+#app{height:calc(100% - var(--vvb, 0px));overflow-x:hidden;overflow-y:auto;overscroll-behavior-y:contain}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.35;-webkit-font-smoothing:antialiased}
 button{font:inherit;color:inherit;cursor:pointer}
 :focus-visible{outline:2.5px solid var(--accent);outline-offset:2px;border-radius:8px}
@@ -117,14 +117,14 @@ button.row:active{background:var(--surface2)}
 .tile{background:var(--card);border-radius:20px;padding:12px 14px}
 .tile .k{font-size:12.5px;color:var(--muted);font-weight:600}
 .tile .v{font-family:var(--display);font-size:22px;font-weight:800;letter-spacing:-.03em;margin-top:2px;font-variant-numeric:tabular-nums}
-.tabbar{position:fixed;bottom:0;left:0;right:0;z-index:6;display:flex;justify-content:center;background:color-mix(in srgb,var(--surface) 97%,transparent);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border-top:1px solid var(--line);padding:6px 0 calc(8px + env(safe-area-inset-bottom))}
+.tabbar{position:fixed;bottom:var(--vvb, 0px);left:0;right:0;z-index:6;display:flex;justify-content:center;background:color-mix(in srgb,var(--surface) 97%,transparent);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border-top:1px solid var(--line);padding:6px 0 calc(8px + env(safe-area-inset-bottom))}
 .tabbar-in{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));align-items:start;max-width:480px;width:100%}
 .tab{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;color:var(--muted);background:none;border:0;padding:6px 0 4px;font-weight:600;white-space:nowrap;min-width:0;min-height:50px;justify-content:center}
 .tab.on{color:var(--ink);font-weight:700}
 .tab.on svg{stroke-width:2.2;background:var(--p-butter);border-radius:15px;padding:4px 16px;box-sizing:content-box;margin:-4px 0}
 .tab-plus{display:flex;justify-content:center}
 .tab-plus button:not(.bub){width:56px;height:56px;margin-top:-24px;border-radius:28px;border:4px solid var(--surface);background:var(--accent);color:var(--onacc);display:flex;align-items:center;justify-content:center}
-.wiz{position:fixed;inset:0;z-index:20;background:var(--surface);display:flex;justify-content:center;animation:fade .15s ease}
+.wiz{position:fixed;inset:0 0 var(--vvb, 0px) 0;z-index:20;background:var(--surface);display:flex;justify-content:center;animation:fade .15s ease}
 .wiz-in{width:100%;max-width:480px;display:flex;flex-direction:column;gap:14px;padding:calc(14px + env(safe-area-inset-top)) 20px calc(18px + env(safe-area-inset-bottom));overflow-y:auto}
 .wiz-q{font-family:var(--display);font-size:28px;font-weight:700;letter-spacing:-0.02em;margin:0;line-height:1.15}
 .wiz-k{font-size:13px;color:var(--muted);font-weight:500}
@@ -147,7 +147,7 @@ button.row:active{background:var(--surface2)}
 .dchip{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:17px;border:1px solid var(--line);background:var(--surface);font-size:13px;color:var(--ink)}
 .bub{width:26px;height:26px;border-radius:13px;border:2px solid var(--surface);background:var(--accent);color:var(--onacc);display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;padding:0;flex:none;box-shadow:0 2px 6px rgba(15,23,42,.25);vertical-align:middle;animation:fade .2s ease}
 .bub.on{background:var(--ink);color:var(--surface)}
-.helptip{position:fixed;left:12px;right:12px;bottom:calc(100px + env(safe-area-inset-bottom));z-index:15;max-width:456px;margin:0 auto;background:#0F172A;color:#fff;border-radius:22px;padding:16px 18px;display:flex;flex-direction:column;gap:10px;box-shadow:0 12px 30px rgba(15,23,42,.3)}
+.helptip{position:fixed;left:12px;right:12px;bottom:calc(100px + env(safe-area-inset-bottom) + var(--vvb, 0px));z-index:15;max-width:456px;margin:0 auto;background:#0F172A;color:#fff;border-radius:22px;padding:16px 18px;display:flex;flex-direction:column;gap:10px;box-shadow:0 12px 30px rgba(15,23,42,.3)}
 .accpill{height:42px;padding:0 14px 0 6px;border-radius:21px;border:0;background:var(--card);display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;color:var(--ink);min-width:0;max-width:100%}
 .accpill .ini{width:30px;height:30px;border-radius:15px;background:var(--p-butter);color:var(--pi-butter);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex:none}
 .tile{background:var(--card);border-radius:20px;padding:12px 14px;text-align:left}
@@ -159,8 +159,8 @@ button.row:active{background:var(--surface2)}
 .fgh{font-size:13px;font-weight:600;color:var(--muted);padding:0 6px 6px}
 .hbtn{width:44px;height:44px;border-radius:22px;border:0;display:grid;place-items:center;flex:none;background:var(--card);color:var(--ink)}
 .hbtn.pri{background:var(--accent);color:var(--onacc)}
-.fab{position:fixed;right:max(16px,calc(50% - 264px));bottom:calc(86px + env(safe-area-inset-bottom));z-index:7;width:56px;height:56px;border-radius:50%;background:var(--accent);color:var(--onacc);border:0;box-shadow:0 10px 26px color-mix(in srgb,var(--accent) 42%,transparent);display:grid;place-items:center}
-.sheet-back{position:fixed;inset:0;z-index:20;background:rgba(9,13,24,.45);display:flex;align-items:flex-end;justify-content:center;animation:fade .18s ease}
+.fab{position:fixed;right:max(16px,calc(50% - 264px));bottom:calc(86px + env(safe-area-inset-bottom) + var(--vvb, 0px));z-index:7;width:56px;height:56px;border-radius:50%;background:var(--accent);color:var(--onacc);border:0;box-shadow:0 10px 26px color-mix(in srgb,var(--accent) 42%,transparent);display:grid;place-items:center}
+.sheet-back{position:fixed;inset:0 0 var(--vvb, 0px) 0;z-index:20;background:rgba(9,13,24,.45);display:flex;align-items:flex-end;justify-content:center;animation:fade .18s ease}
 .sheet{background:var(--bg);width:100%;max-width:560px;max-height:calc(100% - env(safe-area-inset-top) - 20px);border-radius:24px 24px 0 0;display:flex;flex-direction:column;animation:up .26s cubic-bezier(.2,.8,.2,1);box-shadow:0 -10px 40px rgba(0,0,0,.18)}
 .sheet-h{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:14px 16px 12px;border-bottom:1px solid var(--line);gap:8px}
 .sheet-h strong{font-family:var(--display);font-size:16px;font-weight:800;text-align:center}
@@ -219,7 +219,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .toggle .sw::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .2s}
 .toggle.on .sw{background:var(--pos)}
 .toggle.on .sw::after{transform:translateX(18px)}
-.toasts{position:fixed;left:0;right:0;bottom:calc(140px + env(safe-area-inset-bottom));z-index:40;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
+.toasts{position:fixed;left:0;right:0;bottom:calc(140px + env(safe-area-inset-bottom) + var(--vvb, 0px));z-index:40;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
 .toast{background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:14px;font-size:14px;font-weight:600;max-width:90%;box-shadow:0 10px 30px rgba(0,0,0,.25);animation:up .2s}
 .catgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
 .catbtn{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:8px 10px;text-align:left;font-size:14px;font-weight:600;min-height:44px}
@@ -249,7 +249,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .acc-ed .hd input{font-weight:700}
 .kv{display:flex;justify-content:space-between;gap:10px;font-size:14.5px;padding:3px 0}
 .kv span:last-child{font-family:var(--display);font-weight:600;font-variant-numeric:tabular-nums}
-.selbar{position:fixed;left:0;right:0;bottom:calc(84px + env(safe-area-inset-bottom));z-index:8;display:flex;justify-content:center;padding:0 12px}
+.selbar{position:fixed;left:0;right:0;bottom:calc(84px + env(safe-area-inset-bottom) + var(--vvb, 0px));z-index:8;display:flex;justify-content:center;padding:0 12px}
 .selbar>div{max-width:536px;width:100%;background:var(--ink);color:var(--surface);border-radius:18px;padding:10px;display:flex;gap:8px;align-items:center;box-shadow:0 12px 30px rgba(0,0,0,.3)}
 .selbar .btn{flex:1;background:color-mix(in srgb,var(--surface) 14%,transparent);color:var(--surface);box-shadow:none;min-height:40px;padding:8px}
 .check{width:24px;height:24px;border-radius:8px;border:2px solid var(--line);display:grid;place-items:center;flex:none}
@@ -1164,7 +1164,7 @@ function calc(str) {
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
 /* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
-const APP_VERSION = 58;
+const APP_VERSION = 59;
 /* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
 const NEWS = {
   54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
@@ -1172,6 +1172,7 @@ const NEWS = {
   56: ["Compte joint au prorata : une échéance qui commence plus tard ne change les virements qu'à partir de son premier mois."],
   57: ["Échéance « sauf en » : une échéance mensuelle peut sauter certains mois chaque année (par exemple le Navigo, sauf en août). Dans Modifier, sous la fréquence."],
   58: ["Plus de bandeau « Annuler » après chaque modification : pour revenir en arrière, Réglages › Annuler une modification."],
+  59: ["La barre du bas reste entière après une saisie."],
 };
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));
@@ -5696,7 +5697,7 @@ function App() {
   NAV.pop = () => setStack(s => s.slice(0, -1));
   NAV.tab = t => { setStack([]); setTab(t); try { history.replaceState(null, "", "#" + t); } catch { location.hash = t; } appTop(); };
   SHEET.open = s => setSheets(x => [...x, {...s, key: uid("sh")}]);
-  SHEET.close = () => setSheets(x => x.slice(0, -1));
+  SHEET.close = () => { setSheets(x => x.slice(0, -1)); resetSoon(); }; /* après une saisie : la page et la barre du bas reprennent leur place */
   const hasSet = !!A().set.set_main;
   if (!NEWS_DONE && (hasSet || Store.ready)) { NEWS_DONE = true; newsBoot(hasSet); }
   { const th = S().theme; const el = document.documentElement; if (th === "light" || th === "dark") { if (el.dataset.theme !== th) el.dataset.theme = th; } else if (el.dataset.theme) delete el.dataset.theme; }
@@ -5719,9 +5720,23 @@ Store.sub(() => { if (halfT) return; halfT = setTimeout(() => { halfT = null; tr
 /* Haut de l'écran : c'est #app qui défile, pas la page */
 function appTop() { const el = document.getElementById("app"); if (el) el.scrollTop = 0; }
 /* iOS décale parfois la page quand le clavier se ferme : on la remet en place pour que la barre du bas reste collée en bas */
-function resetPage() { if (window.scrollY || document.documentElement.scrollTop) window.scrollTo(0, 0); }
-document.addEventListener("focusout", () => setTimeout(() => { const a = document.activeElement; if (!a || !/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) resetPage(); }, 80));
-if (window.visualViewport) visualViewport.addEventListener("resize", () => { if (visualViewport.height >= window.innerHeight - 2) resetPage(); });
+/* iOS 26 : après la fermeture du clavier (une saisie validée par exemple), la page peut rester décalée ou plus haute que l'écran,
+   et la barre du bas est alors coupée. On remet la page en haut et on cale tout ce qui est accroché en bas sur la partie visible (--vvb). */
+const typing = () => { const a = document.activeElement; return !!a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName); };
+function fitViewport() {
+  const vv = window.visualViewport, root = document.documentElement; if (!vv) return;
+  const gap = Math.round(window.innerHeight - vv.height - vv.offsetTop);
+  const v = typing() || gap > 120 || gap < 1 ? 0 : gap; /* clavier ouvert : rien ; petit écart sans clavier : la barre remonte d'autant */
+  root.style.setProperty("--vvb", (v + .01) + "px"); /* changer la valeur force iOS à replacer la barre */
+  requestAnimationFrame(() => root.style.setProperty("--vvb", v + "px"));
+}
+function resetPage() { if (typing()) return; window.scrollTo(0, 0); document.documentElement.scrollTop = 0; document.body.scrollTop = 0; fitViewport(); }
+const resetSoon = () => [60, 300, 700].forEach(t => setTimeout(resetPage, t));
+document.addEventListener("focusout", () => setTimeout(() => { if (!typing()) resetSoon(); }, 20));
+if (window.visualViewport) { visualViewport.addEventListener("resize", () => { if (!typing()) resetSoon(); }); visualViewport.addEventListener("scroll", () => { if (!typing()) fitViewport(); }); }
+window.addEventListener("resize", fitViewport);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") resetSoon(); });
+setTimeout(fitViewport, 400);
 render(html`<${App} />`, document.getElementById("app"));
 Store.init();
 if ("serviceWorker" in navigator) { try { navigator.serviceWorker.register("./sw.js"); } catch {} }

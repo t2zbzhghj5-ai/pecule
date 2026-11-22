@@ -35,7 +35,7 @@ import fixture_icompta  # noqa: E402
 
 # ---------------------------------------------------------------- serveur (avec accès de test aux calculs)
 HOOK = ('window.__dbg = {A, S, Store, Hist, NAV, SHEET, occurrences, balance, amtFor, accList, today, budgets, lineAt, cardNext, cardPending, '
-        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf, parseBankText, half50, half50Due, half50Msg, halfBase, healthChecks, hKey, kidsOf, cardNext, runBal, addDays, updCheck, UPD, APP_VERSION, prItems, nextPending};\n')
+        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf, parseBankText, half50, half50Due, half50Msg, halfBase, healthChecks, hKey, kidsOf, cardNext, runBal, addDays, updCheck, UPD, APP_VERSION, prItems, nextPending, fitViewport};\n')
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -1570,6 +1570,37 @@ def echeance_sauf_mois(br, url):
     has = lambda k: a.js("return D.prItems(arg).some(x => x.id === 'sch_t_navj');", k)
     check(has("2027-07") and not has("2027-08") and has("2027-09"), "prorata en août : juil %s août %s sept %s" % (has("2027-07"), has("2027-08"), has("2027-09")))
     a.no_errors("sauf en")
+    a.close()
+
+
+@test
+def barre_du_bas_apres_saisie(br, url):
+    """Après une saisie validée, la barre du bas est entière ; si iOS laisse la page plus haute que l'écran (bogue après le clavier), la barre remonte d'autant ; clavier ouvert : rien ne bouge."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    a.pick("Courant")
+    pg.click('[aria-label="Saisir"]'); a.wait(300)
+    pg.click(".wiz >> text=Dépense"); a.wait(300)
+    for k in "12": pg.click('.wiz button:text-is("%s")' % k)
+    for _ in range(6):
+        if pg.locator(".sheet").count() == 0: break
+        b = pg.locator('.wgo').last
+        if b.count() and b.is_enabled(): b.click()
+        else: pg.locator(".wiz .wbig").first.click()
+        a.wait(300)
+    check(pg.locator(".sheet").count() == 0, "la saisie ne s'est pas fermée")
+    a.wait(800)
+    vh = a.js("return window.visualViewport.height;")
+    box = pg.locator(".tabbar").bounding_box()
+    check(abs(box["y"] + box["height"] - vh) < 1.5, "barre du bas coupée après la saisie : %s / %s" % (box, vh))
+    a.js("Object.defineProperty(window, 'innerHeight', {value: window.visualViewport.height + 40, configurable: true}); D.fitViewport();"); a.wait(300)
+    box = pg.locator(".tabbar").bounding_box()
+    check(a.js("return getComputedStyle(document.documentElement).getPropertyValue('--vvb').trim();") == "40px" and abs(box["y"] + box["height"] - (vh - 40)) < 1.5, "barre non recalée sur la partie visible : %s" % box)
+    a.js("Object.defineProperty(window, 'innerHeight', {value: window.visualViewport.height + 300, configurable: true}); D.fitViewport();"); a.wait(300)
+    check(a.js("return getComputedStyle(document.documentElement).getPropertyValue('--vvb').trim();") == "0px", "barre déplacée alors que le clavier est ouvert")
+    a.js("delete window.innerHeight; D.fitViewport();"); a.wait(300)
+    a.no_errors("barre du bas")
     a.close()
 
 
