@@ -431,6 +431,35 @@ def saisie_autre_date(br, url):
 
 
 @test
+def pas_de_zoom_saisie(br, url):
+    """iPhone (écran tactile) : tous les champs du bouton + (texte collé, compte, date, libellé) et du formulaire complet sont écrits en 16 px au moins, sinon Safari zoome en les touchant et la page reste agrandie."""
+    orig = br.new_context
+    br.new_context = lambda **kw: orig(**{**kw, "is_mobile": True, "has_touch": True})
+    try:
+        a = App(br, url)
+    finally:
+        br.new_context = orig
+    a.import_ic(FICTIF)
+    pg = a.pg
+    small = lambda sel: a.js("return [...document.querySelectorAll(arg)].filter(e => e.offsetParent && parseFloat(getComputedStyle(e).fontSize) < 16).map(e => (e.getAttribute('aria-label') || e.tagName) + ' ' + getComputedStyle(e).fontSize);", sel)
+    pg.click('[aria-label="Saisir"]'); a.wait(400)
+    check(pg.locator('.wiz textarea').count() == 1, "champ de saisie par texte absent")
+    check(not small(".wiz input, .wiz textarea, .wiz select"), "champs trop petits à l'ouverture du + : %s" % small(".wiz input, .wiz textarea, .wiz select"))
+    pg.click(".wiz >> text=Dépense"); a.wait(300)
+    for k in "12": pg.click('.wiz button:text-is("%s")' % k)
+    pg.click(".wgo"); a.wait(300)
+    pg.locator(".wiz .wbig").first.click(); a.wait(300)
+    check(not small(".wiz input, .wiz textarea, .wiz select"), "champs trop petits à l'étape Quand : %s" % small(".wiz input, .wiz textarea, .wiz select"))
+    pg.click(".wgo"); a.wait(300)
+    check(not small(".wiz input, .wiz textarea, .wiz select"), "champs trop petits au récapitulatif : %s" % small(".wiz input, .wiz textarea, .wiz select"))
+    a.js("D.SHEET.close()"); a.wait(300)
+    a.js("D.SHEET.open({type: 'op', kind: 'tx'})"); a.wait(500)
+    check(not small(".sheet input, .sheet textarea, .sheet select"), "champs trop petits dans le formulaire : %s" % small(".sheet input, .sheet textarea, .sheet select"))
+    a.no_errors("zoom")
+    a.close()
+
+
+@test
 def saisie_texte_et_suggestions(br, url):
     """Saisie par texte collé et libellés proposés dès la 1re lettre."""
     a = App(br, url)
