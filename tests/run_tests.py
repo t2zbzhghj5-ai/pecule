@@ -1808,7 +1808,7 @@ def enveloppe_datee(br, url):
     check(len(e1) == 1 and e1[0][1] == -300, "la dépense rattachée doit se déduire de l'enveloppe : %s" % e1)
     check(abs(bal() - b0) < 0.01, "les 500 € doivent compter une seule fois : %s puis %s" % (b0, bal()))
     a.js("D.NAV.tab('budgets')"); a.wait(600)
-    check("le " in pg.locator("main .benv", has_text="Projets").first.inner_text(), "date absente de la carte du budget")
+    check("le " in pg.locator("main .bwide", has_text="Projets").first.inner_text(), "date absente de la carte du budget")
     # deux enveloppes dont la période est finie, avec un reste
     a.js("""const t = D.today(), f = D.addDays(t, -40), ops = [];
       for (const [id, c, amt, sp] of [['b', 'cat_t_b', 500, 380], ['c', 'cat_t_c', 100, 30]]) {
@@ -1838,6 +1838,51 @@ def enveloppe_datee(br, url):
     check(st2 == {"bud": 690, "done": ["move:bud_t_b"], "asks": 0}, "mettre sur une autre enveloppe : %s" % st2)
     check(pg.locator(".prow", has_text="non dépensés").count() == 0, "bandeau encore affiché après la décision")
     a.no_errors("enveloppe datée")
+    a.close()
+
+
+@test
+def budget_annuel_date(br, url):
+    """Budget annuel sans date : la vignette propose « Ajouter une date » (pas les budgets mensuels) ; la fiche part de la fin de la période, enregistre la date (chaque année), le reste est retiré à cette date et le budget s'affiche en ligne avec sa puce ; « Une seule fois » refuse une date passée."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    liv = a.acc_id("Livret")
+    norm = lambda x: x.replace("\u202f", " ").replace("\xa0", " ")
+    a.js("""const t = D.today(), m0 = D.addDays(t.slice(0, 8) + '01', -40).slice(0, 8) + '01', ops = [['put', {...D.S(), k: 'set', id: 'set_main', bdgAcc: arg}]];
+      [['a', 'Cadeaux annuels', 300, 'y'], ['b', 'Sorties annuelles', 150, 'y'], ['c', 'Courses test', 400, 'm']].forEach(([id, n, amt, u], i) => {
+        ops.push(['put', {k: 'cat', id: 'cat_y_' + id, name: n + ' cat', type: 'dep', parent: null}]);
+        ops.push(['put', {k: 'bdg', id: 'bdg_y_' + id, name: n, accounts: [arg], remaining: true, remAcc: arg, hidden: false, order: 60 + i}]);
+        ops.push(['put', {k: 'bud', id: 'bud_y_' + id, budget: 'bdg_y_' + id, cat: 'cat_y_' + id, amount: amt, income: false, start: m0, end: null, dur: {n: 1, u}, carry: false, hist: []}]); });
+      return D.Store.bulk(ops);""", liv); a.wait(500)
+    a.js("D.NAV.tab('budgets')"); a.wait(600)
+    btn = lambda n: pg.locator('[aria-label="Ajouter une date à %s"]' % n)
+    check(btn("Cadeaux annuels").count() == 1 and btn("Sorties annuelles").count() == 1, "bouton « Ajouter une date » absent des budgets annuels")
+    check(btn("Courses test").count() == 0, "un budget mensuel ne doit pas proposer de date")
+    btn("Cadeaux annuels").click(); a.wait(500)
+    sh = pg.locator(".sheet").last
+    pe = a.js("return D.lineAt(D.lineById('bud_y_a'), D.today()).pe;")
+    check(sh.locator("#du-d").input_value() == pe, "la date doit partir de la fin de la période : %s / %s" % (sh.locator("#du-d").input_value(), pe))
+    check("300 € par an" in norm(sh.inner_text()), "fiche : montant par an absent")
+    due = a.js("return D.addDays(D.today(), 40);")
+    sh.locator("#du-d").fill(due); a.wait(200)
+    sh.locator(".btn.pri", has_text="Enregistrer").click(); a.wait(600)
+    l = a.js("return D.A().bud.bud_y_a;")
+    check(l["first"] == due and not l["once"] and l["dur"] == {"n": 1, "u": "y"} and not l["carry"] and l["dueSince"] == a.js("return D.today();") and l["start"] == a.js("return D.dueStart(arg, false);", due), "ligne datée : %s" % l)
+    occ = a.js("return D.occurrences(D.addDays(arg, 5)).filter(o => o.kind === 'bud' && o.line === 'bud_y_a').map(o => [o.date, o.amount]);", due)
+    check(occ == [[due, -300]], "reste retiré à la date : %s" % occ)
+    check(btn("Cadeaux annuels").count() == 0, "le bouton doit disparaître une fois la date choisie")
+    card = pg.locator("main .bwide", has_text="Cadeaux annuels")
+    check(card.count() == 1 and card.locator(".bw-one .bw-chip").count() == 1 and "sur 300 €" in norm(card.inner_text()), "carte en ligne avec puce absente : %s" % [norm(x) for x in card.all_inner_texts()])
+    # « Une seule fois » : pas de date passée
+    btn("Sorties annuelles").click(); a.wait(500)
+    sh = pg.locator(".sheet").last
+    sh.locator(".seg button", has_text="Une seule fois").click(); a.wait(150)
+    sh.locator("#du-d").fill(a.js("return D.addDays(D.today().slice(0, 8) + '01', -20);")); a.wait(150)
+    sh.locator(".btn.pri", has_text="Enregistrer").click(); a.wait(300)
+    check("Choisis une date à venir" in sh.inner_text(), "date passée acceptée en « Une seule fois »")
+    check(not a.js("return D.A().bud.bud_y_b.first;"), "la ligne ne doit pas changer après une erreur")
+    a.no_errors("budget annuel daté")
     a.close()
 
 

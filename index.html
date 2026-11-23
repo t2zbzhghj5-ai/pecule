@@ -376,6 +376,8 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .bwide-r{display:flex;align-items:center;gap:12px;padding:12px 14px;border:0;border-top:1px solid var(--line);background:none;text-align:left;color:inherit;font:inherit;width:100%}
 .bwide-r .bw-t{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .bwide-r .bw-s{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--muted)}
+.bwide-r.bw-one{border-top:0;padding:16px 14px}
+.benv-due{display:flex;align-items:center;justify-content:center;gap:5px;min-height:40px;margin:2px 12px 12px;padding:6px 8px;border:0;border-radius:14px;background:var(--surface);color:var(--ink);font:inherit;font-size:13px;font-weight:700;white-space:nowrap}
 .bw-chip{flex:none;font-size:12px;font-weight:700;padding:3px 9px;border-radius:10px;background:var(--pb);color:var(--pi);white-space:nowrap}
 .radio{flex:none;width:22px;height:22px;border-radius:11px;border:2px solid var(--muted);margin-top:1px;display:flex;align-items:center;justify-content:center}
 .radio.on{border-color:var(--ink)}
@@ -1237,7 +1239,7 @@ function calc(str) {
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
 /* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
-const APP_VERSION = 66;
+const APP_VERSION = 67;
 /* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
 const NEWS = {
   54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
@@ -1253,6 +1255,7 @@ const NEWS = {
   64: ["Budgets : plusieurs budgets sur la même catégorie (tes budgets Vacances) peuvent être regroupés en un seul, avec une ligne par séjour. Une dépense ne compte plus que pour un séjour.", "En saisissant une dépense de vacances, Pécule demande « Pour quel séjour ? »."],
   65: ["Budgets : « Réorganiser » (en bas de l'écran) pour choisir l'ordre des vignettes."],
   66: ["Budgets : une enveloppe peut avoir une date de dépense (chaque année ou une seule fois). Les Prévisions retirent ce qui reste à cette date, et ensuite Pécule te demande quoi faire de ce qui n'a pas été dépensé.", "Pour l'activer : ouvre une ligne de budget, puis « Date de dépense »."],
+  67: ["Budgets : un budget annuel sans date affiche « Ajouter une date ». Une fois datés, tous tes budgets annuels se lisent pareil, avec leur date de dépense."],
 };
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));
@@ -1623,6 +1626,11 @@ const durLabel = d => { const n = d?.n || 1, u = d?.u || "m"; if (n === 1) retur
 const dueDay = (l, pe) => l.once ? l.first : pe.slice(0, 7) + "-" + pad(Math.min(Number(l.first.slice(8)), dim(Number(pe.slice(0, 4)), Number(pe.slice(5, 7)))));
 /* Début d'une enveloppe datée : la période qui finit le mois de la 1re date commence 12 mois plus tôt, jamais après le mois en cours */
 const dueStart = (first, once) => { const cur = ym(today()) + "-01"; if (once) return cur < first ? cur : ym(first) + "-01"; const s0 = ymAdd(ym(first), -11) + "-01"; return s0 < cur ? s0 : cur; };
+/* Champs d'une ligne qui passe en enveloppe datée (fiche de la ligne et « Ajouter une date », v67) */
+const datedLine = (o, l0, first, once) => ({...o, first, once: !!once, start: l0 && l0.first === first && !!l0.once === !!once ? l0.start : dueStart(first, !!once), end: once ? eom(ym(first)) : null, dur: {n: 1, u: "y"}, carry: false, dueSince: l0?.first && l0.dueSince ? l0.dueSince : today()});
+const dueHelp = first => first ? "Les Prévisions retirent ce qui reste le " + dayShort(first).replace(/\.$/, "") + ". Après la fin " + deN(MOIS[Number(first.slice(5, 7)) - 1]) + ", Pécule te demande quoi faire de ce qui n'a pas été dépensé." : "Les Prévisions retirent ce qui reste à cette date ; ensuite, Pécule te demande quoi faire de ce qui n'a pas été dépensé.";
+/* Budget annuel sans date (une enveloppe par an) : la vignette propose « Ajouter une date » (v67) */
+const yearlyUndated = l => !!l && !l.first && !l.income && ((Number(l.dur?.n || 1) === 1 && l.dur?.u === "y") || (Number(l.dur?.n) === 12 && (l.dur?.u || "m") === "m"));
 function periodsOf(l, from, to) {
   if (l.first) return memo("perd" + l.id + "|" + from + to + l.start + l.first + (l.once ? 1 : 0) + (l.end || ""), () => {
     const out = []; let ps = l.start, k = ym(l.first), g = 0;
@@ -2341,6 +2349,29 @@ function RestSheet({line, close}) {
     ${ch === "move" && html`<${Field} label="Quelle enveloppe ?" id="rs-to"><select id="rs-to" value=${to} onChange=${e => setTo(e.target.value)}>${others.map(x => { const r = lineAt(x, t); return html`<option value=${x.id}>${remName(x)}${r ? " · il reste " + fmt0(r.rest) : ""}</option>`; })}</select></${Field}>`}
     <button class="btn pri" onClick=${ok}>Valider</button>
     <div class="help" style="text-align:center">« Plus tard » : les ${fmt0(q.rem)} restent réservés et la question revient sur l'accueil et dans Budgets.</div>
+  </${Sheet}>`;
+}
+/* « Ajouter une date » sur un budget annuel : la date de dépense, chaque année ou une seule fois (v67, maquette « budgets annuels datés ») */
+function DueSheet({line, close}) {
+  const l = lineById(line), t = today(), p = l && (periodAt(l, t) || periodsOf(l, t, addDays(t, 800))[0]);
+  const [first, setFirst] = useState(() => l?.first || p?.[1] || ""), [once, setOnce] = useState(!!l?.once), [err, setErr] = useState("");
+  if (!l) return html`<${Sheet} title="Date de dépense" close=${close}><div class="empty">Ce budget n'existe plus.</div></${Sheet}>`;
+  const b = budgetOf(l);
+  const save = () => {
+    setErr("");
+    if (!first) return setErr("Indique la date de la dépense.");
+    if (once && first < ym(t) + "-01") return setErr("Choisis une date à venir.");
+    const nl = datedLine({...A().bud[l.id]}, l, first, once);
+    const np = periodAt(nl, t) || periodsOf(nl, t, addDays(t, 800))[0];
+    Store.put(nl); close(); toast("Date enregistrée : le " + dayShort(np ? dueDay(nl, np[1]) : first));
+  };
+  return html`<${Sheet} title="Date de dépense" close=${close} right=${html`<button class="link" onClick=${save}>Enregistrer</button>`}>
+    <div class=${"card pc p-" + pfam(budColor(b))} style="background:var(--pb);padding:14px 16px;display:flex;align-items:center;gap:12px;flex:none">${lineGlyph(l, null, 40, 20)}<span class="grow" style="min-width:0"><div class="t1" style="font-size:17px;font-weight:700;white-space:normal">${b.name}</div><div class="t2" style="color:var(--pi);white-space:normal">${fmt0(baseAmt(l, p?.[0] || l.start))} par an · ${bAccLabel(b)}</div></span></div>
+    <${Field} label="Quand part l'argent ?" id="du-d"><input id="du-d" type="date" value=${first} onInput=${e => setFirst(e.target.value)} onChange=${e => setFirst(e.target.value)} /></${Field}>
+    <${Field} label="Répéter"><${Seg} v=${once ? "1" : "y"} set=${v => setOnce(v === "1")} opts=${[["y", "Chaque année"], ["1", "Une seule fois"]]} /></${Field}>
+    <div class="help">${dueHelp(first)}</div>
+    ${err && html`<div class="banner" role="alert">${err}</div>`}
+    <button class="btn pri" onClick=${save}>Enregistrer</button>
   </${Sheet}>`;
 }
 function Half50Banner() {
@@ -4606,6 +4637,13 @@ function Budgets() {
     const soon = !e.main.length && lines.filter(l => l.start > d).map(l => l.start).sort()[0];
     /* Maquette R : une enveloppe pastel par budget, en mosaïque */
     const fam = pfam(col), left = e.income ? (e.rest > 0 ? "Encore " + fmt0(e.rest) + " attendus" : "Objectif atteint") : null;
+    /* Une ligne d'enveloppe en largeur : nom, puce de date, reste, barre, « sur X » (v64, v66 ; v67 : aussi seule dans sa carte) */
+    const wRow = (x, nm, go, one) => { const du = x.l.first ? dueDay(x.l, x.pe) : null, add = (x.l.mv && x.l.mv[x.ps]) || 0, fs = one ? "16px" : "15.5px";
+      const sub = [x.spent > .004 ? fmt0(x.spent) + " dépensés" : "", x.plan > .004 ? fmt0(x.plan) + " prévus" : "", add > .004 ? "dont " + fmt0(add) + " ajoutés" : "", du ? "" : "jusqu'au " + dayShort(x.pe)].filter(Boolean).join(" · ") || "rien de dépensé";
+      return html`<button class=${"bwide-r" + (one ? " bw-one" : "")} onClick=${go}>${lineGlyph(x.l, null, 40, 19)}
+        <span class="grow" style="min-width:0;display:flex;flex-direction:column;gap:5px"><span class="bw-t"><span style="display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;min-width:0"><span style=${"font-size:" + fs + ";font-weight:" + (one ? 700 : 600)}>${nm}${one && b.hidden ? html`<span class="tag">masqué</span>` : ""}</span>${du && html`<span class=${"bw-chip pc p-" + pfam(catColor(x.l.cat))}>le ${dayShort(du)}</span>`}</span><span class="amt" style=${"flex:none;font-size:" + fs + ";font-weight:700;color:" + (x.rest < 0 ? "var(--neg)" : "var(--ink)")}>${x.rest < 0 ? "−" : ""}${fmt0(Math.abs(x.rest))}</span></span>
+        <${BudBar} col=${catColor(x.l.cat)} pct=${x.bud > 0 ? x.spent / x.bud : x.spent > 0 ? 1 : 0} ppct=${x.bud > 0 ? x.plan / x.bud : 0} over=${x.act > x.bud + .004} h=${6} />
+        <span class="bw-s"><span>${sub}</span><span style="flex:none">sur ${fmt0(x.bud)}</span></span></span></button>`; };
     /* Plusieurs enveloppes aux dates différentes (séjours de « Vacances ») : une carte en largeur, une ligne par enveloppe (maquette 1a, v64) */
     if (!e.income && e.main.length > 1 && (new Set(e.main.map(x => x.pe)).size > 1 || e.main.some(x => x.l.first))) {
       const yr = e.main.every(x => x.l.dur?.u === "y" && (x.l.dur?.n || 1) === 1);
@@ -4614,14 +4652,12 @@ function Budgets() {
       return html`<div class="bwide">
         <button class="bwide-h" onClick=${open}>${(par => par ? html`<${CatGlyph} id=${par} box=${34} s=${18} />` : lineGlyph(first, null, 34, 18))(e.main.every(x => cat(x.l.cat)?.parent && cat(x.l.cat).parent === cat(e.main[0].l.cat).parent) ? cat(e.main[0].l.cat).parent : null)}<span class="grow" style="min-width:0;display:flex;flex-direction:column"><span style="font-size:18px;font-weight:700">${b.name}${b.hidden ? html`<span class="tag">masqué</span>` : ""}</span><span class="k">${nx ? "Prochaine : " + capF(lineName(nx.x.l)) + ", le " + dayShort(nx.d) : e.main.length + " enveloppes" + (yr ? " · " + fmt0(e.base) + " par an" : "")}</span></span>
           <span style="display:flex;flex-direction:column;align-items:flex-end;flex:none"><span class="k">${e.rest >= 0 ? "Il reste" : "Dépassé de"}</span><span class="amt" style=${"font-size:20px;font-weight:700;color:" + (e.rest < 0 ? "var(--neg)" : "var(--ink)")}>${fmt0(Math.abs(e.rest))}</span></span></button>
-        ${e.main.slice().sort((p, q) => p.pe.localeCompare(q.pe)).map(x => { const du = x.l.first ? dueDay(x.l, x.pe) : null, add = (x.l.mv && x.l.mv[x.ps]) || 0;
-          const sub = [x.spent > .004 ? fmt0(x.spent) + " dépensés" : "", x.plan > .004 ? fmt0(x.plan) + " prévus" : "", add > .004 ? "dont " + fmt0(add) + " ajoutés" : "", du ? "" : "jusqu'au " + dayShort(x.pe)].filter(Boolean).join(" · ") || "rien de dépensé";
-          return html`<button class="bwide-r" onClick=${() => NAV.push({v: "line", id: x.l.id, d: x.ps})}>${lineGlyph(x.l, null, 40, 19)}
-            <span class="grow" style="min-width:0;display:flex;flex-direction:column;gap:5px"><span class="bw-t"><span style="display:flex;align-items:center;gap:8px;min-width:0"><span style="font-size:15.5px;font-weight:600">${capF(lineName(x.l))}</span>${du && html`<span class=${"bw-chip pc p-" + pfam(catColor(x.l.cat))}>le ${dayShort(du)}</span>`}</span><span class="amt" style=${"font-size:15.5px;font-weight:700;color:" + (x.rest < 0 ? "var(--neg)" : "var(--ink)")}>${x.rest < 0 ? "−" : ""}${fmt0(Math.abs(x.rest))}</span></span>
-            <${BudBar} col=${catColor(x.l.cat)} pct=${x.bud > 0 ? x.spent / x.bud : x.spent > 0 ? 1 : 0} ppct=${x.bud > 0 ? x.plan / x.bud : 0} over=${x.act > x.bud + .004} h=${6} />
-            <span class="bw-s"><span>${sub}</span><span style="flex:none">sur ${fmt0(x.bud)}</span></span></span></button>`; })}
+        ${e.main.slice().sort((p, q) => p.pe.localeCompare(q.pe)).map(x => wRow(x, capF(lineName(x.l)), () => NAV.push({v: "line", id: x.l.id, d: x.ps})))}
       </div>`;
     }
+    /* Budget annuel daté d'une seule enveloppe (Noël - Cadeaux) : une carte en largeur, comme Anniversaires et Vacances (v67) */
+    if (!e.income && one && e.main[0].l.first) return html`<div class="bwide">${wRow(e.main[0], b.name, open, true)}</div>`;
+    const due = !e.income && one && yearlyUndated(e.main[0].l);
     return html`<div class=${"card benv pc p-" + fam}>
       <button class="benv-main" onClick=${open}>
         <span class="benv-n">${lineGlyph(first, "var(--pi)", 28, 16)}<span class="t1">${b.name}${b.hidden ? html`<span class="tag">masqué</span>` : ""}</span></span>
@@ -4633,6 +4669,7 @@ function Budgets() {
           : html`<span class="benv-left">${!lines.length ? "Aucune catégorie pour l'instant" : soon ? "Commence le " + dayShort(soon) + (soon.slice(0, 4) !== t.slice(0, 4) ? " " + soon.slice(0, 4) : "") : "Rien en cours à cette date"}</span>`}
       </button>
       ${e.main.length > 0 && html`<button class="benv-amt" aria-label=${(one ? "Modifier le montant de " : "Voir les montants de ") + b.name + " : " + fmt0(e.base) + " " + w.sl.replace("/ ", "par ")} onClick=${edit}>${fmt0(e.base)} ${w.sl.replace("/ ", "par ")}<${Ic} n="edit" s=${13} /></button>`}
+      ${due && html`<button class="benv-due" aria-label=${"Ajouter une date à " + b.name} onClick=${() => SHEET.open({type: "due", line: e.main[0].l.id})}><${Ic} n="cal" s=${14} />Ajouter une date</button>`}
     </div>`;
   };
   return html`
@@ -4926,9 +4963,7 @@ function LineSheet({id, budget, close}) {
   const t = today();
   const avg = f.cat ? avgLine(normLine({...f, id: l0?.id || "tmp", budget: bid, end: f.endOn ? f.end : null}), t) : 0;
   const build = () => { const o = {...(l0 ? A().bud[l0.id] : {}), k: "bud", id: l0?.id || uid("bud"), budget: bid, cat: f.cat, income: !!f.income, carry: !!f.carry, prorata: prLineOk(bid) && !!f.prorata, start: f.start, end: f.endOn && f.end ? f.end : null, dur: {n: Math.max(1, Number(f.dur.n) || 1), u: f.dur.u}, label: f.label.trim() || null, first: null, once: null};
-    if (dated && f.first) { const same = l0 && l0.first === f.first && !!l0.once === !!f.once;
-      Object.assign(o, {first: f.first, once: !!f.once, start: same ? l0.start : dueStart(f.first, !!f.once), end: f.once ? eom(ym(f.first)) : null, dur: {n: 1, u: "y"}, carry: false, dueSince: l0?.first && l0.dueSince ? l0.dueSince : today()}); }
-    return o; };
+    return dated && f.first ? datedLine(o, l0, f.first, f.once) : o; };
   const save = () => {
     setErr("");
     if (!f.cat) return setErr("Choisis une catégorie ou « autres catégories ».");
@@ -4959,7 +4994,7 @@ function LineSheet({id, budget, close}) {
       <input id="ln-a" class="amount-in" style="text-align:left;font-size:30px" inputmode="decimal" value=${f.amt} onInput=${e => set("amt", e.target.value)} placeholder="0,00" /></${Field}>
     ${dated && html`<${Field} label="Date de la dépense" id="ln-d"><input id="ln-d" type="date" value=${f.first} onInput=${e => set("first", e.target.value)} onChange=${e => set("first", e.target.value)} /></${Field}>
       <${Seg} v=${f.once ? "1" : "y"} set=${v => set("once", v === "1")} opts=${[["y", "Chaque année"], ["1", "Une seule fois"]]} />
-      <div class="help">${f.first ? "Les Prévisions retirent ce qui reste le " + dayShort(f.first).replace(/\.$/, "") + ". Après la fin " + deN(MOIS[Number(f.first.slice(5, 7)) - 1]) + ", Pécule te demande quoi faire de ce qui n'a pas été dépensé." : "Les Prévisions retirent ce qui reste à cette date ; ensuite, Pécule te demande quoi faire de ce qui n'a pas été dépensé."}</div>`}
+      <div class="help">${dueHelp(f.first)}</div>`}
     ${!dated && html`<div class="grid2">
       <${Field} label="Durée d'une période" id="ln-n"><div style="display:flex;gap:6px"><input id="ln-n" type="number" min="1" style="width:70px" value=${f.dur.n} onInput=${e => set("dur", {...f.dur, n: e.target.value})} /><select aria-label="Unité" value=${f.dur.u} onChange=${e => set("dur", {...f.dur, u: e.target.value})}><option value="d">jours</option><option value="w">semaines</option><option value="m">mois</option><option value="y">ans</option></select></div></${Field}>
       <${Field} label="Début" id="ln-s"><input id="ln-s" type="date" value=${f.start} onInput=${e => set("start", e.target.value)} /></${Field}>
@@ -5915,6 +5950,7 @@ function SheetHost({s, close}) {
     case "bdgLines": return html`<${BdgLines} ...${p} />`;
     case "regroup": return html`<${RegroupSheet} ...${p} />`;
     case "rest": return html`<${RestSheet} ...${p} />`;
+    case "due": return html`<${DueSheet} ...${p} />`;
     case "lineDates": return html`<${LineDates} ...${p} />`;
     case "fillAvg": return html`<${FillAvg} ...${p} />`;
     case "bdgFromTx": return html`<${BdgFromTx} ...${p} />`;
