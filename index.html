@@ -376,6 +376,11 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .bwide-r{display:flex;align-items:center;gap:12px;padding:12px 14px;border:0;border-top:1px solid var(--line);background:none;text-align:left;color:inherit;font:inherit;width:100%}
 .bwide-r .bw-t{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .bwide-r .bw-s{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--muted)}
+.bw-chip{flex:none;font-size:12px;font-weight:700;padding:3px 9px;border-radius:10px;background:var(--pb);color:var(--pi);white-space:nowrap}
+.radio{flex:none;width:22px;height:22px;border-radius:11px;border:2px solid var(--muted);margin-top:1px;display:flex;align-items:center;justify-content:center}
+.radio.on{border-color:var(--ink)}
+.radio.on::after{content:"";width:10px;height:10px;border-radius:5px;background:var(--ink)}
+.duecard{display:flex;align-items:center;gap:12px;padding:14px 16px}
 .fkids{margin:0 10px 10px;background:var(--pb);border-radius:18px;padding:12px;display:flex;flex-direction:column;gap:10px}
 .fkq{font-size:14px;font-weight:700;color:var(--pi)}
 .fkch{display:flex;flex-wrap:wrap;gap:6px}
@@ -1232,7 +1237,7 @@ function calc(str) {
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
 /* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
-const APP_VERSION = 65;
+const APP_VERSION = 66;
 /* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
 const NEWS = {
   54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
@@ -1247,6 +1252,7 @@ const NEWS = {
   63: ["Opérations d'un compte triées des plus anciennes aux plus récentes : le solde « puis … » se suit maintenant ligne après ligne, même pour plusieurs opérations le même jour."],
   64: ["Budgets : plusieurs budgets sur la même catégorie (tes budgets Vacances) peuvent être regroupés en un seul, avec une ligne par séjour. Une dépense ne compte plus que pour un séjour.", "En saisissant une dépense de vacances, Pécule demande « Pour quel séjour ? »."],
   65: ["Budgets : « Réorganiser » (en bas de l'écran) pour choisir l'ordre des vignettes."],
+  66: ["Budgets : une enveloppe peut avoir une date de dépense (chaque année ou une seule fois). Les Prévisions retirent ce qui reste à cette date, et ensuite Pécule te demande quoi faire de ce qui n'a pas été dépensé.", "Pour l'activer : ouvre une ligne de budget, puis « Date de dépense »."],
 };
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));
@@ -1535,11 +1541,16 @@ function occurrences(until) {
       const pc = payCard(b), acc = pc ? pc.linked : budRemAcc(b);
       if (!acc) continue;
       for (const l of linesOf(b.id)) for (const [ps, pe] of periodsOf(l, t, until)) {
-        if (pe < t || pe > until) continue;
+        if (pe < t || (pe > until && !(l.first && !l.income))) continue;
         const id = "tx_b_" + l.id + "_" + ps;
         const rem = r2(lineBudget(l, ps) - lineActual(l, ps, pe) - linePlanned(l, ps, pe, base));
-        if (rem > 0.004 && !D.tx[id]) { const v = l.income ? rem : -rem; const dd = pc && !l.income ? cardDebitFor(pc, pe) : pe; if (dd > until) continue; out.push({virtual:true, kind:"bud", line:l.id, id, date:dd, account:acc, name:"Budget " + remName(l) + (pc && !l.income ? " (reste, débit " + pc.name + ")" : " (reste)"), amount:v, splits:[{cat:l.cat === "__other__" ? null : l.cat, amount:v}], pay:"autre"}); }
+        if (rem > 0.004 && !D.tx[id]) { const v = l.income ? rem : -rem; const dated = l.first && !l.income, du = dated ? dueDay(l, pe) : pe, d0 = dated && du < t ? t : du;
+          const dd = pc && !l.income ? cardDebitFor(pc, d0) : d0; if (dd > until) continue;
+          out.push({virtual:true, kind:"bud", line:l.id, id, date:dd, account:acc, name:(dated ? remName(l) + " (enveloppe" : "Budget " + remName(l) + " (reste") + (pc && !l.income ? ", débit " + pc.name + ")" : ")"), amount:v, splits:[{cat:l.cat === "__other__" ? null : l.cat, amount:v}], pay:"autre"}); }
       }
+      /* Enveloppe datée dont la période est finie : ce qui n'a pas été dépensé reste réservé (retiré aujourd'hui) jusqu'à ta décision */
+      for (const l of linesOf(b.id)) { const q = dueAsk(l); if (!q || t > until) continue; const v = -q.rem;
+        out.push({virtual:true, kind:"bud", line:l.id, id:"tx_bd_" + l.id + "_" + q.ps, date:t, account:acc, name:remName(l) + " (à décider)", amount:v, splits:[{cat:l.cat === "__other__" ? null : l.cat, amount:v}], pay:"autre"}); }
     }
     return out.sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
   });
@@ -1607,7 +1618,22 @@ const payCard = b => { const c = b.payWith && A().acc[b.payWith]; return c && c.
 const budRemAcc = b => { const D = A(); const own = bAccs(b); return own.find(id => inCash(D.acc[id])) || own.map(id => D.acc[id]).find(a => a.type === "carte" && D.acc[a.linked])?.linked || (own.length ? own[0] : accList().find(inCash)?.id) || null; };
 const bAccLabel = b => { const own = (b.accounts || []).filter(id => A().acc[id]); if (!own.length) return "tous les comptes"; const extra = bAccs(b).filter(id => !own.includes(id)); return own.map(accName).join(", ") + (extra.length ? " + " + extra.map(accName).join(", ") : ""); };
 const durLabel = d => { const n = d?.n || 1, u = d?.u || "m"; if (n === 1) return {d: "par jour", w: "par semaine", m: "par mois", y: "par an"}[u]; return `tous les ${n} ${{d: "jours", w: "semaines", m: "mois", y: "ans"}[u]}`; };
+/* Enveloppe datée (option A, v66) : l.first = 1re date de dépense (AAAA-MM-JJ), l.once = une seule fois. Chaque période va du lendemain
+   de la précédente (ou de l.start) à la fin du mois de la date de dépense ; ce qui reste est retiré à cette date. */
+const dueDay = (l, pe) => l.once ? l.first : pe.slice(0, 7) + "-" + pad(Math.min(Number(l.first.slice(8)), dim(Number(pe.slice(0, 4)), Number(pe.slice(5, 7)))));
+/* Début d'une enveloppe datée : la période qui finit le mois de la 1re date commence 12 mois plus tôt, jamais après le mois en cours */
+const dueStart = (first, once) => { const cur = ym(today()) + "-01"; if (once) return cur < first ? cur : ym(first) + "-01"; const s0 = ymAdd(ym(first), -11) + "-01"; return s0 < cur ? s0 : cur; };
 function periodsOf(l, from, to) {
+  if (l.first) return memo("perd" + l.id + "|" + from + to + l.start + l.first + (l.once ? 1 : 0) + (l.end || ""), () => {
+    const out = []; let ps = l.start, k = ym(l.first), g = 0;
+    while (ps <= to && g++ < 300) {
+      let pe = eom(k); if (l.end && pe > l.end) pe = l.end;
+      if (pe >= ps && pe >= from) out.push([ps, pe]);
+      if (l.once || (l.end && pe >= l.end)) break;
+      ps = addDays(pe, 1); k = ymAdd(k, 12);
+    }
+    return out;
+  });
   return memo("per" + l.id + "|" + from + to + l.start + (l.end || "") + (l.dur.n || 1) + l.dur.u, () => {
     const out = []; let ps = l.start, g = 0; const anchor = Number(l.start.slice(8));
     while (ps <= to && g++ < 5000) {
@@ -1635,6 +1661,27 @@ function baseAmt(l, ps) {
   let a = l.amount || 0;
   for (const h of (l.hist || []).slice().sort((x, y) => x.from.localeCompare(y.from))) if (h.from <= ps) a = h.amount;
   return a;
+}
+/* Enveloppe datée dont la dernière période est finie et dont il reste de l'argent : Pécule demande quoi en faire (v66).
+   Seulement pour les périodes finies après la pose de la date (l.dueSince). */
+function dueAsk(l) {
+  if (!l.first || l.income || !l.dueSince) return null;
+  const t = today(), ps = periodsOf(l, l.dueSince, addDays(t, -1)).filter(p => p[1] < t && p[1] >= l.dueSince).pop();
+  if (!ps || (l.done && l.done[ps[0]])) return null;
+  const bud = lineBudget(l, ps[0]), spent = lineActual(l, ps[0], ps[1]), rem = r2(bud - spent);
+  return rem > 0.004 ? {l, ps: ps[0], pe: ps[1], bud, spent, rem} : null;
+}
+const dueAsks = () => memo("dueAsks", () => budgets(true).flatMap(b => linesOf(b.id).map(dueAsk).filter(Boolean)));
+/* « back » : rendu au compte ; « keep » : ajouté à la période suivante ; « move » : ajouté à l'enveloppe choisie (sa période en cours ou la prochaine) */
+async function decideRest(q, choice, toId) {
+  const raw = A().bud[q.l.id], ops = [], done = {...(raw.done || {}), [q.ps]: choice === "move" ? "move:" + toId : choice};
+  const addTo = (r, ps) => ({...r, mv: {...(r.mv || {}), [ps]: r2(((r.mv || {})[ps] || 0) + q.rem)}});
+  if (choice === "keep") { const nx = periodsOf(q.l, addDays(q.pe, 1), addDays(q.pe, 1))[0]; ops.push(["put", nx ? addTo({...raw, done}, nx[0]) : {...raw, done}]); }
+  else if (choice === "move" && toId && A().bud[toId]) {
+    const tl = lineById(toId), t = today(), p = periodAt(tl, t) || periodsOf(tl, t, addDays(t, 800))[0];
+    ops.push(["put", {...raw, done}]); if (p) ops.push(["put", addTo(A().bud[toId], p[0])]);
+  } else ops.push(["put", {...raw, done}]);
+  await Store.bulk(ops);
 }
 /* budgets pouvant recevoir une dépense de cette catégorie sur ce compte */
 /* Budgets d'une ligne qui suivent la même catégorie sur les mêmes comptes (cas des 5 budgets « Vacances ») : une dépense
@@ -1732,7 +1779,7 @@ function linePrevu(l, ps, pe) {
 }
 function lineTxs(l, ps, pe) { const m = lineMatcher(l), seen = new Set(), out = []; for (const x of bSplits(budgetOf(l))) { if (x.t.adj || x.d < ps || x.d > pe || !m(x.cat) || !counts(l, x) || seen.has(x.t.id)) continue; seen.add(x.t.id); out.push(x.t); } return out.sort((a, b) => b.date.localeCompare(a.date)); }
 function lineBudget(l, ps, depth = 0) {
-  let a = baseAmt(l, ps);
+  let a = baseAmt(l, ps) + ((l.mv && l.mv[ps]) || 0);
   if (l.carry && depth < 60) { const pp = prevPeriod(l, ps); if (pp) { const c = lineBudget(l, pp[0], depth + 1) - lineActual(l, pp[0], pp[1]);
     // Une période pas encore finie : son reste est compté comme dépense prévue, on ne le reporte pas une 2e fois (seul un dépassement se reporte).
     a += pp[1] < today() ? c : Math.min(0, c); } }
@@ -2267,6 +2314,34 @@ function NudgeCard({icon, col = "var(--accent)", title, text, children}) {
     <div style="display:flex;gap:12px;align-items:flex-start"><span style=${`width:36px;height:36px;border-radius:12px;background:color-mix(in srgb,${col} 12%,transparent);color:${col};display:flex;align-items:center;justify-content:center;flex:none`}><${Ic} n=${icon} s=${19} /></span>
       <span class="grow"><div style="font-size:15px;font-weight:700">${title}</div><div class="muted" style="font-size:13px;line-height:1.4;margin-top:2px">${text}</div></span></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">${children}</div></div>`;
+}
+/* Enveloppes datées passées : « Hiver : 120 € non dépensés » → que veux-tu en faire ? (v66) */
+function RestBanners({only}) {
+  return dueAsks().filter(q => !only || only(budgetOf(q.l))).map(q => html`<button class="row prow p-peach" onClick=${() => SHEET.open({type: "rest", line: q.l.id})}><${Ic} n="cal" /><span class="grow"><div class="t1" style="white-space:normal">${remName(q.l)} : ${fmt0(q.rem)} non dépensés</div><div class="t2" style="white-space:normal">Que veux-tu en faire ?</div></span><span style="color:var(--pi)" aria-hidden="true">›</span></button>`);
+}
+function RestSheet({line, close}) {
+  const l = lineById(line), q = l && dueAsk(l), t = today();
+  const [ch, setCh] = useState("back");
+  const others = useMemo(() => budgets(true).flatMap(b => linesOf(b.id)).filter(x => !x.income && l && x.id !== l.id).sort((a, b) => (a.budget === l?.budget ? 0 : 1) - (b.budget === l?.budget ? 0 : 1)), []);
+  const [to, setTo] = useState(() => others[0]?.id || "");
+  if (!q) return html`<${Sheet} title="Ce qui reste" close=${close}><div class="empty">C'est déjà décidé.</div></${Sheet}>`;
+  const nx = !l.once && periodsOf(l, addDays(q.pe, 1), addDays(q.pe, 1))[0], nb = nx ? lineBudget(l, nx[0]) : 0, acc = accName(budRemAcc(budgetOf(l)) || "");
+  const ok = async () => { await decideRest(q, ch, ch === "move" ? to : null); close(); toast(ch === "back" ? fmt0(q.rem) + " remis sur le " + acc : ch === "keep" ? fmt0(q.rem) + " gardés pour l'an prochain" : fmt0(q.rem) + " mis sur " + remName(lineById(to))); };
+  const opt = (v, t1, t2) => html`<button type="button" role="radio" aria-checked=${ch === v ? "true" : "false"} class="row" style="align-items:flex-start" onClick=${() => setCh(v)}><span class=${"radio" + (ch === v ? " on" : "")} aria-hidden="true"></span><span class="grow"><div class="t1" style="white-space:normal">${t1}</div><div class="t2" style="white-space:normal">${t2}</div></span></button>`;
+  return html`<${Sheet} title="Ce qui reste" close=${close} left=${html`<button class="link" onClick=${close}>Plus tard</button>`}>
+    <div class="card pc p-peach" style="background:var(--pb);padding:16px;display:flex;flex-direction:column;gap:12px;flex:none">
+      <div style="display:flex;align-items:center;gap:10px">${lineGlyph(l, null, 36, 18)}<span class="grow"><div class="t1" style="white-space:normal">${fmt0(q.rem)} n'ont pas été dépensés</div><div class="t2" style="color:var(--pi)">${remName(l)} · ${periodLabel(q.ps, q.pe)}</div></span></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);text-align:center;color:var(--pi);font-size:12.5px">${[["Prévu", q.bud], ["Dépensé", q.spent], ["Reste", q.rem]].map(([k, v]) => html`<span>${k}<b class="amt" style="display:block;font-size:18px;color:var(--ink)">${fmt0(v)}</b></span>`)}</div></div>
+    <div class="fgh" style="padding:4px 4px 0">Que veux-tu en faire ?</div>
+    <div class="card" role="radiogroup" aria-label="Que faire de ce qui reste" style="flex:none">
+      ${opt("back", "Les remettre sur le " + acc, "Ils redeviennent de l'argent libre.")}
+      ${nx && opt("keep", "Les garder pour l'an prochain", capF(lineName(l)) + " " + nx[1].slice(0, 4) + " commencera avec " + fmt0(nb + q.rem) + " au lieu de " + fmt0(nb) + ".")}
+      ${others.length > 0 && opt("move", "Les mettre sur une autre enveloppe", "Elle les ajoute à ce qu'elle a déjà.")}
+    </div>
+    ${ch === "move" && html`<${Field} label="Quelle enveloppe ?" id="rs-to"><select id="rs-to" value=${to} onChange=${e => setTo(e.target.value)}>${others.map(x => { const r = lineAt(x, t); return html`<option value=${x.id}>${remName(x)}${r ? " · il reste " + fmt0(r.rest) : ""}</option>`; })}</select></${Field}>`}
+    <button class="btn pri" onClick=${ok}>Valider</button>
+    <div class="help" style="text-align:center">« Plus tard » : les ${fmt0(q.rem)} restent réservés et la question revient sur l'accueil et dans Budgets.</div>
+  </${Sheet}>`;
 }
 function Half50Banner() {
   const h = half50Due(); if (!h) return null;
@@ -3081,7 +3156,7 @@ function Accounts() {
   return html`
     <header class="top" style="align-items:center;gap:8px"><span style="display:flex;align-items:center;gap:6px;min-width:0;flex:1"><${AccPill} /></span><span class="muted" style="font-size:13px;font-weight:500;white-space:nowrap">${(d => d.charAt(0).toUpperCase() + d.slice(1))(P(today()).toLocaleDateString("fr-FR", {weekday: "short", day: "numeric", month: "short"}))}</span><button class="hbtn" style="width:40px;height:40px;font-size:18px;font-weight:700;flex:none" aria-label="Guide de Pécule" onClick=${() => NAV.push({v: "guide"})}>?</button></header>
     <main class="scr wide dash" style="gap:20px">
-      <div class="dash-full"><${UpdBanner} /><${BackupNudge} /><${DataNudge} /><${Half50Banner} /></div>
+      <div class="dash-full"><${UpdBanner} /><${BackupNudge} /><${DataNudge} /><${Half50Banner} /><${RestBanners} /></div>
       <div class="dash-l"><${Glance} />
       ${main && html`<${GlanceBudgets} />`}</div>
       <div class="dash-r">${main && html`<${DashOps} id=${main} key=${main} />`}
@@ -4527,19 +4602,22 @@ function Budgets() {
     if (del) return html`<div class="card" style="padding:12px 16px;display:flex;align-items:center;gap:10px">${budDot(b)}<span class="grow t1">${b.name}</span><button class="btn sm danger" onClick=${() => delBudget(b)}><${Ic} n="trash" s=${16} />Supprimer</button></div>`;
     const open = () => NAV.push({v: "budget", id: b.id}), one = e.main.length === 1;
     const edit = () => one ? SHEET.open({type: "amt", line: e.main[0].l.id, d}) : open();
-    const sb = capF(bAccLabel(b)) + (envPr(b, lines) ? " · au prorata" : "");
+    const sb = capF(bAccLabel(b)) + (envPr(b, lines) ? " · au prorata" : "") + (e.main.length === 1 && e.main[0].l.first && !e.income ? " · le " + dayShort(dueDay(e.main[0].l, e.main[0].pe)) : "");
     const soon = !e.main.length && lines.filter(l => l.start > d).map(l => l.start).sort()[0];
     /* Maquette R : une enveloppe pastel par budget, en mosaïque */
     const fam = pfam(col), left = e.income ? (e.rest > 0 ? "Encore " + fmt0(e.rest) + " attendus" : "Objectif atteint") : null;
     /* Plusieurs enveloppes aux dates différentes (séjours de « Vacances ») : une carte en largeur, une ligne par enveloppe (maquette 1a, v64) */
-    if (!e.income && e.main.length > 1 && new Set(e.main.map(x => x.pe)).size > 1) {
+    if (!e.income && e.main.length > 1 && (new Set(e.main.map(x => x.pe)).size > 1 || e.main.some(x => x.l.first))) {
       const yr = e.main.every(x => x.l.dur?.u === "y" && (x.l.dur?.n || 1) === 1);
+      /* Enveloppes datées (v66) : la prochaine date à venir */
+      const nx = e.main.filter(x => x.l.first).map(x => ({x, d: dueDay(x.l, x.pe)})).filter(o => o.d >= t).sort((p, q) => p.d.localeCompare(q.d))[0];
       return html`<div class="bwide">
-        <button class="bwide-h" onClick=${open}>${(par => par ? html`<${CatGlyph} id=${par} box=${34} s=${18} />` : lineGlyph(first, null, 34, 18))(e.main.every(x => cat(x.l.cat)?.parent && cat(x.l.cat).parent === cat(e.main[0].l.cat).parent) ? cat(e.main[0].l.cat).parent : null)}<span class="grow" style="min-width:0;display:flex;flex-direction:column"><span style="font-size:18px;font-weight:700">${b.name}${b.hidden ? html`<span class="tag">masqué</span>` : ""}</span><span class="k">${e.main.length} enveloppes${yr ? " · " + fmt0(e.base) + " par an" : ""}</span></span>
+        <button class="bwide-h" onClick=${open}>${(par => par ? html`<${CatGlyph} id=${par} box=${34} s=${18} />` : lineGlyph(first, null, 34, 18))(e.main.every(x => cat(x.l.cat)?.parent && cat(x.l.cat).parent === cat(e.main[0].l.cat).parent) ? cat(e.main[0].l.cat).parent : null)}<span class="grow" style="min-width:0;display:flex;flex-direction:column"><span style="font-size:18px;font-weight:700">${b.name}${b.hidden ? html`<span class="tag">masqué</span>` : ""}</span><span class="k">${nx ? "Prochaine : " + capF(lineName(nx.x.l)) + ", le " + dayShort(nx.d) : e.main.length + " enveloppes" + (yr ? " · " + fmt0(e.base) + " par an" : "")}</span></span>
           <span style="display:flex;flex-direction:column;align-items:flex-end;flex:none"><span class="k">${e.rest >= 0 ? "Il reste" : "Dépassé de"}</span><span class="amt" style=${"font-size:20px;font-weight:700;color:" + (e.rest < 0 ? "var(--neg)" : "var(--ink)")}>${fmt0(Math.abs(e.rest))}</span></span></button>
-        ${e.main.slice().sort((p, q) => p.pe.localeCompare(q.pe)).map(x => { const sub = [x.spent > .004 ? fmt0(x.spent) + " dépensés" : "", x.plan > .004 ? fmt0(x.plan) + " prévus" : "", "jusqu'au " + dayShort(x.pe)].filter(Boolean).join(" · ");
+        ${e.main.slice().sort((p, q) => p.pe.localeCompare(q.pe)).map(x => { const du = x.l.first ? dueDay(x.l, x.pe) : null, add = (x.l.mv && x.l.mv[x.ps]) || 0;
+          const sub = [x.spent > .004 ? fmt0(x.spent) + " dépensés" : "", x.plan > .004 ? fmt0(x.plan) + " prévus" : "", add > .004 ? "dont " + fmt0(add) + " ajoutés" : "", du ? "" : "jusqu'au " + dayShort(x.pe)].filter(Boolean).join(" · ") || "rien de dépensé";
           return html`<button class="bwide-r" onClick=${() => NAV.push({v: "line", id: x.l.id, d: x.ps})}>${lineGlyph(x.l, null, 40, 19)}
-            <span class="grow" style="min-width:0;display:flex;flex-direction:column;gap:5px"><span class="bw-t"><span style="font-size:15.5px;font-weight:600">${capF(lineName(x.l))}</span><span class="amt" style=${"font-size:15.5px;font-weight:700;color:" + (x.rest < 0 ? "var(--neg)" : "var(--ink)")}>${x.rest < 0 ? "−" : ""}${fmt0(Math.abs(x.rest))}</span></span>
+            <span class="grow" style="min-width:0;display:flex;flex-direction:column;gap:5px"><span class="bw-t"><span style="display:flex;align-items:center;gap:8px;min-width:0"><span style="font-size:15.5px;font-weight:600">${capF(lineName(x.l))}</span>${du && html`<span class=${"bw-chip pc p-" + pfam(catColor(x.l.cat))}>le ${dayShort(du)}</span>`}</span><span class="amt" style=${"font-size:15.5px;font-weight:700;color:" + (x.rest < 0 ? "var(--neg)" : "var(--ink)")}>${x.rest < 0 ? "−" : ""}${fmt0(Math.abs(x.rest))}</span></span>
             <${BudBar} col=${catColor(x.l.cat)} pct=${x.bud > 0 ? x.spent / x.bud : x.spent > 0 ? 1 : 0} ppct=${x.bud > 0 ? x.plan / x.bud : 0} over=${x.act > x.bud + .004} h=${6} />
             <span class="bw-s"><span>${sub}</span><span style="flex:none">sur ${fmt0(x.bud)}</span></span></span></button>`; })}
       </div>`;
@@ -4570,6 +4648,7 @@ function Budgets() {
         <span class="hint">${fmt0(hs)} dépensés${hp > .004 ? " et " + fmt0(hp) + " à venir" : ""} sur ${fmt0(hb)} prévus${dl > 0 && hr > 0 ? ", environ " + fmt0(hr / dl) + " par jour" : ""}</span>
       </section>`}
       ${m !== curM && html`<button class="link" style="align-self:center" onClick=${() => setM(curM)}>Revenir à ce mois-ci</button>`}
+      ${!del && !ord && html`<${RestBanners} only=${mine} />`}
       ${!del && !ord && bdgGroups().filter(g => g.list.some(mine)).map(g => html`<button class="row prow p-peach" onClick=${() => SHEET.open({type: "regroup", gkey: g.key})}><${Ic} n="layers" /><span class="grow"><div class="t1" style="white-space:normal">${g.list.length} budgets suivent la catégorie ${catName(g.cat)}</div><div class="t2" style="white-space:normal">Une dépense est déduite de chacun. Regroupe-les en un seul budget.</div></span><span style="color:var(--pi)">›</span></button>`)}
       ${ord && html`<div class="help">Monte ou descends les budgets : les vignettes suivent cet ordre.${new Set(list.map(pos)).size > 1 ? " Chaque budget se range parmi ceux de son compte." : ""}</div><div class="card">${list.map(ordRow)}</div>`}
       ${list.length > 0 && !ord && html`<div class="bgrid">${list.map(card)}</div>`}
@@ -4625,7 +4704,7 @@ function EnvDetail({b, lines, line, d0}) {
   const amtRow = x => html`<button class="benv-amt" aria-label=${"Modifier le montant de " + lineName(x.l) + " : " + fmt0(baseAmt(x.l, x.ps)) + " " + durLabel(x.l.dur)} onClick=${() => SHEET.open({type: "amt", line: x.l.id, d})}>${fmt0(baseAmt(x.l, x.ps))}<${Ic} n="edit" s=${14} /></button>`;
   const lineRows = xs => html`<div class="card">${xs.map(x => html`<div class="row" style="padding:0 6px 0 0;gap:0">
     <button class="benv-li" onClick=${() => NAV.push({v: "line", id: x.l.id, d: x.ps})}>${lineGlyph(x.l, x.l.income ? "var(--pos)" : budColor(b))}
-      <span class="grow" style="min-width:0;display:flex;flex-direction:column;gap:5px"><span><div class="t1">${capF(lineName(x.l))}</div><div class="t2" style=${!x.l.income && x.rest < 0 ? "color:var(--neg)" : ""}>${mixed ? "jusqu'au " + dayShort(x.pe) + " · " : ""}${fmt0(x.act)} ${x.l.income ? "reçus" : "dépensés"} · ${x.l.income ? (x.rest > 0 ? "encore " + fmt0(x.rest) : "atteint") : x.rest >= 0 ? "reste " + fmt0(x.rest) : "dépassé de " + fmt0(-x.rest)}</div></span>
+      <span class="grow" style="min-width:0;display:flex;flex-direction:column;gap:5px"><span><div class="t1">${capF(lineName(x.l))}</div><div class="t2" style=${!x.l.income && x.rest < 0 ? "color:var(--neg)" : ""}>${x.l.first ? "le " + dayShort(dueDay(x.l, x.pe)) + " · " : mixed ? "jusqu'au " + dayShort(x.pe) + " · " : ""}${fmt0(x.act)} ${x.l.income ? "reçus" : "dépensés"} · ${x.l.income ? (x.rest > 0 ? "encore " + fmt0(x.rest) : "atteint") : x.rest >= 0 ? "reste " + fmt0(x.rest) : "dépassé de " + fmt0(-x.rest)}</div></span>
       <${BudBar} col=${x.l.income ? "var(--pos)" : budColor(b)} pct=${x.bud > 0 ? x.spent / x.bud : x.spent > 0 ? 1 : 0} ppct=${x.bud > 0 ? x.plan / x.bud : 0} over=${!x.l.income && x.act > x.bud + .004} h=${6} /></span></button>
     ${amtRow(x)}</div>`)}</div>`;
   /* Réglages */
@@ -4647,6 +4726,7 @@ function EnvDetail({b, lines, line, d0}) {
         <span class="t2" style="margin:0;white-space:normal">${heroTxt}${carry ? ` · dont report ${fmt(carry, true)}` : ""}</span>
         ${single && html`<button class="benv-mrow" onClick=${() => SHEET.open({type: "amt", line: x1.l.id, d})}><span class="grow">Montant : <b>${fmt0(baseAmt(x1.l, x1.ps))} ${durLabel(x1.l.dur)}</b>${x1.l.ov && x1.l.ov[x1.ps] != null ? html`<span class="t2" style="display:block">ajusté pour ${budPer(ref, x1.ps, x1.pe)}, d'habitude ${fmt0(baseAmt({...x1.l, ov: {}}, x1.ps))}</span>` : ""}</span><span class="benv-go"><${Ic} n="edit" s=${15} />Modifier</span></button>`}
       </section>`}
+      ${single && x1.l.first && !x1.l.income && (du => html`<div class="card duecard"><${Ic} n="cal" /><span class="grow"><div class="t1">Dépense prévue le ${dayShort(du)}${du.slice(0, 4) !== t.slice(0, 4) ? " " + du.slice(0, 4) : ""}</div><div class="t2" style="white-space:normal">${du >= t ? (x1.rest > .004 ? "Les Prévisions y retirent les " + fmt0(x1.rest) + " qui restent" : "Tout est déjà dépensé ou prévu") : "Date passée : ce qui reste est réservé jusqu'à la fin du mois"}${x1.l.once ? "" : " · chaque année"}${x1.l.mv && x1.l.mv[x1.ps] ? " · dont " + fmt0(x1.l.mv[x1.ps]) + " ajoutés" : ""}</div></span></div>`)(dueDay(x1.l, x1.pe))}
       ${e.ps && !cur && html`<button class="link" style="align-self:center;margin-top:-8px" onClick=${() => setD(t)}>Revenir ${w.cur === "ce mois-ci" ? "à ce mois-ci" : "à aujourd'hui"}</button>`}
       ${!single && e.main.length > 0 && html`<section><div class="sec-h"><h2>${e.income ? "Revenus attendus" : mixed ? "Enveloppes" : "Catégories"}</h2><span class="t2">touche le montant pour le changer</span></div>${lineRows(mixed ? e.main.slice().sort((p, q) => p.pe.localeCompare(q.pe)) : e.main)}</section>`}
       ${!e.income && e.inc.length > 0 && html`<section><div class="sec-h"><h2>Revenus attendus</h2></div>${lineRows(e.inc)}</section>`}
@@ -4838,20 +4918,27 @@ async function addMissing(b) {
 function LineSheet({id, budget, close}) {
   const l0 = id ? lineById(id) : null;
   const bid = l0?.budget || budget;
-  const [f, setF] = useState(() => l0 ? {...clone(l0), amt: amtStr(l0.amount), endOn: !!l0.end, label: l0.label || ""} : {cat: null, amt: "", income: false, carry: false, start: A().bdg[bid]?.start || ym(today()) + "-01", end: A().bdg[bid]?.end || "", endOn: !!A().bdg[bid]?.end, dur: {n: 1, u: "m"}, label: ""});
+  const [f, setF] = useState(() => l0 ? {...clone(l0), amt: amtStr(l0.amount), endOn: !!l0.end, label: l0.label || "", dated: !!l0.first, first: l0.first || "", once: !!l0.once} : {cat: null, amt: "", income: false, carry: false, start: A().bdg[bid]?.start || ym(today()) + "-01", end: A().bdg[bid]?.end || "", endOn: !!A().bdg[bid]?.end, dur: {n: 1, u: "m"}, label: "", dated: false, first: "", once: false});
+  /* Enveloppe datée (option A, v66) : une date de dépense, chaque année ou une seule fois ; la période en découle */
+  const dated = f.dated && !f.income;
   const set = (k, v) => setF(o => ({...o, [k]: v}));
   const [err, setErr] = useState("");
   const t = today();
   const avg = f.cat ? avgLine(normLine({...f, id: l0?.id || "tmp", budget: bid, end: f.endOn ? f.end : null}), t) : 0;
-  const build = () => ({...(l0 ? A().bud[l0.id] : {}), k: "bud", id: l0?.id || uid("bud"), budget: bid, cat: f.cat, income: !!f.income, carry: !!f.carry, prorata: prLineOk(bid) && !!f.prorata, start: f.start, end: f.endOn && f.end ? f.end : null, dur: {n: Math.max(1, Number(f.dur.n) || 1), u: f.dur.u}, label: f.label.trim() || null});
+  const build = () => { const o = {...(l0 ? A().bud[l0.id] : {}), k: "bud", id: l0?.id || uid("bud"), budget: bid, cat: f.cat, income: !!f.income, carry: !!f.carry, prorata: prLineOk(bid) && !!f.prorata, start: f.start, end: f.endOn && f.end ? f.end : null, dur: {n: Math.max(1, Number(f.dur.n) || 1), u: f.dur.u}, label: f.label.trim() || null, first: null, once: null};
+    if (dated && f.first) { const same = l0 && l0.first === f.first && !!l0.once === !!f.once;
+      Object.assign(o, {first: f.first, once: !!f.once, start: same ? l0.start : dueStart(f.first, !!f.once), end: f.once ? eom(ym(f.first)) : null, dur: {n: 1, u: "y"}, carry: false, dueSince: l0?.first && l0.dueSince ? l0.dueSince : today()}); }
+    return o; };
   const save = () => {
     setErr("");
     if (!f.cat) return setErr("Choisis une catégorie ou « autres catégories ».");
     const v = calc(f.amt || "0"); if (isNaN(v) || v < 0) return setErr("Le montant doit être un nombre positif ou 0.");
-    if (!f.start) return setErr("Indique la date de début.");
-    if (f.endOn && f.end && f.end < f.start) return setErr("La date de fin est avant le début.");
-    if (linesOf(bid).some(x => x.id !== l0?.id && x.cat === f.cat && !!x.income === !!f.income && (!x.end || x.end >= f.start) && (!(f.endOn && f.end) || x.start <= f.end))) return setErr("Une autre ligne couvre déjà cette catégorie sur ces dates.");
+    if (dated && !f.first) return setErr("Indique la date de la dépense.");
+    if (dated && f.once && f.first < ym(t) + "-01") return setErr("Choisis une date à venir.");
+    if (!dated && !f.start) return setErr("Indique la date de début.");
+    if (!dated && f.endOn && f.end && f.end < f.start) return setErr("La date de fin est avant le début.");
     const nl = build();
+    if (linesOf(bid).some(x => x.id !== l0?.id && x.cat === f.cat && !!x.income === !!f.income && (!x.end || x.end >= nl.start) && (!nl.end || x.start <= nl.end))) return setErr("Une autre ligne couvre déjà cette catégorie sur ces dates.");
     const firstPe = periodsOf(normLine(nl), nl.start, nl.start)[0]?.[1];
     if (l0 && Math.abs(v - (l0.amount || 0)) > 0.004 && firstPe && firstPe < t) {
       const cur = periodAt(normLine(nl), t)?.[0] || t;
@@ -4867,17 +4954,21 @@ function LineSheet({id, budget, close}) {
     <${Field} label="Catégorie" id="ln-c"><${CatField} id="ln-c" v=${f.cat === "__other__" ? null : f.cat} set=${v => { set("cat", v); const c = cat(v); set("income", (c?.type || cat(c?.parent)?.type) === "rev"); }} />
       <button type="button" class=${"chip" + (f.cat === "__other__" ? " on" : "")} style="align-self:flex-start" onClick=${() => set("cat", "__other__")}>✳️ Autres catégories (tout ce qui n'a pas sa ligne)</button></${Field}>
     <${Seg} v=${f.income ? "inc" : "exp"} set=${v => set("income", v === "inc")} opts=${[["exp", "Dépense prévue"], ["inc", "Revenu attendu"]]} />
-    <${Field} label="Montant par période" id="ln-a" help=${avg > 0 ? html`Moyenne des 3 périodes précédentes : <button class="link" onClick=${() => set("amt", amtStr(Math.round(avg)))}>${fmt(avg)}, l'utiliser</button>` : "0 € est accepté, pour suivre une catégorie sans plafond."}>
+    ${!f.income && html`<${Seg} v=${f.dated ? "date" : "per"} set=${v => set("dated", v === "date")} opts=${[["per", "Période régulière"], ["date", "Date de dépense"]]} />`}
+    <${Field} label=${dated ? (f.once ? "Montant" : "Montant par an") : "Montant par période"} id="ln-a" help=${avg > 0 ? html`Moyenne des 3 périodes précédentes : <button class="link" onClick=${() => set("amt", amtStr(Math.round(avg)))}>${fmt(avg)}, l'utiliser</button>` : "0 € est accepté, pour suivre une catégorie sans plafond."}>
       <input id="ln-a" class="amount-in" style="text-align:left;font-size:30px" inputmode="decimal" value=${f.amt} onInput=${e => set("amt", e.target.value)} placeholder="0,00" /></${Field}>
-    <div class="grid2">
+    ${dated && html`<${Field} label="Date de la dépense" id="ln-d"><input id="ln-d" type="date" value=${f.first} onInput=${e => set("first", e.target.value)} onChange=${e => set("first", e.target.value)} /></${Field}>
+      <${Seg} v=${f.once ? "1" : "y"} set=${v => set("once", v === "1")} opts=${[["y", "Chaque année"], ["1", "Une seule fois"]]} />
+      <div class="help">${f.first ? "Les Prévisions retirent ce qui reste le " + dayShort(f.first).replace(/\.$/, "") + ". Après la fin " + deN(MOIS[Number(f.first.slice(5, 7)) - 1]) + ", Pécule te demande quoi faire de ce qui n'a pas été dépensé." : "Les Prévisions retirent ce qui reste à cette date ; ensuite, Pécule te demande quoi faire de ce qui n'a pas été dépensé."}</div>`}
+    ${!dated && html`<div class="grid2">
       <${Field} label="Durée d'une période" id="ln-n"><div style="display:flex;gap:6px"><input id="ln-n" type="number" min="1" style="width:70px" value=${f.dur.n} onInput=${e => set("dur", {...f.dur, n: e.target.value})} /><select aria-label="Unité" value=${f.dur.u} onChange=${e => set("dur", {...f.dur, u: e.target.value})}><option value="d">jours</option><option value="w">semaines</option><option value="m">mois</option><option value="y">ans</option></select></div></${Field}>
       <${Field} label="Début" id="ln-s"><input id="ln-s" type="date" value=${f.start} onInput=${e => set("start", e.target.value)} /></${Field}>
     </div>
     <div class="help">À la fin de chaque période, une nouvelle commence et le compteur repart de zéro. Les périodes sont calées sur la date de début : un 1er du mois donne des mois civils.</div>
-    <${Field} label="Fin" id="ln-e" help=${f.endOn && f.end ? html`<button type="button" class="link" onClick=${() => { set("end", ""); set("endOn", false); }}>Retirer la date de fin</button>` : "Vide : la ligne continue indéfiniment."}><input id="ln-e" type="date" min=${f.start || null} value=${f.endOn ? f.end || "" : ""} onInput=${e => { set("end", e.target.value); set("endOn", !!e.target.value); }} /></${Field}>
+    <${Field} label="Fin" id="ln-e" help=${f.endOn && f.end ? html`<button type="button" class="link" onClick=${() => { set("end", ""); set("endOn", false); }}>Retirer la date de fin</button>` : "Vide : la ligne continue indéfiniment."}><input id="ln-e" type="date" min=${f.start || null} value=${f.endOn ? f.end || "" : ""} onInput=${e => { set("end", e.target.value); set("endOn", !!e.target.value); }} /></${Field}>`}
     ${prLineOk(bid) && A().bdg[bid]?.prorata && html`<p class="help" style="margin:0">Ce budget est entièrement au prorata des salaires (réglage du budget).</p>`}
     ${prLineOk(bid) && !A().bdg[bid]?.prorata && html`<${Toggle} on=${!!f.prorata} set=${v => set("prorata", v)} label="Au prorata des salaires" sub=${f.prorata ? `L'enveloppe est comptée chaque mois dans ton virement au ${accName(halfJoint())} et la ligne ${(PR().name || "").trim() || "de l'autre personne"}` : "Partager cette enveloppe au prorata de vos salaires"} />`}
-    <${Toggle} on=${!!f.carry} set=${v => set("carry", v)} label="Reporter le reste sur la période suivante" sub="Ce qui n'est pas dépensé s'ajoute à la période d'après, un dépassement s'en retire." />
+    ${!dated && html`<${Toggle} on=${!!f.carry} set=${v => set("carry", v)} label="Reporter le reste sur la période suivante" sub="Ce qui n'est pas dépensé s'ajoute à la période d'après, un dépassement s'en retire." />`}
     <${Field} label="Nom affiché (facultatif)" id="ln-l"><input id="ln-l" value=${f.label} onInput=${e => set("label", e.target.value)} placeholder=${f.cat ? (f.cat === "__other__" ? "autres catégories" : catName(f.cat)) : ""} /></${Field}>
     ${err && html`<div class="banner" role="alert">${err}</div>`}
     <button class="btn pri" onClick=${save}>Enregistrer</button>
@@ -5823,6 +5914,7 @@ function SheetHost({s, close}) {
     case "half50": return html`<${Half50Sheet} ...${p} />`;
     case "bdgLines": return html`<${BdgLines} ...${p} />`;
     case "regroup": return html`<${RegroupSheet} ...${p} />`;
+    case "rest": return html`<${RestSheet} ...${p} />`;
     case "lineDates": return html`<${LineDates} ...${p} />`;
     case "fillAvg": return html`<${FillAvg} ...${p} />`;
     case "bdgFromTx": return html`<${BdgFromTx} ...${p} />`;

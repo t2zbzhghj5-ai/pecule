@@ -35,7 +35,7 @@ import fixture_icompta  # noqa: E402
 
 # ---------------------------------------------------------------- serveur (avec accès de test aux calculs)
 HOOK = ('window.__dbg = {A, S, Store, Hist, NAV, SHEET, occurrences, balance, amtFor, accList, today, budgets, lineAt, cardNext, cardPending, '
-        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf, parseBankText, half50, half50Due, half50Msg, halfBase, healthChecks, hKey, kidsOf, cardNext, runBal, addDays, updCheck, UPD, APP_VERSION, prItems, nextPending, fitViewport, bdgGroups};\n')
+        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf, parseBankText, half50, half50Due, half50Msg, halfBase, healthChecks, hKey, kidsOf, cardNext, runBal, addDays, updCheck, UPD, APP_VERSION, prItems, nextPending, fitViewport, bdgGroups, dueAsks, dueStart, dailySeries};\n')
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -1774,6 +1774,71 @@ def design_enveloppes(br, url):
         check(bg != fg, "bouton + illisible (%s sur %s)" % (fg, bg))
         a.no_errors("design R" + (" sombre" if dark else ""))
         a.close()
+
+
+@test
+def enveloppe_datee(br, url):
+    """Enveloppe datée (option A) : une ligne passée en « Date de dépense » ; ce qui reste est retiré à cette date dans les prévisions, une dépense rattachée s'en déduit (les 500 € ne comptent qu'une fois) ; une fois la période finie, le reste est réservé et Pécule demande quoi en faire : garder pour l'an prochain, mettre sur une autre enveloppe."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    liv = a.acc_id("Livret")
+    norm = lambda x: x.replace("\u202f", " ").replace("\xa0", " ")
+    a.js("""return D.Store.bulk([['put', {k: 'cat', id: 'cat_t_a', name: 'Ski', type: 'dep', parent: null}], ['put', {k: 'cat', id: 'cat_t_b', name: 'Cadeaux test', type: 'dep', parent: null}], ['put', {k: 'cat', id: 'cat_t_c', name: 'Fleurs test', type: 'dep', parent: null}],
+      ['put', {k: 'bdg', id: 'bdg_t_v', name: 'Projets', accounts: [arg], remaining: true, remAcc: arg, hidden: false, order: 30}],
+      ['put', {k: 'bud', id: 'bud_t_a', budget: 'bdg_t_v', cat: 'cat_t_a', amount: 500, income: false, start: D.today().slice(0, 8) + '01', end: null, dur: {n: 1, u: 'm'}, carry: false, hist: []}],
+      ['put', {...D.S(), k: 'set', id: 'set_main', bdgAcc: arg}]]);""", liv); a.wait(400)
+    due = a.js("return D.addDays(D.today(), 60);")
+    # la fiche de la ligne : « Date de dépense », chaque année
+    a.js("D.SHEET.open({type: 'line', id: 'bud_t_a'})"); a.wait(400)
+    sh = pg.locator(".sheet").last
+    sh.locator(".seg button", has_text="Date de dépense").click(); a.wait(200)
+    check("Montant par an" in sh.inner_text() and sh.locator("#ln-n").count() == 0, "fiche : mode date de dépense mal affiché")
+    sh.locator("#ln-d").fill(due); a.wait(200)
+    sh.locator(".btn.pri", has_text="Enregistrer").click(); a.wait(600)
+    l = a.js("return D.A().bud.bud_t_a;")
+    check(l["first"] == due and l["dur"]["u"] == "y" and not l["once"] and l["dueSince"] == a.js("return D.today();") and l["start"] == a.js("return D.dueStart(arg, false);", due), "ligne datée : %s" % l)
+    env = lambda: a.js("return D.occurrences(D.addDays(arg, 5)).filter(o => o.kind === 'bud' && o.line === 'bud_t_a').map(o => [o.date, o.amount, o.name]);", due)
+    e0 = env()
+    check(len(e0) == 1 and e0[0][0] == due and e0[0][1] == -500 and "(enveloppe)" in e0[0][2], "reste retiré à la date : %s" % e0)
+    bal = lambda: a.js("const s = D.dailySeries([arg], D.today(), D.addDays(D.today(), 70)); return s.find(p => p[0] === D.addDays(D.today(), 60))?.[1];", liv)
+    b0 = bal()
+    a.js("return D.Store.put({k: 'tx', id: 'tx_t_loc', account: arg, date: D.addDays(D.today(), 50), name: 'Location test', amount: -200, splits: [{amount: -200, cat: 'cat_t_a'}], st: 'prevue', pay: 'virement'});", liv); a.wait(400)
+    e1 = env()
+    check(len(e1) == 1 and e1[0][1] == -300, "la dépense rattachée doit se déduire de l'enveloppe : %s" % e1)
+    check(abs(bal() - b0) < 0.01, "les 500 € doivent compter une seule fois : %s puis %s" % (b0, bal()))
+    a.js("D.NAV.tab('budgets')"); a.wait(600)
+    check("le " in pg.locator("main .benv", has_text="Projets").first.inner_text(), "date absente de la carte du budget")
+    # deux enveloppes dont la période est finie, avec un reste
+    a.js("""const t = D.today(), f = D.addDays(t, -40), ops = [];
+      for (const [id, c, amt, sp] of [['b', 'cat_t_b', 500, 380], ['c', 'cat_t_c', 100, 30]]) {
+        ops.push(['put', {k: 'bud', id: 'bud_t_' + id, budget: 'bdg_t_v', cat: c, amount: amt, income: false, first: f, once: false, start: D.dueStart(f, false), end: null, dur: {n: 1, u: 'y'}, carry: false, hist: [], dueSince: D.addDays(t, -400)}]);
+        ops.push(['put', {k: 'tx', id: 'tx_t_' + id, account: arg, date: D.addDays(f, -3), name: 'Achat ' + id, amount: -sp, splits: [{amount: -sp, cat: c}], st: 'pointee', pay: 'cb'}]); }
+      return D.Store.bulk(ops);""", liv); a.wait(500)
+    asks = a.js("return D.dueAsks().map(q => [q.l.id, q.rem]);")
+    check(sorted(asks) == [["bud_t_b", 120], ["bud_t_c", 70]], "restes à décider : %s" % asks)
+    pend = a.js("return D.occurrences(D.addDays(D.today(), 5)).filter(o => o.kind === 'bud' && /à décider/.test(o.name)).map(o => [o.line, o.date === D.today(), o.amount]);")
+    check(sorted(pend) == [["bud_t_b", True, -120], ["bud_t_c", True, -70]], "restes réservés dès aujourd'hui : %s" % pend)
+    a.js("D.NAV.tab('comptes')"); a.wait(200); a.js("D.NAV.tab('budgets')"); a.wait(600)
+    ban = pg.locator(".prow", has_text="Cadeaux test")
+    check(ban.count() == 1 and "120 € non dépensés" in norm(ban.inner_text()), "bandeau du reste absent : %s" % [norm(x) for x in pg.locator(".prow").all_inner_texts()])
+    ban.click(); a.wait(500)
+    sh = pg.locator(".sheet").last
+    check(sh.locator('[role=radio][aria-checked=true]', has_text="Les remettre sur le").count() == 1, "le choix par défaut doit être de rendre l'argent au compte")
+    sh.locator('[role=radio]', has_text="Les garder pour l'an prochain").click(); a.wait(200)
+    sh.locator(".btn.pri", has_text="Valider").click(); a.wait(600)
+    st = a.js("const l = D.lineById('bud_t_b'), x = D.lineAt(l, D.today()); return {done: l.done, mv: l.mv, bud: x.bud, ps: x.ps};")
+    check(list(st["done"].values()) == ["keep"] and st["mv"] == {st["ps"]: 120} and st["bud"] == 620, "garder pour l'an prochain : %s" % st)
+    pg.locator(".prow", has_text="Fleurs test").click(); a.wait(500)
+    sh = pg.locator(".sheet").last
+    sh.locator('[role=radio]', has_text="Les mettre sur une autre enveloppe").click(); a.wait(200)
+    sh.locator("#rs-to").select_option("bud_t_b"); a.wait(100)
+    sh.locator(".btn.pri", has_text="Valider").click(); a.wait(600)
+    st2 = a.js("const b = D.lineById('bud_t_b'), c = D.lineById('bud_t_c'); return {bud: D.lineAt(b, D.today()).bud, done: Object.values(c.done || {}), asks: D.dueAsks().length};")
+    check(st2 == {"bud": 690, "done": ["move:bud_t_b"], "asks": 0}, "mettre sur une autre enveloppe : %s" % st2)
+    check(pg.locator(".prow", has_text="non dépensés").count() == 0, "bandeau encore affiché après la décision")
+    a.no_errors("enveloppe datée")
+    a.close()
 
 
 @test
