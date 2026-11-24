@@ -1887,6 +1887,47 @@ def budget_annuel_date(br, url):
 
 
 @test
+def valider_date_future(br, url):
+    """Valider une opération datée après aujourd'hui : « Passée à la banque aujourd'hui ? » ; « Garder » ne change rien (pas dans le solde validé), « La dater d'aujourd'hui » la compte tout de suite ; même question depuis la fiche ; achat par carte : date de débit gardée ; rien pour une opération déjà datée."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    cour, carte = a.acc_id("Courant"), a.acc_id("Carte Perso")
+    tm, t0 = a.js("return D.addDays(D.today(), 1);"), a.js("return D.today();")
+    a.js("""return D.Store.bulk([['put', {k: 'tx', id: 'tx_f_sal', account: arg[0], date: arg[2], name: 'Salaire test', amount: 2000, splits: [{amount: 2000, cat: null}], st: 'saisie', pay: 'virement'}],
+      ['put', {k: 'tx', id: 'tx_f_cb', account: arg[1], date: arg[2], name: 'Achat test', amount: -40, splits: [{amount: -40, cat: null}], st: 'saisie', pay: 'cb'}],
+      ['put', {k: 'tx', id: 'tx_f_old', account: arg[0], date: D.addDays(D.today(), -2), name: 'Ancienne test', amount: -10, splits: [{amount: -10, cat: null}], st: 'saisie', pay: 'cb'}]]);""", [cour, carte, tm]); a.wait(400)
+    val = lambda: a.js("return D.balance(arg, {cleared: true});", cour)
+    v0 = val()
+    sheet = lambda: pg.locator(".sheet", has_text="Passée à la banque aujourd'hui ?")
+    a.js("D.NAV.push({v: 'acc', id: arg});", cour); a.wait(600)
+    pg.locator(".seg button", has_text="Opérations").first.click(); a.wait(500)
+    pg.locator(".row", has_text="Salaire test").first.locator("button.st").click(); a.wait(500)
+    check(sheet().count() == 1 and "Salaire test" in sheet().inner_text(), "question absente après le rond de statut")
+    sheet().locator(".btn", has_text="Garder le").click(); a.wait(400)
+    t = a.js("return D.A().tx.tx_f_sal;")
+    check(t["st"] == "pointee" and t["date"] == tm and near(val(), v0), "« Garder » : %s, solde %s/%s" % (t, val(), v0))
+    a.js("return D.Store.put({...D.A().tx.tx_f_sal, st: 'saisie'});"); a.wait(300)
+    pg.locator(".row", has_text="Salaire test").first.locator("button.st").click(); a.wait(500)
+    sheet().locator(".btn.pri").click(); a.wait(500)
+    t = a.js("return D.A().tx.tx_f_sal;")
+    check(t["st"] == "pointee" and t["date"] == t0 and near(val(), v0 + 2000), "« La dater d'aujourd'hui » : %s, solde %s" % (t, val()))
+    # opération déjà datée : pas de question
+    pg.locator(".row", has_text="Ancienne test").first.locator("button.st").click(); a.wait(500)
+    check(sheet().count() == 0 and a.js("return D.A().tx.tx_f_old.st;") == "pointee", "question posée pour une opération déjà datée")
+    # depuis la fiche, sur une carte : date de débit gardée
+    a.js("D.SHEET.open({type: 'op', kind: 'tx', src: D.A().tx.tx_f_cb});"); a.wait(500)
+    pg.locator('.sheet [role=switch]:has-text("Déjà passée à la banque")').click(); a.wait(200)
+    pg.locator(".sheet .link", has_text="Enregistrer").first.click(); a.wait(600)
+    check(sheet().count() == 1 and "débit de la carte ne change pas" in sheet().inner_text(), "question absente après la fiche (carte)")
+    sheet().locator(".btn.pri").click(); a.wait(500)
+    t = a.js("return D.A().tx.tx_f_cb;")
+    check(t["st"] == "pointee" and t["date"] == t0 and t["vdate"] == tm, "achat par carte daté d'aujourd'hui, débit gardé : %s" % t)
+    a.no_errors("valider une opération datée après aujourd'hui")
+    a.close()
+
+
+@test
 def budgets_ordre(br, url):
     """Budgets › « Réorganiser » : ↑/↓ change l'ordre des vignettes parmi celles du même compte, et l'ordre est gardé."""
     a = App(br, url)

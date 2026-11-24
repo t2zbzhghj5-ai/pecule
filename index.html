@@ -1239,7 +1239,7 @@ function calc(str) {
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
 /* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
-const APP_VERSION = 67;
+const APP_VERSION = 68;
 /* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
 const NEWS = {
   54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
@@ -1256,6 +1256,7 @@ const NEWS = {
   65: ["Budgets : « Réorganiser » (en bas de l'écran) pour choisir l'ordre des vignettes."],
   66: ["Budgets : une enveloppe peut avoir une date de dépense (chaque année ou une seule fois). Les Prévisions retirent ce qui reste à cette date, et ensuite Pécule te demande quoi faire de ce qui n'a pas été dépensé.", "Pour l'activer : ouvre une ligne de budget, puis « Date de dépense »."],
   67: ["Budgets : un budget annuel sans date affiche « Ajouter une date ». Une fois datés, tous tes budgets annuels se lisent pareil, avec leur date de dépense."],
+  68: ["Valider une opération datée après aujourd'hui (un salaire versé la veille, par exemple) : Pécule te propose de la dater d'aujourd'hui pour qu'elle compte tout de suite dans le solde validé."],
 };
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));
@@ -1400,6 +1401,10 @@ const amtFor = (t, a) => { for (const [x, v] of sides(t)) if (x === a) return v;
 const sideSt = (t, a) => t.virtual ? "prevue" : t.st === "annulee" ? "annulee" : (!a || t.account === a) ? (t.st || "saisie") : (t.st2 || "saisie");
 const setSide = (t, a, st) => t.account === a ? {...t, st} : {...t, st2: st};
 /* Valider d'un geste : pour un virement entre tes comptes, les deux côtés à la fois (sauf un côté verrouillé par un relevé) */
+/* Validée mais datée après aujourd'hui : le solde validé ne la compte qu'à sa date ; Pécule propose de la dater d'aujourd'hui (v68, salaire versé un jour plus tôt) */
+const isValSt = s => s === "pointee" || s === "verrouillee";
+const newlyVal = (b, t) => (isValSt(t.st) && !isValSt(b?.st)) || ((t.splits || []).some(x => x.to) && isValSt(t.st2) && !isValSt(b?.st2));
+const askToday = ids => setTimeout(() => { const t0 = today(), l = ids.filter(i => { const t = A().tx[i]; return t && t.st !== "annulee" && t.date > t0; }); if (l.length) SHEET.open({type: "today", ids: l}); }, 60);
 const setBoth = (t, st) => { const k = cur => cur === "verrouillee" ? cur : st; return (t.splits || []).some(x => x.to) ? {...t, st: k(t.st), st2: k(t.st2)} : {...t, st: k(t.st)}; };
 const isTransfer = t => (t.splits || []).some(s => s.to);
 
@@ -2182,7 +2187,7 @@ function TxRow({t, a, run, sel, onSel, showAcc, dateCol}) {
   const v = a ? amtFor(t, a) : t.amount;
   const s = sideSt(t, a || t.account);
   const open = () => onSel ? onSel(t) : t.kind === "bud" && t.virtual ? NAV.push({v: "line", id: t.line}) : t.virtual ? SHEET.open({type:"op", kind:"tx", occ:t, acc:a}) : SHEET.open({type:"op", kind:"tx", src:t, acc:a});
-  const toggle = e => { e.stopPropagation(); if (t.virtual) { if (t.kind === "bud") { toast("Prévision de budget : elle se recalcule toute seule"); return; } validateOcc(t); toast("Échéance validée"); return; } if (s === "prevue") { Store.put(setBoth(t, "saisie")); toast("Passée en « créée »"); } else if (s === "saisie" || s === "importee") { Store.put(setBoth(t, "pointee")); toast("Validée : comptée dans le solde"); } else if (s === "pointee") { Store.put(setBoth(t, "saisie")); toast("Repassée en « créée »"); } else if (s === "verrouillee") toast("Opération verrouillée par un relevé"); };
+  const toggle = e => { e.stopPropagation(); if (t.virtual) { if (t.kind === "bud") { toast("Prévision de budget : elle se recalcule toute seule"); return; } validateOcc(t); toast("Échéance validée"); return; } if (s === "prevue") { Store.put(setBoth(t, "saisie")); toast("Passée en « créée »"); } else if (s === "saisie" || s === "importee") { Store.put(setBoth(t, "pointee")); if (t.date > today()) askToday([t.id]); else toast("Validée : comptée dans le solde"); } else if (s === "pointee") { Store.put(setBoth(t, "saisie")); toast("Repassée en « créée »"); } else if (s === "verrouillee") toast("Opération verrouillée par un relevé"); };
   return html`<div class=${"row" + (t.virtual || s === "prevue" ? " planned" : "") + (s === "annulee" ? " cancel" : "")} style=${"padding-right:8px" + (t.hl ? `;box-shadow:inset 4px 0 0 ${t.hl};background:color-mix(in srgb, ${t.hl} 7%, transparent)` : "")}>
     ${onSel && html`<span class=${"check" + (sel ? " on" : "")} onClick=${open}>${sel && html`<${Ic} n="check" s=${14} w=${3} />`}</span>`}
     <button class="grow" style="display:flex;align-items:center;gap:12px;background:none;border:0;padding:0;text-align:left;min-width:0" onClick=${open}>
@@ -3543,7 +3548,7 @@ function AccountView({id}) {
     </main>
     ${selMode && sel.size > 0 && html`<div class="selbar"><div>
       <span style="font-weight:700;padding:0 6px">${sel.size}</span>
-      <button class="btn" onClick=${() => batch(x => ["put", setBoth(x, "pointee")], "# opérations validées")}>Valider</button>
+      <button class="btn" onClick=${() => { const nv = selected().filter(x => !isValSt(sideSt(x, id))).map(x => x.id); batch(x => ["put", setBoth(x, "pointee")], "# opérations validées").then(() => askToday(nv)); }}>Valider</button>
       <button class="btn" onClick=${() => SHEET.open({type:"bulk", ids:[...sel], acc:id, done: () => { setSel(new Set()); setSelMode(false); }})}>Modifier</button>
       <button class="btn" onClick=${() => SHEET.open({type:"batchMore", ids:[...sel], acc:id, done: () => { setSel(new Set()); setSelMode(false); }})}>Plus…</button>
     </div></div>`}`;
@@ -3662,7 +3667,7 @@ function AllTx({f0, q0}) {
       ${list.length > 400 && html`<p class="help">Les 400 premières sont affichées : affine la recherche ou les filtres.</p>`}
     </main>
     ${selMode && sel.size > 0 && html`<div class="selbar"><div><span style="font-weight:700;padding:0 6px">${sel.size}</span>
-      <button class="btn" onClick=${() => Store.bulk([...sel].map(i => A().tx[i]).filter(t => t && sideSt(t, t.account) !== "verrouillee").map(t => ["put", setBoth(t, "pointee")])).then(() => { setSel(new Set()); toast("Opérations pointées"); })}>Pointer</button>
+      <button class="btn" onClick=${() => { const l = [...sel].map(i => A().tx[i]).filter(t => t && sideSt(t, t.account) !== "verrouillee"), nv = l.filter(t => !isValSt(sideSt(t, t.account))).map(t => t.id); Store.bulk(l.map(t => ["put", setBoth(t, "pointee")])).then(() => { setSel(new Set()); toast("Opérations pointées"); askToday(nv); }); }}>Pointer</button>
       <button class="btn" onClick=${() => SHEET.open({type: "bulk", ids: [...sel], acc: null, done: () => { setSel(new Set()); setSelMode(false); }})}>Modifier</button>
       <button class="btn" onClick=${() => SHEET.open({type: "batchMore", ids: [...sel], acc: null, done: () => { setSel(new Set()); setSelMode(false); }})}>Plus…</button>
     </div></div>`}`;
@@ -3693,7 +3698,8 @@ function BulkSheet({ids, acc, done, close}) {
       if (f.cat !== undefined && x.splits?.length === 1 && !x.splits[0].to) x.splits[0].cat = f.cat;
       if (f.payee) x.payee = f.payee; if (f.pay) x.pay = f.pay; if (f.project) x.project = f.project; if (f.hl !== undefined) x.hl = f.hl || null; if (f.date) x.date = f.date;
       return ["put", x]; });
-    close(); done && done(); await Store.bulk(ops); toast(ops.length + " opérations modifiées");
+    const nv = f.st === "pointee" ? txs.filter(t => !isValSt(sideSt(t, acc || t.account))).map(t => t.id) : [];
+    close(); done && done(); await Store.bulk(ops); toast(ops.length + " opérations modifiées"); askToday(nv);
   };
   return html`<${Sheet} title=${"Modifier " + txs.length + " opérations"} close=${close} right=${html`<button class="link" onClick=${apply}>Appliquer</button>`}>
     <div class="help">Seuls les champs remplis sont changés. Les opérations verrouillées ne sont pas modifiées.</div>
@@ -4051,6 +4057,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
     if (!base && mode !== "transfer" && !f.split && !f.cat) t = applyRules(t, {isNew: true});
     if (occ) { validateOcc(occ, t); toast("Échéance validée"); }
     else Store.put(t);
+    if (newlyVal(base && !base.virtual ? base : null, t)) askToday([t.id]);
     if (f.rep && !base) {
       const sid = uid("sch");
       Store.put({k: "sch", id: sid, ...common, freq: {n: Math.max(1, Number(f.freq.n) || 1), u: f.freq.u}, next: step(f.date, f.freq, Number(f.date.slice(8))), anchor: Number(f.date.slice(8)), start: f.date, end: f.end || null, left: null, auto: false});
@@ -5518,6 +5525,22 @@ function PmvSheet({id, per, close}) {
     ${m0 && html`<button class="btn danger" onClick=${() => { Store.del(m0); close(); }}>Supprimer</button>`}
   </${Sheet}>`;
 }
+/* « Passée à la banque aujourd'hui ? » : une opération validée datée après aujourd'hui (v68). Rien ne change sans ton choix. */
+function TodaySheet({ids, close}) {
+  const t0 = today(), list = ids.map(i => A().tx[i]).filter(t => t && t.date > t0);
+  if (!list.length) return html`<${Sheet} title="Passée à la banque aujourd'hui ?" close=${close}><div class="empty">Déjà datée d'aujourd'hui ou avant.</div></${Sheet}>`;
+  const one = list.length === 1, d1 = list[0].date, same = list.every(t => t.date === d1), card = list.some(t => A().acc[t.account]?.type === "carte" && !t.vdate);
+  const go = async () => {
+    await Store.bulk(list.map(t => ["put", {...t, date: t0, ...(A().acc[t.account]?.type === "carte" && !t.vdate ? {vdate: t.date} : {})}]));
+    close(); toast(one ? "Datée d'aujourd'hui : comptée dans le solde validé" : list.length + " opérations datées d'aujourd'hui");
+  };
+  return html`<${Sheet} title="Passée à la banque aujourd'hui ?" close=${close}>
+    <div class="card" style="padding:4px 16px;flex:none">${list.map((t, i) => html`<div style=${"display:flex;align-items:center;gap:12px;padding:10px 0;border-top:" + (i ? "1px solid var(--line)" : "0")}><span class="grow" style="min-width:0"><div class="t1">${t.name}</div><div class="t2">${accName(t.account)} · datée du ${dayShort(t.date)}</div></span><span class=${"amt" + (t.amount > 0 ? " pos" : "")}>${fmt(t.amount, true)}</span></div>`)}</div>
+    <div class="help">Le solde validé ne compte que ce qui est daté d'aujourd'hui ou avant. ${one ? "Datée du " + dayShort(d1) + ", elle n'y entrera que ce jour-là." : "Avec leurs dates, elles n'y entreront qu'à ces jours-là."}${card ? " Pour un achat par carte, le débit de la carte ne change pas." : ""}</div>
+    <button class="btn pri" onClick=${go}>${(one ? "La dater" : "Les dater") + " d'aujourd'hui (" + dayShort(t0) + ")"}</button>
+    <button class="btn" onClick=${close}>${one || same ? "Garder le " + dayShort(d1) : "Garder leurs dates"}</button>
+  </${Sheet}>`;
+}
 function Confirm({title, text, ok, onOk, danger, close}) {
   return html`<${Sheet} title=${title} close=${close}>
     <p style="margin:0;font-size:16px">${text}</p>
@@ -5978,6 +6001,7 @@ function SheetHost({s, close}) {
     case "pmv": return html`<${PmvSheet} ...${p} />`;
     case "copy": return html`<${CopySheet} ...${p} />`;
     case "confirm": return html`<${Confirm} ...${p} />`;
+    case "today": return html`<${TodaySheet} ...${p} />`;
   }
   return null;
 }
