@@ -1928,6 +1928,26 @@ def valider_date_future(br, url):
 
 
 @test
+def montant_fiche_entier(br, url):
+    """Fiche de saisie : le grand montant s'affiche en entier (ni rogné ni collé au « € ») et avec ses centimes (58,10 et non 58,1)."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    liv = a.acc_id("Livret")
+    a.js("return D.Store.put({k: 'tx', id: 'tx_f_amt', account: arg, date: D.today(), name: 'Montant test', amount: -58.10, splits: [{amount: -58.10, cat: null}], st: 'saisie', pay: 'cb'});", liv); a.wait(300)
+    for v, want in [(None, "58,10"), ("1234,5", "1234,50"), ("12", "12"), ("98765,43", "98765,43")]:
+        a.js("D.SHEET.open({type: 'op', kind: 'tx', src: D.A().tx.tx_f_amt});"); a.wait(500)
+        el = pg.locator("#op-amt")
+        if v: el.fill(v); el.evaluate("e => e.blur()"); a.wait(250)
+        m = el.evaluate("e => { const z = e.parentElement.querySelector('.famt-sz'); return [e.value, e.scrollWidth, e.clientWidth, z.scrollWidth, z.clientWidth]; }")
+        check(m[0] == want, "montant affiché %r au lieu de %r" % (m[0], want))
+        check(m[1] <= m[2] and m[3] <= m[4], "montant rogné (%s) : champ %s/%s, gabarit %s/%s" % (want, m[1], m[2], m[3], m[4]))
+        pg.keyboard.press("Escape"); a.js("D.SHEET.close && D.SHEET.close();"); a.wait(300)
+    a.no_errors("montant de la fiche")
+    a.close()
+
+
+@test
 def budgets_ordre(br, url):
     """Budgets › « Réorganiser » : ↑/↓ change l'ordre des vignettes parmi celles du même compte, et l'ordre est gardé."""
     a = App(br, url)

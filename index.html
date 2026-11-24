@@ -410,9 +410,9 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .famt-seg .seg button{border-radius:18px;background:var(--track);color:var(--ink);font-weight:600;min-height:36px;padding:0 14px}
 .famt-seg .seg button.on{background:var(--accent);color:var(--onacc)}
 .famt-l{font-size:13px;font-weight:600;color:var(--pi);margin-top:8px}
-.famt-v{display:flex;align-items:baseline;justify-content:center;gap:6px;max-width:100%}
+.famt-v{display:flex;align-items:baseline;justify-content:center;gap:6px;width:100%;max-width:100%} /* v69 : pleine largeur, sinon la place du « € » (calc 100% − 44px) rognait le montant */
 .famt-box{display:inline-grid;min-width:0;max-width:calc(100% - 44px)}
-.famt-box>*{grid-area:1/1;font-family:var(--display);font-size:50px !important;font-weight:700;letter-spacing:-.035em;padding:0 2px;line-height:1.2}
+.famt-box>*{grid-area:1/1;font-family:var(--display);font-size:50px !important;font-weight:700;letter-spacing:-.035em;padding:0 2px;line-height:1.2;font-variant-numeric:tabular-nums}
 .famt-sz{visibility:hidden;white-space:pre;overflow:hidden;padding:0 10px !important}
 .famt .amount-in{background:none;border:0;color:var(--ink);text-align:center;min-height:60px;width:0;min-width:100%;padding:0 !important}
 .famt-eur{font-family:var(--display);font-size:34px;font-weight:700;color:var(--ink)}
@@ -1220,7 +1220,7 @@ const uid = p => p + "_" + Date.now().toString(36) + Math.random().toString(36).
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const slug = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const norm = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-const amtStr = x => x ? String(r2(Math.abs(x))).replace(".", ",") : "";
+const amtStr = x => { if (!x) return ""; const v = r2(Math.abs(x)); return (Number.isInteger(v) ? String(v) : v.toFixed(2)).replace(".", ","); }; /* 58,10 et non 58,1 (v69) */
 /* Part de ventilation : montant dans le sens de l'opération (négatif = part en sens inverse, ex. −10 € de bon d'achat sur un ticket) */
 const partStr = x => x ? String(r2(x)).replace(".", ",") : "";
 
@@ -1239,7 +1239,7 @@ function calc(str) {
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
 /* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
-const APP_VERSION = 68;
+const APP_VERSION = 69;
 /* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
 const NEWS = {
   54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
@@ -1257,6 +1257,7 @@ const NEWS = {
   66: ["Budgets : une enveloppe peut avoir une date de dépense (chaque année ou une seule fois). Les Prévisions retirent ce qui reste à cette date, et ensuite Pécule te demande quoi faire de ce qui n'a pas été dépensé.", "Pour l'activer : ouvre une ligne de budget, puis « Date de dépense »."],
   67: ["Budgets : un budget annuel sans date affiche « Ajouter une date ». Une fois datés, tous tes budgets annuels se lisent pareil, avec leur date de dépense."],
   68: ["Valider une opération datée après aujourd'hui (un salaire versé la veille, par exemple) : Pécule te propose de la dater d'aujourd'hui pour qu'elle compte tout de suite dans le solde validé."],
+  69: ["Fiche de saisie : le montant s'affiche en entier avec ses centimes (58,10 €), sans être coupé ni collé au « € »."],
 };
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));
