@@ -35,7 +35,7 @@ import fixture_icompta  # noqa: E402
 
 # ---------------------------------------------------------------- serveur (avec accès de test aux calculs)
 HOOK = ('window.__dbg = {A, S, Store, Hist, NAV, SHEET, occurrences, balance, amtFor, accList, today, budgets, lineAt, cardNext, cardPending, '
-        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf, parseBankText, half50, half50Due, half50Msg, halfBase, healthChecks, hKey, kidsOf, cardNext, runBal, addDays, updCheck, UPD, APP_VERSION, prItems, nextPending, fitViewport, bdgGroups, dueAsks, dueStart, dailySeries};\n')
+        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf, parseBankText, half50, half50Due, half50Msg, halfBase, healthChecks, hKey, kidsOf, cardNext, runBal, addDays, updCheck, UPD, APP_VERSION, prItems, nextPending, fitViewport, bdgGroups, dueAsks, dueStart, dailySeries, lineMoved, lineMoves, flows, monthBilan};\n')
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -2298,6 +2298,82 @@ def echeance_modifiee(br, url):
     p1 = a.projected(["2027-01-31"])["Joint"][0]
     check(near(p1, p0 - 200), "Joint fin janv. : %s → %s (attendu −200, 2 loyers)" % (p0, p1))
     a.no_errors("échéance")
+    a.close()
+
+
+@test
+def virement_deux_categories(br, url):
+    """Virement à deux catégories (v70) : fiche « Au départ / À l'arrivée », catégorie d'arrivée reprise de celle du départ puis changée, effet sur chaque budget ; l'enveloppe du départ diminue, celle de l'arrivée augmente, rien n'est compté comme dépense (budgets, Analyses, bilan) ; échéance à deux catégories comptée chaque mois ; un virement avec la seule catégorie de départ garde l'ancien sens."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    liv, cour = a.acc_id("Livret"), a.acc_id("Courant")
+    norm = lambda x: x.replace(" ", " ").replace("\xa0", " ")
+    a.js("""const [liv, cour] = arg, m0 = D.today().slice(0, 8) + '01';
+      return D.Store.bulk([['put', {k: 'cat', id: 'cat_t_g', name: 'Cadeaux test', type: 'dep', parent: null}], ['put', {k: 'cat', id: 'cat_t_x', name: 'Extra test', type: 'dep', parent: null}],
+      ['put', {k: 'bdg', id: 'bdg_t_g', name: 'Cadeaux B', accounts: [liv], hidden: false, order: 31}], ['put', {k: 'bdg', id: 'bdg_t_x', name: 'Extra B', accounts: [cour], hidden: false, order: 32}],
+      ['put', {k: 'bud', id: 'bud_t_g', budget: 'bdg_t_g', cat: 'cat_t_g', amount: 200, income: false, start: m0, end: null, dur: {n: 1, u: 'm'}, carry: false, hist: []}],
+      ['put', {k: 'bud', id: 'bud_t_x', budget: 'bdg_t_x', cat: 'cat_t_x', amount: 100, income: false, start: m0, end: null, dur: {n: 1, u: 'm'}, carry: false, hist: []}],
+      ['put', {k: 'tx', id: 'tx_t_x60', account: cour, date: D.today(), name: 'Sortie test', amount: -60, splits: [{amount: -60, cat: 'cat_t_x'}], st: 'pointee', pay: 'cb'}]]);""", [liv, cour]); a.wait(400)
+    k = a.js("return D.today().slice(0, 7);")
+    at = lambda l, d=None: a.js("const x = D.lineAt(D.lineById(arg[0]), arg[1] || D.today()); return x && [x.bud, x.spent, x.rest];", [l, d])
+    fl0 = a.js("return D.flows(arg, D.today().slice(0, 8) + '01', D.addDays(D.today(), 40)).exp;", liv)
+    bil0 = a.js("return D.monthBilan(arg).exp;", k)
+    check(at("bud_t_g") == [200, 0, 200] and at("bud_t_x") == [100, 60, 40], "budgets de départ : %s %s" % (at("bud_t_g"), at("bud_t_x")))
+    # la fiche
+    a.js("D.SHEET.open({type: 'op', kind: 'tx'})"); a.wait(500)
+    sh = pg.locator(".sheet").last
+    sh.locator(".famt .seg button", has_text="Virement").click(); a.wait(200)
+    txt = sh.inner_text()
+    check("Au départ" in txt and "À l'arrivée" in txt and sh.locator("#op-cat2").count() == 1 and sh.locator('label[for="op-to"]').count() == 1, "fiche du virement : %r" % txt[:400])
+    sh.locator("#op-amt").fill("150")
+    sh.locator("#op-name").fill("Virement budgets test")
+    sh.locator("#op-acc").select_option(label="Livret"); a.wait(150)
+    sh.locator("#op-to").select_option(label="Courant"); a.wait(150)
+    sh.locator("#op-cat").click(); a.wait(300)
+    sh.locator(".frow-grid .catbtn", has_text="Cadeaux test").first.click(); a.wait(200)
+    check("Cadeaux test" in sh.locator("#op-cat2").inner_text(), "la catégorie d'arrivée doit reprendre celle du départ : %r" % sh.locator("#op-cat2").inner_text())
+    sh.locator("#op-cat2").click(); a.wait(300)
+    sh.locator(".frow-grid .catbtn", has_text="Extra test").first.click(); a.wait(200)
+    check("Extra test" in sh.locator("#op-cat2").inner_text() and "Cadeaux test" in sh.locator("#op-cat").inner_text(), "catégories choisies : %r / %r" % (sh.locator("#op-cat").inner_text(), sh.locator("#op-cat2").inner_text()))
+    fx = [norm(x) for x in sh.locator(".ffx").all_inner_texts()]
+    check(len(fx) == 2 and "Cadeaux B" in fx[0] and "200 € → 50 €" in fx[0] and "−150 €" in fx[0] and "Extra B" in fx[1] and "40 € → 190 €" in fx[1] and "+150 €" in fx[1], "effet sur les budgets : %s" % fx)
+    sh.locator(".btn.pri").last.click(); a.wait(600)
+    t = a.js("return Object.values(D.A().tx).find(t => t.name === 'Virement budgets test');")
+    check(t and t["account"] == liv and t["amount"] == -150 and t["splits"] == [{"to": cour, "amount": -150, "cat": "cat_t_g", "cat2": "cat_t_x"}], "virement enregistré : %s" % t)
+    # budgets : l'argent passe de l'un à l'autre, sans dépense
+    check(at("bud_t_g") == [50, 0, 50], "budget du départ : %s" % at("bud_t_g"))
+    check(at("bud_t_x") == [250, 60, 190], "budget de l'arrivée : %s" % at("bud_t_x"))
+    check(a.js("return D.lineActual(D.lineById('bud_t_g'), D.today().slice(0, 8) + '01', D.addDays(D.today(), 40));") == 0, "le virement ne doit pas compter en dépense")
+    # Analyses et bilan : rien de compté
+    check(a.js("return D.flows(arg, D.today().slice(0, 8) + '01', D.addDays(D.today(), 40)).exp;", liv) == fl0, "le virement compté dans les dépenses du livret")
+    check(a.js("return D.monthBilan(arg).exp;", k) == bil0, "le virement compté dans le bilan du mois")
+    # écrans
+    a.js("D.NAV.push({v: 'budget', id: 'bdg_t_x'})"); a.wait(600)
+    body = norm(pg.locator("main").last.inner_text())
+    check("Virements entre budgets" in body and "dont 150 € reçus par virement" in body and "Virement budgets test" in body and "60,00 € dépensés" in body, "écran du budget d'arrivée : %r" % body[:600])
+    a.js("D.NAV.push({v: 'budget', id: 'bdg_t_g'})"); a.wait(600)
+    body = norm(pg.locator("main").last.inner_text())
+    check("150 € versés par virement" in body and "Virements entre budgets" in body, "écran du budget de départ : %r" % body[:600])
+    a.js("D.NAV.tab('comptes')"); a.wait(200); a.js("return D.Store.put({...D.S(), k: 'set', id: 'set_main', bdgAcc: ''});"); a.js("D.NAV.tab('budgets')"); a.wait(600)
+    cards = norm(" | ".join(pg.locator("main .benv").all_inner_texts()))
+    check("150 reçus" in cards.replace(" €", "") and "150 versés" in cards.replace(" €", ""), "vignettes : %r" % cards[:600])
+    # réouverture : rien ne change, les deux catégories restent
+    a.js("D.SHEET.open({type: 'op', kind: 'tx', src: D.A().tx[arg]})", t["id"]); a.wait(500)
+    sh = pg.locator(".sheet").last
+    check(sh.locator(".ffx").count() == 0 and "Extra test" in sh.locator("#op-cat2").inner_text(), "réouverture du virement")
+    sh.locator(".btn.pri").last.click(); a.wait(500)
+    check(a.js("return D.A().tx[arg].splits[0].cat2;", t["id"]) == "cat_t_x", "catégorie d'arrivée perdue en réenregistrant")
+    # échéance à deux catégories : chaque mois
+    a.js("""const [liv, cour] = arg; return D.Store.put({k: 'sch', id: 'sch_t_mv', account: liv, name: 'Virement mensuel test', amount: -30, splits: [{to: cour, amount: -30, cat: 'cat_t_g', cat2: 'cat_t_x'}], pay: 'virement', freq: {n: 1, u: 'm'}, next: D.addDays(D.today(), 9), anchor: Number(D.addDays(D.today(), 9).slice(8)), start: D.addDays(D.today(), 9), end: null, left: null, auto: false, skips: []});""", [liv, cour]); a.wait(400)
+    nx = a.js("return D.addDays(D.today().slice(0, 8) + '01', 45);")
+    check(at("bud_t_g") == [20, 0, 20] and at("bud_t_x") == [280, 60, 220], "échéance comptée ce mois-ci : %s %s" % (at("bud_t_g"), at("bud_t_x")))
+    check(at("bud_t_g", nx) == [170, 0, 170] and at("bud_t_x", nx) == [130, 0, 130], "échéance comptée le mois suivant : %s %s" % (at("bud_t_g", nx), at("bud_t_x", nx)))
+    # ancien sens : la seule catégorie de départ compte comme une dépense
+    a.js("""const [liv, cour] = arg; return D.Store.put({k: 'tx', id: 'tx_t_old', account: liv, date: D.today(), name: 'Ancien virement test', amount: -20, splits: [{to: cour, amount: -20, cat: 'cat_t_g'}], st: 'saisie', pay: 'virement'});""", [liv, cour]); a.wait(400)
+    check(at("bud_t_g") == [20, 20, 0], "virement avec la seule catégorie de départ : %s" % at("bud_t_g"))
+    check(a.js("return D.flows(arg, D.today().slice(0, 8) + '01', D.addDays(D.today(), 40)).exp;", liv) == round(fl0 + 20, 2), "l'ancien virement catégorisé doit rester compté dans les dépenses")
+    a.no_errors("virement à deux catégories")
     a.close()
 
 

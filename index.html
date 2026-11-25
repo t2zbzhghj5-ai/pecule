@@ -433,6 +433,15 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .frow-col{display:flex;flex-direction:column}
 .frow-grid{padding:4px 12px 14px}
 .fsel{margin:0 14px 12px;width:calc(100% - 28px)}
+.fside{font-size:13px;font-weight:600;color:var(--muted);padding:0 6px;margin:4px 0 -8px}
+.farr{align-self:center;width:36px;height:36px;border-radius:18px;background:var(--p-sky);color:var(--pi-sky);display:grid;place-items:center;margin:-6px 0}
+.fside-h{margin:-6px 6px 0;line-height:1.45}
+.fcard>.ffx{border-top:0}
+.ffx{display:flex;align-items:center;gap:10px;margin:0 10px 10px;padding:10px 12px;background:var(--bg);border-radius:16px}
+.ffx .grow{display:flex;flex-direction:column;gap:1px}
+.ffx-k{font-size:12.5px;color:var(--muted)}
+.ffx b{font-size:15.5px;font-weight:700;text-align:left}
+.ffx-p{flex:none;font-size:14px;font-weight:700;background:var(--pb);color:var(--pi);border-radius:12px;padding:5px 10px;white-space:nowrap}
 .fcard>.fsel{border-top:0}
 .flink{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;min-height:40px;font-weight:600}
 .fhead{font-size:13px;font-weight:600;color:var(--muted);padding:6px 6px 0}
@@ -1239,7 +1248,7 @@ function calc(str) {
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
 /* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
-const APP_VERSION = 69;
+const APP_VERSION = 70;
 /* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
 const NEWS = {
   54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
@@ -1258,6 +1267,7 @@ const NEWS = {
   67: ["Budgets : un budget annuel sans date affiche « Ajouter une date ». Une fois datés, tous tes budgets annuels se lisent pareil, avec leur date de dépense."],
   68: ["Valider une opération datée après aujourd'hui (un salaire versé la veille, par exemple) : Pécule te propose de la dater d'aujourd'hui pour qu'elle compte tout de suite dans le solde validé."],
   69: ["Fiche de saisie : le montant s'affiche en entier avec ses centimes (58,10 €), sans être coupé ni collé au « € »."],
+  70: ["Virement entre tes comptes : une catégorie au départ et une à l'arrivée. L'argent passe d'un budget à l'autre (par exemple d'un budget de cadeaux sur un livret vers un budget de sorties sur le compte courant), sans compter comme une dépense.", "Le budget de chaque côté montre ce qu'il a reçu ou versé ; les Analyses ne comptent pas ces virements."]
 };
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));
@@ -1408,6 +1418,11 @@ const newlyVal = (b, t) => (isValSt(t.st) && !isValSt(b?.st)) || ((t.splits || [
 const askToday = ids => setTimeout(() => { const t0 = today(), l = ids.filter(i => { const t = A().tx[i]; return t && t.st !== "annulee" && t.date > t0; }); if (l.length) SHEET.open({type: "today", ids: l}); }, 60);
 const setBoth = (t, st) => { const k = cur => cur === "verrouillee" ? cur : st; return (t.splits || []).some(x => x.to) ? {...t, st: k(t.st), st2: k(t.st2)} : {...t, st: k(t.st)}; };
 const isTransfer = t => (t.splits || []).some(s => s.to);
+/* Virement à deux catégories (v70) : une catégorie au départ (s.cat), une à l'arrivée (s.cat2). L'argent passe d'un budget à l'autre :
+   ni dépense ni revenu (hors des Analyses et du bilan), l'enveloppe du départ diminue, celle de l'arrivée augmente (lineMoved).
+   Un virement avec la seule catégorie de départ garde l'ancien sens : compté comme une dépense de cette catégorie, comme dans iCompta. */
+const isMove = s => !!(s && s.to && s.cat2);
+const noStat = s => !!s.to && (!s.cat || !!s.cat2);
 
 const idx = () => memo("idx", () => { const m = {}; for (const t of Object.values(A().tx)) for (const [a, v] of sides(t)) (m[a] || (m[a] = [])).push([t, v]); return m; });
 function balance(a, o = {}) { if (!o.upTo) o = {...o, upTo: today()}; return memo("bal" + a + "|" + (o.upTo || "") + (o.cleared ? "c" : "") + (o.locked ? "l" : "") + (o.byValue ? "v" : ""), () => balance0(a, o)); }
@@ -1762,7 +1777,7 @@ function bSplits(b) {
       if (t.st === "annulee" || !acc || acc.type === "pret") continue;
       if (af && !af.has(t.account)) continue;
       if (t.id.startsWith("tx_half_")) continue;
-      for (const s of t.splits || []) { if ((s.to && !s.cat) || s.nobud || s.hf || bdgElsewhere(s, b.id)) continue; out.push({d: s.bm ? addMonths(t.date, s.bm) : t.date, cat: s.cat || null, a: s.amount, rf: !!s.refund, t}); }
+      for (const s of t.splits || []) { if (noStat(s) || s.nobud || s.hf || bdgElsewhere(s, b.id)) continue; out.push({d: s.bm ? addMonths(t.date, s.bm) : t.date, cat: s.cat || null, a: s.amount, rf: !!s.refund, t}); }
     }
     const hf = halfFrom();
     if (af && hf && af.has(hf)) for (const t of Object.values(A().tx)) { if (!t.half || t.st === "annulee" || !isJointAcc(t.account) || af.has(t.account)) continue;
@@ -1792,8 +1807,36 @@ function linePrevu(l, ps, pe) {
   return memo("lv" + l.id + ps + pe, () => { const m = lineMatcher(l); let s = 0; for (const x of bSplits(budgetOf(l))) { if (x.t.st !== "prevue" || x.d < ps || x.d > pe || !m(x.cat) || !counts(l, x)) continue; s += l.income ? x.a : -x.a; } return r2(s); });
 }
 function lineTxs(l, ps, pe) { const m = lineMatcher(l), seen = new Set(), out = []; for (const x of bSplits(budgetOf(l))) { if (x.t.adj || x.d < ps || x.d > pe || !m(x.cat) || !counts(l, x) || seen.has(x.t.id)) continue; seen.add(x.t.id); out.push(x.t); } return out.sort((a, b) => b.date.localeCompare(a.date)); }
+/* Virements à deux catégories (v70) : ce qui sort d'une enveloppe (côté départ) et ce qui entre dans une autre (côté arrivée).
+   Opérations (prévues comprises) et échéances pas encore passées ; ni les prêts ni les opérations annulées. */
+const mvAccOk = id => !!A().acc[id] && A().acc[id].type !== "pret";
+function mvPush(out, t, sp, d) { if (!isMove(sp) || sp.nobud || !mvAccOk(t.account) || !mvAccOk(sp.to)) return;
+  if (sp.cat) out.push({d, acc: t.account, cat: sp.cat, v: r2(sp.amount), t, other: sp.to, ocat: sp.cat2});
+  out.push({d, acc: sp.to, cat: sp.cat2, v: r2(-sp.amount), t, other: t.account, ocat: sp.cat || null}); }
+const txMoves = () => memo("xmt", () => { const out = []; for (const t of Object.values(A().tx)) { if (t.st === "annulee") continue; for (const sp of t.splits || []) mvPush(out, t, sp, t.date); } return out; });
+function schMoves(until) {
+  return memo("xms" + until, () => { const D = A(), out = [];
+    for (const s of Object.values(D.sch)) {
+      if (s.paused || !s.next || !((s.splits || []).some(isMove) || Object.values(s.ov || {}).some(o => (o?.splits || []).some(isMove)))) continue;
+      let d = s.next, left = s.left, g = 0;
+      while (d <= until && g++ < 500) {
+        if (s.end && d > s.end) break; if (left != null && left <= 0) break;
+        if (isOff(s, d)) { d = step(d, s.freq, s.anchor); continue; }
+        const id = "tx_s_" + s.id + "_" + d;
+        if (!D.tx[id] && !(s.skips || []).includes(d)) { const o = fromSched(s, d, id); for (const sp of o.splits || []) mvPush(out, o, sp, o.date); }
+        if (left != null) left--; d = step(d, s.freq, s.anchor);
+      } }
+    return out; });
+}
+function lineMoves(l, ps, pe) {
+  if (l.income) return [];
+  return memo("xml" + l.id + ps + pe, () => { const af = bAccs(budgetOf(l)), m = lineMatcher(l); return [...txMoves(), ...schMoves(pe)].filter(x => x.d >= ps && x.d <= pe && (!af.length || af.includes(x.acc)) && m(x.cat)).sort((p, q) => q.d.localeCompare(p.d)); });
+}
+const lineMoved = (l, ps, pe) => r2(lineMoves(l, ps, pe).reduce((s, x) => s + x.v, 0));
+const envMoved = e => r2((e.main || []).reduce((s, x) => s + lineMoved(x.l, x.ps, x.pe), 0));
 function lineBudget(l, ps, depth = 0) {
   let a = baseAmt(l, ps) + ((l.mv && l.mv[ps]) || 0);
+  { const p0 = periodsOf(l, ps, ps)[0]; if (p0 && p0[0] === ps) a += lineMoved(l, ps, p0[1]); }
   if (l.carry && depth < 60) { const pp = prevPeriod(l, ps); if (pp) { const c = lineBudget(l, pp[0], depth + 1) - lineActual(l, pp[0], pp[1]);
     // Une période pas encore finie : son reste est compté comme dépense prévue, on ne le reporte pas une 2e fois (seul un dépassement se reporte).
     a += pp[1] < today() ? c : Math.min(0, c); } }
@@ -1802,7 +1845,7 @@ function lineBudget(l, ps, depth = 0) {
 function linePlanned(l, ps, pe, occ) {
   const af = bAccs(budgetOf(l)), m = lineMatcher(l); let s = 0;
   for (const o of occ) { if (o.kind === "bud" || o.kind === "half" || o.kind === "prorata" || o.date < ps || o.date > pe) continue; if (af.length && !af.includes(o.account)) continue;
-    for (const sp of o.splits || []) { if ((sp.to && !sp.cat) || sp.nobud || sp.hf || bdgElsewhere(sp, l.budget) || !m(sp.cat)) continue; if (l.income ? sp.amount > 0 : sp.amount < 0) s += l.income ? sp.amount : -sp.amount; } }
+    for (const sp of o.splits || []) { if (noStat(sp) || sp.nobud || sp.hf || bdgElsewhere(sp, l.budget) || !m(sp.cat)) continue; if (l.income ? sp.amount > 0 : sp.amount < 0) s += l.income ? sp.amount : -sp.amount; } }
   return r2(s);
 }
 /* Déjà prévu dans l'échéancier sur la période (opérations rattachées au budget, pas encore passées) */
@@ -2151,10 +2194,10 @@ function CatGrid({v, income, onPick}) {
   </div>`;
 }
 /* Fiche opération (maquette A) : la catégorie en ligne, la grille s'ouvre dessous */
-function CatRow({v, set, income, label = "Catégorie", clear}) {
+function CatRow({v, set, income, label = "Catégorie", clear, id = "op-cat"}) {
   const [open, setOpen] = useState(false), c = v && cat(v);
   return html`<div class="frow-col">
-    <button type="button" id="op-cat" class="frow frow-btn" aria-expanded=${open ? "true" : "false"} onClick=${() => setOpen(!open)}>
+    <button type="button" id=${id} class="frow frow-btn" aria-expanded=${open ? "true" : "false"} onClick=${() => setOpen(!open)}>
       ${v ? html`<${CatGlyph} id=${v} box=${36} s=${18} />` : html`<span class="fic p-mint"><${Ic} n="tag" s=${18} /></span>`}
       <span class="fl">${label}</span><span class="fv">${c ? c.name : "Choisir"}</span><span class="muted" aria-hidden="true" style=${"transition:transform .2s;transform:rotate(" + (open ? 90 : 0) + "deg)"}>›</span></button>
     ${open && html`<div class="frow-grid"><${CatGrid} v=${v} income=${income} onPick=${x => { set(x); setOpen(false); }} />${clear && v && html`<button type="button" class="link" style="align-self:flex-start;margin-top:8px" onClick=${() => { set(null); setOpen(false); }}>Retirer la catégorie</button>`}</div>`}
@@ -2171,7 +2214,7 @@ function CatField({v, set, id, income}) {
 
 function txDesc(t, a) {
   const sp = t.splits || [];
-  if (sp.length === 1 && sp[0].to) return t.account === a ? "→ " + accName(sp[0].to) : "← " + accName(t.account);
+  if (sp.length === 1 && sp[0].to) { const c = t.account === a ? sp[0].cat : sp[0].cat2; return (t.account === a ? "→ " + accName(sp[0].to) : "← " + accName(t.account)) + (c ? " · " + catName(c) : ""); }
   if (t.kind === "loan") return "capital + intérêts";
   if (sp.length > 1) return "ventilée · " + sp.length + " parts";
   return catName(sp[0]?.cat);
@@ -2654,7 +2697,7 @@ function monthBilan(k) {
     const accs = accList(true).filter(a => a.type !== "pret" && a.type !== "epargne"), ids = new Set(accs.map(a => a.id));
     let inc = 0, exp = 0; const cats = {};
     for (const t of Object.values(A().tx)) { if (t.st === "annulee" || !t.date.startsWith(k) || !ids.has(t.account)) continue;
-      for (const s of t.splits || []) { if (s.noRep) continue; if (s.to && !s.cat) { if (A().acc[s.to]?.type === "pret") { exp -= s.amount; cats.__loan = (cats.__loan || 0) - s.amount; } continue; }
+      for (const s of t.splits || []) { if (s.noRep) continue; if (s.to && !s.cat) { if (A().acc[s.to]?.type === "pret") { exp -= s.amount; cats.__loan = (cats.__loan || 0) - s.amount; } continue; } if (isMove(s)) continue;
         if (s.amount > 0 && !s.refund) inc += s.amount; else { exp -= s.amount; const c = catTop(s.cat) || "none"; cats[c] = (cats[c] || 0) - s.amount; } } }
     const nw = d => r2(accList(true).filter(inTotal).reduce((s, a) => s + balance(a.id, {upTo: d}), 0));
     return {inc: r2(inc), exp: r2(exp), net: r2(inc - exp), cats, nwEnd: nw(eom(k)), nwStart: nw(addDays(k + "-01", -1))};
@@ -3346,7 +3389,7 @@ function flows(id, from, to) {
   let inc = 0, exp = 0; const cats = {};
   for (const [t] of idx()[id] || []) {
     if (t.st === "annulee" || t.date < from || t.date > to) continue;
-    if (t.account === id) for (const s of t.splits || []) { if ((s.to && !s.cat) || s.noRep) continue; if (s.amount > 0 && !s.refund) inc += s.amount; else { exp -= s.amount; const c = catTop(s.cat) || "none"; cats[c] = (cats[c] || 0) - s.amount; } }
+    if (t.account === id) for (const s of t.splits || []) { if (noStat(s) || s.noRep) continue; if (s.amount > 0 && !s.refund) inc += s.amount; else { exp -= s.amount; const c = catTop(s.cat) || "none"; cats[c] = (cats[c] || 0) - s.amount; } }
   }
   return {inc: r2(inc), exp: r2(exp), cats: Object.entries(cats).map(([c, v]) => ({c: c === "none" ? null : c, v: r2(v)})).filter(x => x.v > 0.004).sort((a, b) => b.v - a.v)};
 }
@@ -3354,7 +3397,7 @@ function monthFlows(id, k) {
   let inc = 0, exp = 0; const cats = {};
   for (const [t, v] of idx()[id] || []) {
     if (t.st === "annulee" || !t.date.startsWith(k)) continue;
-    if (t.account === id) for (const s of t.splits || []) { if ((s.to && !s.cat) || s.noRep) continue; if (s.amount > 0 && !s.refund) inc += s.amount; else { exp -= s.amount; const c = catTop(s.cat) || "none"; cats[c] = (cats[c] || 0) - s.amount; } }
+    if (t.account === id) for (const s of t.splits || []) { if (noStat(s) || s.noRep) continue; if (s.amount > 0 && !s.refund) inc += s.amount; else { exp -= s.amount; const c = catTop(s.cat) || "none"; cats[c] = (cats[c] || 0) - s.amount; } }
   }
   return {inc: r2(inc), exp: r2(exp), cats: Object.entries(cats).map(([c, v]) => ({c: c === "none" ? null : c, v: r2(v)})).filter(x => x.v > 0.004).sort((a, b) => b.v - a.v)};
 }
@@ -3980,7 +4023,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
   const [mode, setMode] = useState(preset?.mode || (tr0 ? "transfer" : init.amount > 0 ? "income" : "expense"));
   const [f, setF] = useState(() => ({
     name: init.name || "", date: isSch ? (preset?.next || init.next || today()) : init.date, account: init.account || defAcc,
-    to: tr0 ? sp0[0].to : "", amt: amtStr(init.amount), cat: sp0.length === 1 ? sp0[0].cat || null : null,
+    to: tr0 ? sp0[0].to : "", amt: amtStr(init.amount), cat: sp0.length === 1 ? sp0[0].cat || null : null, cat2: tr0 ? sp0[0].cat2 || null : null, c2t: false,
     split: sp0.length > 1, splits: sp0.map(s => ({cat: s.cat || null, to: s.to || "", tr: !!s.to, amt: partStr(s.amount * (init.amount > 0 ? 1 : -1)), memo: s.memo || "", bm: s.bm || 0, nobud: !!s.nobud, refund: !!s.refund, noRep: !!s.noRep, noAvg: !!s.noAvg, owner: s.owner || null, bdg: s.bdg || null})),
     opt: (s => ({bm: s.bm || 0, nobud: !!s.nobud, refund: !!s.refund, noRep: !!s.noRep, noAvg: !!s.noAvg, owner: s.owner || null, bdg: s.bdg || null}))(sp0[0] || {}), vdate: init.vdate || "", payee: init.payee || "", project: init.project || "", hl: init.hl || "", more: !!(init.vdate || init.project || init.hl || init.payee || init.comment || init.shares?.length || init.repay || init.num || (init.st && init.st !== "saisie" && !(base && base.virtual)) || (sp0[0] && (sp0[0].bm || sp0[0].nobud || sp0[0].refund || sp0[0].noRep))),
     pay: init.pay || "cb", num: init.num || "", comment: init.comment || "", st: init.st || "saisie", st2: init.st2 || "saisie",
@@ -3991,6 +4034,13 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
   const [sugg, setSugg] = useState([]);
   const set = (k, v) => setF(x => ({...x, [k]: v}));
   const total = calc(f.amt);
+  /* Virement (v70) : la catégorie d'arrivée reprend celle du départ tant qu'on ne l'a pas changée (nouveau virement seulement) */
+  const setCat = v => setF(x => ({...x, cat: v, ...(!base && !x.c2t ? {cat2: v} : {})}));
+  /* Ce que le virement change dans le budget de chaque côté (nouveau virement : « il reste A → B ») */
+  const trFx = (acc, c, v) => { if (!acc || !c || !(total > 0) || (base && !base.virtual)) return null;
+    const b = budgetsFor(acc, c)[0], l = b && linesOf(b.id).find(x => !x.income && lineMatcher(x)(c)), x = l && lineAt(l, f.date || today()); if (!x) return null;
+    const nm = "Budget " + (linesOf(b.id).length > 1 ? b.name + " · " + capF(lineName(l)) : b.name);
+    return html`<div class="ffx"><span class="grow" style="min-width:0"><span class="ffx-k">${nm} · il reste</span><b class="amt">${fmt0(x.rest)} → ${fmt0(r2(x.rest + v))}</b></span><span class=${"ffx-p p-" + (v < 0 ? "rose" : "mint")}>${v < 0 ? "−" : "+"}${fmt0(Math.abs(v))}</span></div>`; };
   const sg = mode === "income" ? 1 : -1;
   const splitSum = r2(f.splits.reduce((s, x) => s + (calc(x.amt) || 0), 0));
   const locked = !isSch && base && !base.virtual && (base.st === "verrouillee");
@@ -4004,7 +4054,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
   const pickSugg = t => {
     const sp = t.splits || [];
     setMode(sp.length === 1 && sp[0].to ? "transfer" : t.amount > 0 ? "income" : "expense");
-    setF(x => ({...x, name: t.name, amt: x.amt || amtStr(t.amount), cat: sp.length === 1 && !sp[0].to ? sp[0].cat : x.cat, to: sp.length === 1 && sp[0].to ? sp[0].to : x.to, pay: t.pay || x.pay, payee: x.payee || t.payee || "", project: x.project || t.project || "", account: x.account}));
+    setF(x => ({...x, name: t.name, amt: x.amt || amtStr(t.amount), cat: sp.length === 1 && !sp[0].to ? sp[0].cat : sp.length === 1 && sp[0].to && sp[0].cat ? sp[0].cat : x.cat, ...(sp.length === 1 && sp[0].to && sp[0].cat2 ? {cat2: sp[0].cat2, c2t: true} : {}), to: sp.length === 1 && sp[0].to ? sp[0].to : x.to, pay: t.pay || x.pay, payee: x.payee || t.payee || "", project: x.project || t.project || "", account: x.account}));
     setSugg([]);
   };
   const startSplit = () => {
@@ -4019,7 +4069,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
     let splits, amount;
     if (mode === "transfer") {
       if (!f.to || f.to === f.account) return setErr("Choisis le compte qui reçoit le virement.");
-      amount = -total; splits = [{to: f.to, amount: -total, ...(f.cat ? {cat: f.cat} : {}), ...(f.cat && f.opt?.bdg ? {bdg: f.opt.bdg} : {})}];
+      amount = -total; splits = [{to: f.to, amount: -total, ...(f.cat ? {cat: f.cat} : {}), ...(f.cat2 && A().acc[f.to]?.type !== "pret" ? {cat2: f.cat2} : {}), ...(f.cat && f.opt?.bdg ? {bdg: f.opt.bdg} : {})}];
     } else if (f.split) {
       if (f.splits.some(s => s.tr && (calc(s.amt) || 0) && (!s.to || s.to === f.account))) return setErr("Choisis le compte de chaque virement de la ventilation.");
       splits = f.splits.map(s => { const v = calc(s.amt) || 0; const o = s.tr && s.to ? {to: s.to, amount: r2(sg * v), ...(s.cat ? {cat: s.cat} : {}), ...(s.bdg ? {bdg: s.bdg} : {})} : withOpt({cat: s.cat || null, amount: r2(sg * v)}, s); if (s.memo) o.memo = s.memo; return o; }).filter(s => s.amount);
@@ -4083,17 +4133,34 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
       ${!/[+*/]|.-/.test(f.amt) && html`<div class="famt-h">Tu peux taper un calcul : 40 + 2,10</div>`}
     </div>
     ${(sugg.length > 0 || (!base && !isSch && !f.name.trim() && topNames(6).length > 0)) && html`<div class="fsugg" aria-label="Libellés habituels">${(sugg.length ? sugg : topNames(6)).map(t => html`<button type="button" class="chip" onClick=${() => pickSugg(t)}><${CatGlyph} id=${t.splits?.[0]?.cat} box=${24} s=${14} /> ${t.name}</button>`)}</div>`}
-    <div class="fcard">
+    ${mode !== "transfer" && html`<div class="fcard">
       <div class="frow"><span class="fic p-butter"><${Ic} n="tag" s=${18} /></span><label class="fl" for="op-name">Libellé</label><input id="op-name" class="fin" value=${f.name} onInput=${e => onName(e.target.value)} placeholder=${mode === "transfer" ? "Virement" : "Monoprix, loyer…"} autocomplete="off" /></div>
-      ${mode === "transfer" && html`<div class="frow"><span class="fic p-sky"><${Ic} n="swap" s=${18} /></span><label class="fl" for="op-to">Vers</label><${AccSelect} id="op-to" v=${f.to} set=${v => set("to", v)} none="Choisir…" exclude=${f.account} /></div>`}
-      ${!f.split && html`<${CatRow} v=${f.cat} set=${v => set("cat", v)} income=${mode === "income"} label=${mode === "transfer" ? "Catégorie (facultatif)" : "Catégorie"} clear=${mode === "transfer"} />`}
+      ${!f.split && html`<${CatRow} v=${f.cat} set=${v => set("cat", v)} income=${mode === "income"} />`}
       ${!f.split && mode !== "transfer" && (bs => bs.length > 1 && html`<select aria-label="Budget concerné" value=${f.opt?.bdg || ""} onChange=${e => set("opt", {...f.opt, bdg: e.target.value || null})} class="fsel"><option value="">Budget : tous ceux de cette catégorie</option>${bs.map(b => html`<option value=${b.id}>Budget : ${b.name}</option>`)}</select>`)(budgetsFor(f.account, f.cat))}
       ${!f.split && mode !== "transfer" && f.cat && (par => { const ks = budKids(par); return ks.length > 0 && html`<div class="fkids pc p-sky" role="group" aria-label=${kidQ(par)}><span class="fkq">${kidQ(par)}</span>
         <span class="fkch">${ks.map(k => html`<button type="button" class=${"chip-k" + (f.cat === k.id ? " on" : "")} aria-pressed=${f.cat === k.id ? "true" : "false"} onClick=${() => set("cat", k.id)}><${CatGlyph} id=${k.id} box=${28} s=${15} />${k.name}</button>`)}</span>
         <span class="fkh">${f.cat === par ? "Sans choix, elle ne compte dans aucune de ces enveloppes." : "Elle ne comptera que dans " + catName(par) + " › " + catName(f.cat) + "."}</span></div>`; })(cat(f.cat)?.parent || f.cat)}
-      <div class="frow"><span class="fic p-sky"><${Ic} n="wallet" s=${18} /></span><label class="fl" for="op-acc">${mode === "transfer" ? "Depuis" : "Compte"}</label><${AccSelect} id="op-acc" v=${f.account} set=${v => set("account", v)} /></div>
+      <div class="frow"><span class="fic p-sky"><${Ic} n="wallet" s=${18} /></span><label class="fl" for="op-acc">Compte</label><${AccSelect} id="op-acc" v=${f.account} set=${v => set("account", v)} /></div>
+      <div class="frow"><span class="fic p-lilac"><${Ic} n="cal" s=${18} /></span><label class="fl" for="op-date">${isSch ? "Prochaine échéance" : "Date"}</label><input id="op-date" class="fin" type="date" value=${f.date} onInput=${e => set("date", e.target.value)} onChange=${e => e.target.value && set("date", e.target.value)} /></div>
+    </div>`}
+    ${mode === "transfer" && html`<div class="fcard">
+      <div class="frow"><span class="fic p-butter"><${Ic} n="tag" s=${18} /></span><label class="fl" for="op-name">Libellé</label><input id="op-name" class="fin" value=${f.name} onInput=${e => onName(e.target.value)} placeholder=${mode === "transfer" ? "Virement" : "Monoprix, loyer…"} autocomplete="off" /></div>
       <div class="frow"><span class="fic p-lilac"><${Ic} n="cal" s=${18} /></span><label class="fl" for="op-date">${isSch ? "Prochaine échéance" : "Date"}</label><input id="op-date" class="fin" type="date" value=${f.date} onInput=${e => set("date", e.target.value)} onChange=${e => e.target.value && set("date", e.target.value)} /></div>
     </div>
+    <span class="fside">Au départ</span>
+    <div class="fcard">
+      <div class="frow"><span class="fic p-sky"><${Ic} n="wallet" s=${18} /></span><label class="fl" for="op-acc">Compte</label><${AccSelect} id="op-acc" v=${f.account} set=${v => set("account", v)} /></div>
+      <${CatRow} v=${f.cat} set=${setCat} income=${false} label="Catégorie" clear />
+      ${trFx(f.account, f.cat, -total)}
+    </div>
+    <span class="farr" aria-hidden="true"><${Ic} n="down" s=${18} w=${2.2} /></span>
+    <span class="fside">À l'arrivée</span>
+    <div class="fcard">
+      <div class="frow"><span class="fic p-sky"><${Ic} n="swap" s=${18} /></span><label class="fl" for="op-to">Compte</label><${AccSelect} id="op-to" v=${f.to} set=${v => set("to", v)} none="Choisir…" exclude=${f.account} /></div>
+      ${A().acc[f.to]?.type !== "pret" && html`<${CatRow} id="op-cat2" v=${f.cat2} set=${v => setF(x => ({...x, cat2: v, c2t: true}))} income=${false} label="Catégorie" clear />`}
+      ${A().acc[f.to]?.type !== "pret" && trFx(f.to, f.cat2, total)}
+    </div>
+    <p class="help fside-h">${base && !base.virtual ? "Une catégorie de chaque côté : l'argent passe d'un budget à l'autre, sans compter comme une dépense." : "La catégorie d'arrivée reprend celle du départ. Change-la pour faire passer l'argent d'un budget à l'autre."}</p>`}
     ${mode !== "transfer" && !f.split && html`<button type="button" class="link flink" onClick=${startSplit}><${Ic} n="split" s=${16} />Répartir sur plusieurs catégories</button>`}
     ${mode !== "transfer" && f.split && html`<div class="field"><span class="lb">Ventilation</span>
           ${f.splits.map((s, i) => html`<div class="split">
@@ -4590,7 +4657,7 @@ function linePlanOccs(l, ps, pe) {
   if (l.income) return [];
   const af = bAccs(budgetOf(l)), m = lineMatcher(l);
   return occurrences(pe).filter(o => o.kind !== "bud" && o.kind !== "half" && o.kind !== "prorata" && o.date >= ps && o.date <= pe && (!af.length || af.includes(o.account))
-    && (o.splits || []).some(sp => !((sp.to && !sp.cat) || sp.nobud || sp.hf || bdgElsewhere(sp, l.budget) || !m(sp.cat)) && sp.amount < 0));
+    && (o.splits || []).some(sp => !(noStat(sp) || sp.nobud || sp.hf || bdgElsewhere(sp, l.budget) || !m(sp.cat)) && sp.amount < 0));
 }
 const remCol = (rest, bud) => rest < 0 ? "var(--neg)" : bud > 0 && rest / bud < .2 ? "color-mix(in srgb, var(--warn) 78%, var(--ink))" : "var(--ink)";
 const envPr = (b, lines) => prLineOk(b.id) && (!!b.prorata || lines.some(l => l.prorata));
@@ -4646,8 +4713,8 @@ function Budgets() {
     /* Maquette R : une enveloppe pastel par budget, en mosaïque */
     const fam = pfam(col), left = e.income ? (e.rest > 0 ? "Encore " + fmt0(e.rest) + " attendus" : "Objectif atteint") : null;
     /* Une ligne d'enveloppe en largeur : nom, puce de date, reste, barre, « sur X » (v64, v66 ; v67 : aussi seule dans sa carte) */
-    const wRow = (x, nm, go, one) => { const du = x.l.first ? dueDay(x.l, x.pe) : null, add = (x.l.mv && x.l.mv[x.ps]) || 0, fs = one ? "16px" : "15.5px";
-      const sub = [x.spent > .004 ? fmt0(x.spent) + " dépensés" : "", x.plan > .004 ? fmt0(x.plan) + " prévus" : "", add > .004 ? "dont " + fmt0(add) + " ajoutés" : "", du ? "" : "jusqu'au " + dayShort(x.pe)].filter(Boolean).join(" · ") || "rien de dépensé";
+    const wRow = (x, nm, go, one) => { const du = x.l.first ? dueDay(x.l, x.pe) : null, add = (x.l.mv && x.l.mv[x.ps]) || 0, mvd = lineMoved(x.l, x.ps, x.pe), fs = one ? "16px" : "15.5px";
+      const sub = [x.spent > .004 ? fmt0(x.spent) + " dépensés" : "", x.plan > .004 ? fmt0(x.plan) + " prévus" : "", add > .004 ? "dont " + fmt0(add) + " ajoutés" : "", mvd > .004 ? "dont " + fmt0(mvd) + " reçus" : mvd < -.004 ? fmt0(-mvd) + " versés" : "", du ? "" : "jusqu'au " + dayShort(x.pe)].filter(Boolean).join(" · ") || "rien de dépensé";
       return html`<button class=${"bwide-r" + (one ? " bw-one" : "")} onClick=${go}>${lineGlyph(x.l, null, 40, 19)}
         <span class="grow" style="min-width:0;display:flex;flex-direction:column;gap:5px"><span class="bw-t"><span style="display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;min-width:0"><span style=${"font-size:" + fs + ";font-weight:" + (one ? 700 : 600)}>${nm}${one && b.hidden ? html`<span class="tag">masqué</span>` : ""}</span>${du && html`<span class=${"bw-chip pc p-" + pfam(catColor(x.l.cat))}>le ${dayShort(du)}</span>`}</span><span class="amt" style=${"flex:none;font-size:" + fs + ";font-weight:700;color:" + (x.rest < 0 ? "var(--neg)" : "var(--ink)")}>${x.rest < 0 ? "−" : ""}${fmt0(Math.abs(x.rest))}</span></span>
         <${BudBar} col=${catColor(x.l.cat)} pct=${x.bud > 0 ? x.spent / x.bud : x.spent > 0 ? 1 : 0} ppct=${x.bud > 0 ? x.plan / x.bud : 0} over=${x.act > x.bud + .004} h=${6} />
@@ -4673,7 +4740,7 @@ function Budgets() {
         ${e.main.length > 0 ? html`<span class="benv-k">${e.income ? "Reçu" : e.rest >= 0 ? "Il reste" : "Dépassé de"}</span>
           <span class="amt benv-big" style=${"color:" + (e.income ? "var(--ink)" : e.rest < 0 ? "var(--neg)" : "var(--ink)")}>${fmt0(e.income ? e.act : Math.abs(e.rest))}</span>
           <${BudBar} col=${e.income ? "var(--pos)" : "var(--pi)"} tr="var(--track)" pct=${e.bud > 0 ? e.spent / e.bud : e.spent > 0 ? 1 : 0} ppct=${e.bud > 0 ? e.plan / e.bud : 0} over=${!e.income && e.act > e.bud + .004} h=${8} />
-          <span class="benv-left">${left || html`${fmt0(e.spent)} dépensés<br />${e.plan > .004 ? fmt0(e.plan) + " à venir" : "rien à venir"}`}</span>`
+          <span class="benv-left">${left || html`${fmt0(e.spent)} dépensés<br />${e.plan > .004 ? fmt0(e.plan) + " à venir" : "rien à venir"}${(m => m > .004 ? html`<br />${fmt0(m)} reçus` : m < -.004 ? html`<br />${fmt0(-m)} versés` : "")(envMoved(e))}`}</span>`
           : html`<span class="benv-left">${!lines.length ? "Aucune catégorie pour l'instant" : soon ? "Commence le " + dayShort(soon) + (soon.slice(0, 4) !== t.slice(0, 4) ? " " + soon.slice(0, 4) : "") : "Rien en cours à cette date"}</span>`}
       </button>
       ${e.main.length > 0 && html`<button class="benv-amt" aria-label=${(one ? "Modifier le montant de " : "Voir les montants de ") + b.name + " : " + fmt0(e.base) + " " + w.sl.replace("/ ", "par ")} onClick=${edit}>${fmt0(e.base)} ${w.sl.replace("/ ", "par ")}<${Ic} n="edit" s=${13} /></button>`}
@@ -4742,7 +4809,10 @@ function EnvDetail({b, lines, line, d0}) {
   if (ref) { let p = periodAt(ref, t) || periodsOf(ref, ref.start, t).slice(-1)[0] || null; if (e.ps && (!p || e.ps > p[0])) p = [e.ps, e.pe];
     while (p && bars.length < 6) { const s = envAt(lines, p[0]); if (s.main.length) bars.unshift({ps: p[0], pe: p[1], bud: s.bud, act: s.act, name: budPer(ref, p[0], p[1]), short: perShort(ref, p[0])}); p = prevPeriod(ref, p[0]); } }
   const pick = x => setD(x.ps <= t && x.pe >= t ? t : x.pe < t ? x.pe : x.ps);
-  const dl = cur ? daysBetween(t, e.pe) + 1 : 0, carry = x1 ? r2(x1.bud - baseAmt(x1.l, x1.ps)) : 0;
+  const dl = cur ? daysBetween(t, e.pe) + 1 : 0, carry = x1 ? r2(x1.bud - baseAmt(x1.l, x1.ps) - lineMoved(x1.l, x1.ps, x1.pe)) : 0;
+  /* Virements à deux catégories de la période (v70) */
+  const mvs = e.ps && !e.income ? e.main.flatMap(x => lineMoves(x.l, x.ps, x.pe)) : [], mvSum = envMoved(e);
+  const mvTxt = mvSum > .004 ? ` · dont ${fmt0(mvSum)} reçus par virement` : mvSum < -.004 ? ` · ${fmt0(-mvSum)} versés par virement` : "";
   const heroTxt = !e.ps ? "" : mixed ? fmt(e.spent) + " dépensés" + (e.plan > .004 ? " · " + fmt(e.plan) + " prévus" : "") + " · " + e.main.length + " enveloppes en cours" : e.income ? (e.rest > 0 ? `Encore ${fmt(e.rest)} attendus` : "Objectif atteint")
     : e.ps > t ? (e.plan > .004 ? fmt(e.plan) + " déjà prévus" : "Pas encore commencé")
     : fmt(e.spent) + " dépensés" + (e.plan > .004 ? " · " + fmt(e.plan) + " à venir" : "") + (cur && e.rest > 0 && dl > 0 ? ` · environ ${fmt0(e.rest / dl)} par jour jusqu'au ${e.pe.slice(0, 7) === t.slice(0, 7) ? P(e.pe).getDate() : dayShort(e.pe)}` : "");
@@ -4768,7 +4838,7 @@ function EnvDetail({b, lines, line, d0}) {
         <span class="t2" style="margin:0">${mixed ? "En cours" : capF(budPer(ref, e.ps, e.pe))} · ${e.income ? "reçu" : e.rest >= 0 ? "il reste" : "dépassé de"}</span>
         <span style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span class="amt" style=${"font-size:38px;text-align:left;letter-spacing:-.02em;line-height:1.05;color:" + (e.income ? "var(--ink)" : remCol(e.rest, e.bud))}>${fmt0(e.income ? e.act : Math.abs(e.rest))}</span><span class="muted" style="font-size:14px;font-weight:600">sur ${fmt0(e.bud)}</span></span>
         <${BudBar} col=${col} pct=${e.bud > 0 ? e.spent / e.bud : e.spent > 0 ? 1 : 0} ppct=${e.bud > 0 ? e.plan / e.bud : 0} over=${!e.income && e.act > e.bud + .004} h=${10} />
-        <span class="t2" style="margin:0;white-space:normal">${heroTxt}${carry ? ` · dont report ${fmt(carry, true)}` : ""}</span>
+        <span class="t2" style="margin:0;white-space:normal">${heroTxt}${carry ? ` · dont report ${fmt(carry, true)}` : ""}${mvTxt}</span>
         ${single && html`<button class="benv-mrow" onClick=${() => SHEET.open({type: "amt", line: x1.l.id, d})}><span class="grow">Montant : <b>${fmt0(baseAmt(x1.l, x1.ps))} ${durLabel(x1.l.dur)}</b>${x1.l.ov && x1.l.ov[x1.ps] != null ? html`<span class="t2" style="display:block">ajusté pour ${budPer(ref, x1.ps, x1.pe)}, d'habitude ${fmt0(baseAmt({...x1.l, ov: {}}, x1.ps))}</span>` : ""}</span><span class="benv-go"><${Ic} n="edit" s=${15} />Modifier</span></button>`}
       </section>`}
       ${single && x1.l.first && !x1.l.income && (du => html`<div class="card duecard"><${Ic} n="cal" /><span class="grow"><div class="t1">Dépense prévue le ${dayShort(du)}${du.slice(0, 4) !== t.slice(0, 4) ? " " + du.slice(0, 4) : ""}</div><div class="t2" style="white-space:normal">${du >= t ? (x1.rest > .004 ? "Les Prévisions y retirent les " + fmt0(x1.rest) + " qui restent" : "Tout est déjà dépensé ou prévu") : "Date passée : ce qui reste est réservé jusqu'à la fin du mois"}${x1.l.once ? "" : " · chaque année"}${x1.l.mv && x1.l.mv[x1.ps] ? " · dont " + fmt0(x1.l.mv[x1.ps]) + " ajoutés" : ""}</div></span></div>`)(dueDay(x1.l, x1.pe))}
@@ -4779,6 +4849,9 @@ function EnvDetail({b, lines, line, d0}) {
         ${txs.length ? (all ? txs : txs.slice(0, 6)).map(tx => html`<${TxRow} t=${tx} showAcc />`) : html`<div class="empty" style="padding:14px 18px 20px;font-size:14px">Rien pour l'instant.</div>`}
         ${txs.length > 6 && !all && html`<button class="row" style="justify-content:center;color:var(--accent);font-weight:600;min-height:48px" onClick=${() => setAll(true)}>Voir les ${txs.length} opérations</button>`}
       </section>`}
+      ${mvs.length > 0 && html`<section class="card" style="padding-top:4px" aria-label="Virements entre budgets"><div class="sec-h" style="margin:12px 16px 6px"><h2>Virements entre budgets</h2><span class="t2">${mvSum >= 0 ? "+" : "−"}${fmt0(Math.abs(mvSum))}</span></div>
+        ${mvs.map(x => html`<${TxRow} t=${x.t} a=${x.acc} />`)}
+        <p class="help" style="margin:4px 16px 14px">Ni dépense ni revenu : l'argent passe d'un budget à l'autre.</p></section>`}
       ${bars.length > 1 && !mixed && html`<section class="card" style="padding:12px 16px 14px"><div class="sec-h" style="margin:0 0 8px"><h2>${w.hist}</h2></div>
         <${HistBars} bars=${bars} sel=${e.ps} col=${col} income=${e.income} onPick=${pick} />
         <p class="help" style="margin:10px 0 0">Pointillés : le montant prévu. Touche une barre pour revoir cette période.</p></section>`}
@@ -5070,8 +5143,8 @@ function Choice({title, text, options, close}) {
 function CatTx({cat: cid, k, income, bud, months, accs}) {
   const ks = months || [k];
   const set = catSet(cid);
-  const list = Object.values(A().tx).filter(t => t.st !== "annulee" && ks.includes(ym(t.date)) && (!accs || !accs.length || accs.includes(t.account)) && repIn(t.account) && (t.splits || []).some(s => (!s.to || s.cat) && set.has(s.cat))).sort((a, b) => b.date.localeCompare(a.date));
-  const tot = r2(list.reduce((s, t) => s + (t.splits || []).filter(x => (!x.to || x.cat) && set.has(x.cat)).reduce((a, x) => a + x.amount, 0), 0));
+  const list = Object.values(A().tx).filter(t => t.st !== "annulee" && ks.includes(ym(t.date)) && (!accs || !accs.length || accs.includes(t.account)) && repIn(t.account) && (t.splits || []).some(s => !noStat(s) && set.has(s.cat))).sort((a, b) => b.date.localeCompare(a.date));
+  const tot = r2(list.reduce((s, t) => s + (t.splits || []).filter(x => !noStat(x) && set.has(x.cat)).reduce((a, x) => a + x.amount, 0), 0));
   return html`<${Top} title=${catName(cid)} sub=${(ks.length > 1 ? monthLabel(ks[0]) + " → " + monthLabel(ks[ks.length - 1]) : monthLabel(k)) + " · " + fmt(tot)} back right=${bud && html`<button class="ibtn" aria-label="Modifier le budget" onClick=${() => SHEET.open({type: "bud", id: bud, k})}><${Ic} n="edit" /></button>`} />
     <main class="scr"><div class="card">${list.length ? list.map(t => html`<${TxRow} t=${t} showAcc />`) : html`<div class="empty">Aucune opération sur cette période.</div>`}</div></main>`;
 }
@@ -5091,7 +5164,7 @@ function RepCat() {
   const months = Array.from({length: span}, (_, i) => ymAdd(k, i - span + 1));
   const sums = {};
   for (const t of Object.values(A().tx)) { if (t.st === "annulee" || !months.includes(ym(t.date)) || !A().acc[t.account] || !repIn(t.account)) continue;
-    for (const s of t.splits || []) { if ((s.to && !s.cat) || s.noRep) continue; if (inc ? (s.amount <= 0 || s.refund) : (s.amount >= 0 && !s.refund)) continue; const key = parent ? (s.cat === parent || cat(s.cat)?.parent === parent ? s.cat : null) : catTop(s.cat); if (parent && key === null && !(s.cat === parent)) continue; sums[key ?? "none"] = (sums[key ?? "none"] || 0) + (inc ? s.amount : -s.amount); } }
+    for (const s of t.splits || []) { if (noStat(s) || s.noRep) continue; if (inc ? (s.amount <= 0 || s.refund) : (s.amount >= 0 && !s.refund)) continue; const key = parent ? (s.cat === parent || cat(s.cat)?.parent === parent ? s.cat : null) : catTop(s.cat); if (parent && key === null && !(s.cat === parent)) continue; sums[key ?? "none"] = (sums[key ?? "none"] || 0) + (inc ? s.amount : -s.amount); } }
   const parts = Object.entries(sums).map(([id, v]) => ({id: id === "none" ? null : id, v: r2(v), c: id === "none" ? "#9AA1B5" : (cat(id)?.color || catColor(id))})).sort((a, b) => b.v - a.v);
   if (parent) parts.forEach((p, i) => { p.c = `color-mix(in srgb, ${catColor(parent)} ${100 - i * 14}%, var(--surface))`; });
   const total = r2(parts.reduce((s, p) => s + p.v, 0));
@@ -5111,8 +5184,8 @@ function RepFlux() {
   const cur = ym(today());
   const rows = Array.from({length: 7}, (_, i) => ymAdd(cur, i - 5)).map(k => {
     let inc = 0, exp = 0;
-    for (const t of Object.values(A().tx)) { if (t.st === "annulee" || !t.date.startsWith(k) || !A().acc[t.account] || !repIn(t.account)) continue; for (const s of t.splits || []) { if ((s.to && !s.cat) || s.noRep) continue; s.amount > 0 && !s.refund ? inc += s.amount : exp -= s.amount; } }
-    if (k >= cur) for (const o of occurrences(eom(k))) { if (!o.date.startsWith(k) || !repIn(o.account)) continue; for (const s of o.splits || []) { if (s.to && !s.cat) continue; s.amount > 0 ? inc += s.amount : exp -= s.amount; } }
+    for (const t of Object.values(A().tx)) { if (t.st === "annulee" || !t.date.startsWith(k) || !A().acc[t.account] || !repIn(t.account)) continue; for (const s of t.splits || []) { if (noStat(s) || s.noRep) continue; s.amount > 0 && !s.refund ? inc += s.amount : exp -= s.amount; } }
+    if (k >= cur) for (const o of occurrences(eom(k))) { if (!o.date.startsWith(k) || !repIn(o.account)) continue; for (const s of o.splits || []) { if (noStat(s)) continue; s.amount > 0 ? inc += s.amount : exp -= s.amount; } }
     return {k, inc: r2(inc), exp: r2(exp), cur: k === cur, future: k > cur};
   });
   const past = rows.filter(r => !r.future && !r.cur), avgNet = past.length ? past.reduce((s, r) => s + r.inc - r.exp, 0) / past.length : 0;
@@ -5166,7 +5239,7 @@ const repKey = (r, t, s) => { switch (r.group) { case "top": return catTop(s.cat
 const repLabel = (r, k) => { if (k === "none") return {cat: "sans catégorie", top: "sans catégorie", payee: "sans tiers", project: "sans projet", pay: "non précisé"}[r.group] || "—"; switch (r.group) { case "cat": case "top": return catName(k); case "acc": return accName(k); case "pay": return PAY[k] || k; case "owner": return k === "me" ? "Moi" : (A().per[k]?.name || "?"); case "total": return "Total"; default: return k; } };
 const repColor = (r, k, i) => (r.group === "cat" || r.group === "top") && k !== "none" ? catColor(k) : r.group === "acc" ? (A().acc[k]?.color || COLORS[i % COLORS.length]) : COLORS[i % COLORS.length];
 function repMatch(r, t, s) {
-  if (t.st === "annulee" || !A().acc[t.account] || (s.to && !s.cat) || s.noRep) return false;
+  if (t.st === "annulee" || !A().acc[t.account] || noStat(s) || s.noRep) return false;
   if (r.accounts?.length && !r.accounts.includes(t.account)) return false;
   if (r.kind === "exp" && !(s.amount < 0 || (s.refund && s.amount > 0))) return false;
   if (r.kind === "inc" && !(s.amount > 0 && !s.refund)) return false;
@@ -5395,7 +5468,7 @@ function CatSheet({id, parent, close}) {
   const c0 = id ? cat(id) : null;
   const [f, setF] = useState(() => c0 ? {...c0} : {name: "", icon: null, color: parent ? cat(parent)?.color : COLORS[0], parent: parent || null, type: parent ? cat(parent)?.type : "dep"});
   const set = (k, v) => setF(o => ({...o, [k]: v}));
-  const used = id ? Object.values(A().tx).filter(t => (t.splits || []).some(s => s.cat === id)).length : 0;
+  const used = id ? Object.values(A().tx).filter(t => (t.splits || []).some(s => s.cat === id || s.cat2 === id)).length : 0;
   const save = () => { if (!f.name.trim()) return; Store.put({...f, k: "cat", id: c0?.id || "cat_" + slug(f.name) + "_" + Math.random().toString(36).slice(2, 5), name: f.name.trim().toLowerCase()}); close(); };
   return html`<${Sheet} title=${c0 ? "Catégorie" : "Nouvelle catégorie"} close=${close} right=${html`<button class="link" onClick=${save}>Enregistrer</button>`}>
     <div style="display:flex;gap:12px;align-items:flex-end"><${CatGlyph} k=${(CAT_IC[f.icon] && f.icon) || guessIc(f.name) || (f.parent && catIc(f.parent)) || "tag"} col=${f.color || (f.parent && catColor(f.parent)) || "#8A93AD"} box=${52} s=${28} /><div style="flex:1"><${Field} label="Nom" id="ct-n"><input id="ct-n" value=${f.name} onInput=${e => set("name", e.target.value)} /></${Field}></div></div>
@@ -5404,7 +5477,7 @@ function CatSheet({id, parent, close}) {
     <${Field} label="Dans" id="ct-p"><select id="ct-p" value=${f.parent || ""} onChange=${e => set("parent", e.target.value || null)}><option value="">Catégorie principale</option>${topCats().filter(c => c.id !== id).map(c => html`<option value=${c.id}>${c.name}</option>`)}</select></${Field}>
     ${!f.parent && html`<${Seg} v=${f.type || "dep"} set=${v => set("type", v)} opts=${[["dep", "Dépenses"], ["rev", "Revenus"], ["both", "Les deux"]]} />`}
     <button class="btn pri" onClick=${save}>Enregistrer</button>
-    ${c0 && html`<button class="btn danger" onClick=${() => confirmIt("Supprimer cette catégorie ?", used ? `${used} opérations deviendront « sans catégorie ».` : "Elle n'est utilisée par aucune opération.", "Supprimer", async () => { close(); const ops = Object.values(A().tx).filter(t => (t.splits || []).some(s => s.cat === id)).map(t => ["put", {...t, splits: t.splits.map(s => s.cat === id ? {...s, cat: null} : s)}]); ops.push(...kids(id).map(k => ["put", {...k, parent: null}]), ...Object.values(A().bud).filter(b => b.cat === id).map(b => ["del", b]), ["del", c0]); await Store.bulk(ops); })}>Supprimer</button>`}
+    ${c0 && html`<button class="btn danger" onClick=${() => confirmIt("Supprimer cette catégorie ?", used ? `${used} opérations deviendront « sans catégorie ».` : "Elle n'est utilisée par aucune opération.", "Supprimer", async () => { close(); const ops = Object.values(A().tx).filter(t => (t.splits || []).some(s => s.cat === id || s.cat2 === id)).map(t => ["put", {...t, splits: t.splits.map(s => s.cat === id || s.cat2 === id ? {...s, ...(s.cat === id ? {cat: null} : {}), ...(s.cat2 === id ? {cat2: null} : {})} : s)}]); ops.push(...kids(id).map(k => ["put", {...k, parent: null}]), ...Object.values(A().bud).filter(b => b.cat === id).map(b => ["del", b]), ["del", c0]); await Store.bulk(ops); })}>Supprimer</button>`}
   </${Sheet}>`;
 }
 function RulesView() {
