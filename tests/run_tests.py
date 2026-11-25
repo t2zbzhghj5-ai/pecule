@@ -2351,10 +2351,10 @@ def virement_deux_categories(br, url):
     # écrans
     a.js("D.NAV.push({v: 'budget', id: 'bdg_t_x'})"); a.wait(600)
     body = norm(pg.locator("main").last.inner_text())
-    check("Virements entre budgets" in body and "dont 150 € reçus par virement" in body and "Virement budgets test" in body and "60,00 € dépensés" in body, "écran du budget d'arrivée : %r" % body[:600])
+    check("Reçus de " in body and "dont 150 € reçus" in body and "Virement budgets test" in body and "60,00 € dépensés" in body and "← Livret · Cadeaux test" in body, "écran du budget d'arrivée : %r" % body[:600])
     a.js("D.NAV.push({v: 'budget', id: 'bdg_t_g'})"); a.wait(600)
     body = norm(pg.locator("main").last.inner_text())
-    check("150 € versés par virement" in body and "Virements entre budgets" in body, "écran du budget de départ : %r" % body[:600])
+    check("· 150 € versés" in body and "Versés de " in body and "→ Courant · Extra test" in body, "écran du budget de départ : %r" % body[:600])
     a.js("D.NAV.tab('comptes')"); a.wait(200); a.js("return D.Store.put({...D.S(), k: 'set', id: 'set_main', bdgAcc: ''});"); a.js("D.NAV.tab('budgets')"); a.wait(600)
     cards = norm(" | ".join(pg.locator("main .benv").all_inner_texts()))
     check("150 reçus" in cards.replace(" €", "") and "150 versés" in cards.replace(" €", ""), "vignettes : %r" % cards[:600])
@@ -2374,6 +2374,110 @@ def virement_deux_categories(br, url):
     check(at("bud_t_g") == [20, 20, 0], "virement avec la seule catégorie de départ : %s" % at("bud_t_g"))
     check(a.js("return D.flows(arg, D.today().slice(0, 8) + '01', D.addDays(D.today(), 40)).exp;", liv) == round(fl0 + 20, 2), "l'ancien virement catégorisé doit rester compté dans les dépenses")
     a.no_errors("virement à deux catégories")
+    a.close()
+
+
+@test
+def alimenter_plusieurs_budgets(br, url):
+    """v71 : arrivée d'un virement répartie entre plusieurs budgets (dernière part = le reste, total vérifié) ; revenu qui « alimente le budget » (ajouté au montant, reste un revenu dans les Analyses), choix repris de la dernière fois pour le même libellé (fiche et +) ; revenu réparti, chaque part avec son choix ; échéance qui alimente chaque mois."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    liv, cour = a.acc_id("Livret"), a.acc_id("Courant")
+    norm = lambda x: x.replace(" ", " ").replace("\xa0", " ")
+    a.js("""const [liv, cour] = arg, m0 = D.today().slice(0, 8) + '01';
+      return D.Store.bulk([['put', {k: 'cat', id: 'cat_t_g', name: 'Cadeaux test', type: 'dep', parent: null}], ['put', {k: 'cat', id: 'cat_t_x', name: 'Extra test', type: 'both', parent: null}], ['put', {k: 'cat', id: 'cat_t_l', name: 'Loisirs test', type: 'both', parent: null}],
+      ['put', {k: 'bdg', id: 'bdg_t_g', name: 'Cadeaux B', accounts: [liv], hidden: false, order: 31}], ['put', {k: 'bdg', id: 'bdg_t_x', name: 'Extra B', accounts: [cour], hidden: false, order: 32}], ['put', {k: 'bdg', id: 'bdg_t_l', name: 'Loisirs B', accounts: [cour], hidden: false, order: 33}],
+      ['put', {k: 'bud', id: 'bud_t_g', budget: 'bdg_t_g', cat: 'cat_t_g', amount: 200, income: false, start: m0, end: null, dur: {n: 1, u: 'm'}, carry: false, hist: []}],
+      ['put', {k: 'bud', id: 'bud_t_x', budget: 'bdg_t_x', cat: 'cat_t_x', amount: 100, income: false, start: m0, end: null, dur: {n: 1, u: 'm'}, carry: false, hist: []}],
+      ['put', {k: 'bud', id: 'bud_t_l', budget: 'bdg_t_l', cat: 'cat_t_l', amount: 100, income: false, start: m0, end: null, dur: {n: 1, u: 'm'}, carry: false, hist: []}],
+      ['put', {k: 'tx', id: 'tx_t_x60', account: cour, date: D.today(), name: 'Sortie test', amount: -60, splits: [{amount: -60, cat: 'cat_t_x'}], st: 'pointee', pay: 'cb'}]]);""", [liv, cour]); a.wait(400)
+    at = lambda l, d=None: a.js("const x = D.lineAt(D.lineById(arg[0]), arg[1] || D.today()); return x && [x.bud, x.spent, x.rest];", [l, d])
+    k = a.js("return D.today().slice(0, 7);")
+    inc = lambda: a.js("return D.flows(arg, D.today().slice(0, 8) + '01', D.addDays(D.today(), 40)).inc;", cour)
+    pick = lambda sh, sel, name: (sh.locator(sel).click(), a.wait(300), sh.locator(".frow-grid .catbtn", has_text=name).first.click(), a.wait(200))
+    # --- virement réparti à l'arrivée
+    a.js("D.SHEET.open({type: 'op', kind: 'tx'})"); a.wait(500)
+    sh = pg.locator(".sheet").last
+    sh.locator(".famt .seg button", has_text="Virement").click(); a.wait(200)
+    sh.locator("#op-amt").fill("150"); sh.locator("#op-name").fill("Virement réparti test")
+    sh.locator("#op-acc").select_option(label="Livret"); a.wait(150)
+    sh.locator("#op-to").select_option(label="Courant"); a.wait(150)
+    pick(sh, "#op-cat", "Cadeaux test")
+    sh.locator("button", has_text="Répartir entre plusieurs budgets").click(); a.wait(250)
+    check(sh.locator(".fpart").count() == 2, "deux parts à l'arrivée attendues : %s" % sh.locator(".fpart").count())
+    pick(sh, "#op-arr0", "Extra test")
+    sh.locator(".fpart-in").nth(0).fill("100"); a.wait(150)
+    pick(sh, "#op-arr1", "Loisirs test")
+    fx = [norm(x) for x in sh.locator(".fpart-fx").all_inner_texts()]
+    check(norm(sh.locator(".fpill").inner_text()) == "Tout est réparti" and fx == ["il reste 40 € → 140 €", "il reste 100 € → 150 €"], "parts : %s / %s" % (sh.locator(".fpill").inner_text(), fx))
+    sh.locator(".btn.pri").last.click(); a.wait(600)
+    t = a.js("return Object.values(D.A().tx).find(t => t.name === 'Virement réparti test');")
+    check(t and t["splits"] == [{"to": cour, "amount": -150, "cat": "cat_t_g", "arr": [{"cat": "cat_t_x", "amount": 100}, {"cat": "cat_t_l", "amount": 50}]}], "virement réparti : %s" % (t and t["splits"]))
+    check(at("bud_t_g") == [50, 0, 50] and at("bud_t_x") == [200, 60, 140] and at("bud_t_l") == [150, 0, 150], "budgets après le virement réparti : %s %s %s" % (at("bud_t_g"), at("bud_t_x"), at("bud_t_l")))
+    # total faux : refusé
+    a.js("D.SHEET.open({type: 'op', kind: 'tx'})"); a.wait(500)
+    sh = pg.locator(".sheet").last
+    sh.locator(".famt .seg button", has_text="Virement").click(); a.wait(200)
+    sh.locator("#op-amt").fill("150"); sh.locator("#op-acc").select_option(label="Livret"); sh.locator("#op-to").select_option(label="Courant"); a.wait(150)
+    sh.locator("button", has_text="Répartir entre plusieurs budgets").click(); a.wait(250)
+    pick(sh, "#op-arr0", "Extra test"); pick(sh, "#op-arr1", "Loisirs test")
+    sh.locator(".fpart-in").nth(0).fill("100"); sh.locator(".fpart-in").nth(1).fill("100"); a.wait(150)
+    check("50,00 € de trop" in norm(sh.locator(".fpill").inner_text()), "écart non signalé : %r" % sh.locator(".fpill").inner_text())
+    sh.locator(".btn.pri").last.click(); a.wait(400)
+    check("La répartition fait" in norm(sh.inner_text()), "un total faux doit être refusé")
+    a.js("D.SHEET.close()"); a.wait(300)
+    # --- revenu qui alimente le budget
+    i0 = inc()
+    a.js("D.SHEET.open({type: 'op', kind: 'tx'})"); a.wait(500)
+    sh = pg.locator(".sheet").last
+    sh.locator(".famt .seg button", has_text="Revenu").click(); a.wait(200)
+    sh.locator("#op-amt").fill("80"); sh.locator("#op-name").fill("Vente test")
+    sh.locator("#op-acc").select_option(label="Courant"); a.wait(150)
+    pick(sh, "#op-cat", "Extra test")
+    txt = norm(sh.locator(".fmode").inner_text())
+    check("Pour le budget Extra B" in txt and "Reste un revenu" in txt and "Rembourse une dépense" in txt and "Alimente le budget" in txt and sh.locator('.fmode-o[aria-pressed="true"]').inner_text().startswith("Reste un revenu"), "choix du revenu : %r" % txt)
+    sh.locator(".fmode-o", has_text="Alimente le budget").click(); a.wait(200)
+    check("140 € → 220 €" in norm(sh.locator(".ffx").last.inner_text()), "effet du revenu : %r" % sh.locator(".ffx").last.inner_text())
+    sh.locator(".btn.pri").last.click(); a.wait(600)
+    t = a.js("return Object.values(D.A().tx).find(t => t.name === 'Vente test');")
+    check(t and t["splits"][0].get("feed") is True and not t["splits"][0].get("refund"), "revenu enregistré : %s" % (t and t["splits"]))
+    check(at("bud_t_x") == [280, 60, 220], "budget alimenté : %s" % at("bud_t_x"))
+    check(round(inc() - i0, 2) == 80, "le revenu doit rester un revenu dans les Analyses : %s → %s" % (i0, inc()))
+    # écran du budget
+    a.js("D.NAV.push({v: 'budget', id: 'bdg_t_x'})"); a.wait(600)
+    body = norm(pg.locator("main").last.inner_text())
+    check("Reçus de " in body and "dont 180 € reçus" in body and "revenu qui alimente le budget" in body and "Virement réparti test" in body and "+100,00 €" in body and "+80,00 €" in body, "écran du budget : %r" % body[:700])
+    # même libellé : le choix revient tout seul (fiche, puis +)
+    a.js("D.SHEET.open({type: 'op', kind: 'tx'})"); a.wait(500)
+    sh = pg.locator(".sheet").last
+    sh.locator(".famt .seg button", has_text="Revenu").click(); a.wait(200)
+    sh.locator("#op-amt").fill("20"); sh.locator("#op-name").fill("Vente test"); sh.locator("#op-acc").select_option(label="Courant"); a.wait(150)
+    pick(sh, "#op-cat", "Extra test")
+    check(sh.locator('.fmode-o[aria-pressed="true"]').inner_text().startswith("Alimente le budget"), "le dernier choix doit être repris : %r" % sh.locator('.fmode-o[aria-pressed="true"]').inner_text())
+    sh.locator(".btn.pri").last.click(); a.wait(600)
+    check(at("bud_t_x") == [300, 60, 240], "2e revenu : %s" % at("bud_t_x"))
+    # --- revenu réparti : un choix par part
+    a.js("D.SHEET.open({type: 'op', kind: 'tx'})"); a.wait(500)
+    sh = pg.locator(".sheet").last
+    sh.locator(".famt .seg button", has_text="Revenu").click(); a.wait(200)
+    sh.locator("#op-amt").fill("120"); sh.locator("#op-name").fill("Vente répartie test"); sh.locator("#op-acc").select_option(label="Courant"); a.wait(150)
+    sh.locator("button", has_text="Répartir sur plusieurs catégories").click(); a.wait(300)
+    sh.locator(".split .selbtn").nth(0).click(); a.wait(300); sh.locator(".catbtn", has_text="Extra test").first.click(); a.wait(200)
+    sh.locator(".split .selbtn").nth(1).click(); a.wait(300); sh.locator(".catbtn", has_text="Loisirs test").first.click(); a.wait(200)
+    amts = sh.locator('[aria-label="Montant de la part"]'); amts.nth(0).fill("80"); amts.nth(1).fill("40"); a.wait(150)
+    check(sh.locator(".fmode-s").count() == 2, "choix par part absent : %s" % sh.locator(".fmode-s").count())
+    sh.locator(".fmode-s").nth(0).select_option("feed"); sh.locator(".fmode-s").nth(1).select_option("refund"); a.wait(150)
+    sh.locator(".btn.pri").last.click(); a.wait(600)
+    t = a.js("return Object.values(D.A().tx).find(t => t.name === 'Vente répartie test');")
+    sp = t and sorted([(x["cat"], x["amount"], bool(x.get("feed")), bool(x.get("refund"))) for x in t["splits"]])
+    check(sp == [("cat_t_l", 40, False, True), ("cat_t_x", 80, True, False)], "parts du revenu : %s" % sp)
+    check(at("bud_t_x")[2] == 320 and at("bud_t_l")[2] == 190, "budgets après le revenu réparti : %s %s" % (at("bud_t_x"), at("bud_t_l")))
+    # --- échéance qui alimente chaque mois
+    a.js("""return D.Store.put({k: 'sch', id: 'sch_t_feed', account: arg, name: 'Rentrée test', amount: 50, splits: [{cat: 'cat_t_l', amount: 50, feed: true}], pay: 'virement', freq: {n: 1, u: 'm'}, next: D.addDays(D.today(), 9), anchor: Number(D.addDays(D.today(), 9).slice(8)), start: D.addDays(D.today(), 9), end: null, left: null, auto: false, skips: []});""", cour); a.wait(400)
+    nx = a.js("return D.addDays(D.today().slice(0, 8) + '01', 45);")
+    check(at("bud_t_l")[0] == 200 and at("bud_t_l", nx)[0] == 150, "échéance qui alimente : %s %s" % (at("bud_t_l"), at("bud_t_l", nx)))
+    a.no_errors("alimenter plusieurs budgets")
     a.close()
 
 

@@ -441,6 +441,25 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .ffx .grow{display:flex;flex-direction:column;gap:1px}
 .ffx-k{font-size:12.5px;color:var(--muted)}
 .ffx b{font-size:15.5px;font-weight:700;text-align:left}
+.fmode{display:flex;flex-direction:column;gap:6px;margin:0 10px 10px;padding:12px;background:var(--p-sky);border-radius:18px}
+.fcard>.fmode{border-top:0}
+.fmode-q{font-size:13px;font-weight:700;color:var(--pi-sky);padding:0 2px 2px}
+.fmode-o{display:flex;align-items:flex-start;gap:10px;text-align:left;background:color-mix(in srgb,var(--bg) 55%,transparent);border:2px solid transparent;border-radius:14px;padding:8px 10px;color:var(--ink);font:inherit;min-height:44px}
+.fmode-o.on{background:var(--bg);border-color:var(--ink)}
+.fmode-o:disabled{opacity:.55}
+.fmode-r{width:18px;height:18px;border-radius:9px;border:2px solid var(--muted);box-sizing:border-box;flex:none;margin-top:2px}
+.fmode-o.on .fmode-r{border:5px solid var(--ink)}
+.fmode-t{display:flex;flex-direction:column;gap:1px}.fmode-t b{font-size:15px;font-weight:600}.fmode-o.on .fmode-t b{font-weight:700}.fmode-t span{font-size:12.5px;color:var(--muted)}
+.fmode-s{align-self:flex-start;margin-top:4px;border:0;border-radius:16px;padding:4px 12px;font-size:13px;font-weight:700;min-height:32px;width:auto;background:var(--p-sky);color:var(--pi-sky)}
+.fmode-s.m-refund{background:var(--p-peach);color:var(--pi-peach)}.fmode-s.m-inc{background:var(--surface2);color:var(--muted)}
+.fpart-h{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px 6px;font-size:13px;font-weight:600;color:var(--muted)}
+.fpill{font-size:12.5px;font-weight:700;border-radius:10px;padding:4px 9px}.fpill.ok{background:var(--p-mint);color:var(--pi-mint)}.fpill.bad{background:var(--p-peach);color:var(--pi-peach)}
+.fpart{display:flex;flex-direction:column}
+.fpart-a{display:flex;align-items:center;gap:8px;padding:0 14px 10px 62px}
+.fpart-fx{font-size:12.5px;color:var(--muted)}
+.fpart-in{width:96px;flex:none;height:44px;border:0;border-radius:14px;background:var(--bg);color:var(--ink);font-weight:700;text-align:right;padding:0 12px;box-sizing:border-box}
+.fpart-plus{background:none;border:1.5px dashed var(--line);color:var(--ink)}
+.mvrow{display:flex;align-items:center;gap:12px;width:100%;background:none;border:0;text-align:left;font:inherit;color:var(--ink)}
 .ffx-p{flex:none;font-size:14px;font-weight:700;background:var(--pb);color:var(--pi);border-radius:12px;padding:5px 10px;white-space:nowrap}
 .fcard>.fsel{border-top:0}
 .flink{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;min-height:40px;font-weight:600}
@@ -742,6 +761,7 @@ function QuickSheet({acc, close}) {
     if (w.rep) { await Store.bulk(saveItem("sch", {...d, date, freq: {n: 1, u: "m"}, next: date})); close(); toast(date > t ? "Ajoutée à l'échéancier, 1re le " + dayShort(date) : "Ajoutée à l'échéancier, à valider dès aujourd'hui"); return; }
     let [[, tx]] = saveItem("tx", {...d, date});
     if (!isTr && !w.cat) tx = applyRules(tx, {isNew: true});
+    if (inc && w.cat && tx.splits?.length === 1 && !tx.splits[0].to) { const m = lastMode(tx.name, w.cat); if (m) tx = {...tx, splits: [{...tx.splits[0], [m]: true}]}; }
     Store.put(tx); close(); toast(label + (w.type === "dep" ? " enregistrée" : " enregistré"));
   };
   const Q = {pick: ["Nouveau", "Que veux-tu ajouter ?"], sens: ["Échéance", "Qu'est-ce qui revient ?"], amount: [label, w.type === "ech" ? "Combien à chaque fois ?" : "Combien ?"], cat: [label, w.subOf ? kidQ(w.subOf) : inc ? "D'où vient cet argent ?" : "Pour quoi ?"], dest: ["Virement", "Vers quel compte ?"], when: [label, "Quand ?"], start: ["Échéance", "Quand commence-t-elle ?"], recap: ["Dernière étape", "On vérifie ?"]}[kind];
@@ -1248,7 +1268,7 @@ function calc(str) {
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
 /* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
-const APP_VERSION = 70;
+const APP_VERSION = 71;
 /* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
 const NEWS = {
   54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
@@ -1267,7 +1287,8 @@ const NEWS = {
   67: ["Budgets : un budget annuel sans date affiche « Ajouter une date ». Une fois datés, tous tes budgets annuels se lisent pareil, avec leur date de dépense."],
   68: ["Valider une opération datée après aujourd'hui (un salaire versé la veille, par exemple) : Pécule te propose de la dater d'aujourd'hui pour qu'elle compte tout de suite dans le solde validé."],
   69: ["Fiche de saisie : le montant s'affiche en entier avec ses centimes (58,10 €), sans être coupé ni collé au « € »."],
-  70: ["Virement entre tes comptes : une catégorie au départ et une à l'arrivée. L'argent passe d'un budget à l'autre (par exemple d'un budget de cadeaux sur un livret vers un budget de sorties sur le compte courant), sans compter comme une dépense.", "Le budget de chaque côté montre ce qu'il a reçu ou versé ; les Analyses ne comptent pas ces virements."]
+  70: ["Virement entre tes comptes : une catégorie au départ et une à l'arrivée. L'argent passe d'un budget à l'autre (par exemple d'un budget de cadeaux sur un livret vers un budget de sorties sur le compte courant), sans compter comme une dépense.", "Le budget de chaque côté montre ce qu'il a reçu ou versé ; les Analyses ne comptent pas ces virements."],
+  71: ["Virement : l'arrivée peut se répartir entre plusieurs budgets (« Répartir entre plusieurs budgets »). La dernière part vide prend ce qui reste.", "Revenu : sous la catégorie, choisis s'il reste un revenu, rembourse une dépense ou alimente le budget. Pécule reprend le choix de la dernière fois pour le même libellé."]
 };
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));
@@ -1418,11 +1439,19 @@ const newlyVal = (b, t) => (isValSt(t.st) && !isValSt(b?.st)) || ((t.splits || [
 const askToday = ids => setTimeout(() => { const t0 = today(), l = ids.filter(i => { const t = A().tx[i]; return t && t.st !== "annulee" && t.date > t0; }); if (l.length) SHEET.open({type: "today", ids: l}); }, 60);
 const setBoth = (t, st) => { const k = cur => cur === "verrouillee" ? cur : st; return (t.splits || []).some(x => x.to) ? {...t, st: k(t.st), st2: k(t.st2)} : {...t, st: k(t.st)}; };
 const isTransfer = t => (t.splits || []).some(s => s.to);
+/* Revenu : « refund » ou « feed » si la dernière rentrée de ce libellé dans cette catégorie l'était (v71) */
+const lastMode = (name, c) => { const k = norm(name || "").trim(); if (!k || !c) return null; let best = null;
+  for (const t of Object.values(A().tx)) { if (t.st === "annulee" || !(t.amount > 0) || norm(t.name || "").trim() !== k) continue; const sp = (t.splits || []).find(x => !x.to && x.cat === c && x.amount > 0); if (sp && (!best || t.date > best.t.date)) best = {t, sp}; }
+  return best ? (best.sp.feed ? "feed" : best.sp.refund ? "refund" : null) : null; };
 /* Virement à deux catégories (v70) : une catégorie au départ (s.cat), une à l'arrivée (s.cat2). L'argent passe d'un budget à l'autre :
    ni dépense ni revenu (hors des Analyses et du bilan), l'enveloppe du départ diminue, celle de l'arrivée augmente (lineMoved).
    Un virement avec la seule catégorie de départ garde l'ancien sens : compté comme une dépense de cette catégorie, comme dans iCompta. */
-const isMove = s => !!(s && s.to && s.cat2);
-const noStat = s => !!s.to && (!s.cat || !!s.cat2);
+/* v71 : l'arrivée peut être répartie entre plusieurs budgets (s.arr : [{cat, amount}], montants positifs, total = montant du virement) ;
+   un revenu (part positive sans virement) peut « alimenter le budget » de sa catégorie (s.feed) : ajouté au montant du budget, il reste un revenu dans les Analyses. */
+const arrOf = sp => sp && sp.arr && sp.arr.length ? sp.arr.filter(x => x && x.cat && x.amount) : sp && sp.cat2 ? [{cat: sp.cat2, amount: Math.abs(sp.amount || 0)}] : [];
+const isMove = s => !!(s && s.to && (s.cat2 || (s.arr && s.arr.length)));
+const isFeed = s => !!(s && !s.to && s.feed && s.cat && (s.amount || 0) > 0);
+const noStat = s => !!s.to && (!s.cat || isMove(s));
 
 const idx = () => memo("idx", () => { const m = {}; for (const t of Object.values(A().tx)) for (const [a, v] of sides(t)) (m[a] || (m[a] = [])).push([t, v]); return m; });
 function balance(a, o = {}) { if (!o.upTo) o = {...o, upTo: today()}; return memo("bal" + a + "|" + (o.upTo || "") + (o.cleared ? "c" : "") + (o.locked ? "l" : "") + (o.byValue ? "v" : ""), () => balance0(a, o)); }
@@ -1777,7 +1806,7 @@ function bSplits(b) {
       if (t.st === "annulee" || !acc || acc.type === "pret") continue;
       if (af && !af.has(t.account)) continue;
       if (t.id.startsWith("tx_half_")) continue;
-      for (const s of t.splits || []) { if (noStat(s) || s.nobud || s.hf || bdgElsewhere(s, b.id)) continue; out.push({d: s.bm ? addMonths(t.date, s.bm) : t.date, cat: s.cat || null, a: s.amount, rf: !!s.refund, t}); }
+      for (const s of t.splits || []) { if (noStat(s) || isFeed(s) || s.nobud || s.hf || bdgElsewhere(s, b.id)) continue; out.push({d: s.bm ? addMonths(t.date, s.bm) : t.date, cat: s.cat || null, a: s.amount, rf: !!s.refund, t}); }
     }
     const hf = halfFrom();
     if (af && hf && af.has(hf)) for (const t of Object.values(A().tx)) { if (!t.half || t.st === "annulee" || !isJointAcc(t.account) || af.has(t.account)) continue;
@@ -1810,14 +1839,18 @@ function lineTxs(l, ps, pe) { const m = lineMatcher(l), seen = new Set(), out = 
 /* Virements à deux catégories (v70) : ce qui sort d'une enveloppe (côté départ) et ce qui entre dans une autre (côté arrivée).
    Opérations (prévues comprises) et échéances pas encore passées ; ni les prêts ni les opérations annulées. */
 const mvAccOk = id => !!A().acc[id] && A().acc[id].type !== "pret";
-function mvPush(out, t, sp, d) { if (!isMove(sp) || sp.nobud || !mvAccOk(t.account) || !mvAccOk(sp.to)) return;
-  if (sp.cat) out.push({d, acc: t.account, cat: sp.cat, v: r2(sp.amount), t, other: sp.to, ocat: sp.cat2});
-  out.push({d, acc: sp.to, cat: sp.cat2, v: r2(-sp.amount), t, other: t.account, ocat: sp.cat || null}); }
+function mvPush(out, t, sp, d) { if (!sp || sp.nobud || !mvAccOk(t.account)) return;
+  if (isFeed(sp)) { out.push({d, acc: t.account, cat: sp.cat, v: r2(sp.amount), t, kind: "feed", ocats: []}); return; }
+  if (!isMove(sp) || !mvAccOk(sp.to)) return;
+  const arr = arrOf(sp), sg = sp.amount > 0 ? -1 : 1;
+  if (sp.cat) out.push({d, acc: t.account, cat: sp.cat, v: r2(sp.amount), t, kind: "out", other: sp.to, ocats: arr.map(x => x.cat)});
+  for (const x of arr) out.push({d, acc: sp.to, cat: x.cat, v: r2(sg * Math.abs(x.amount)), t, kind: "in", other: t.account, ocats: sp.cat ? [sp.cat] : []}); }
 const txMoves = () => memo("xmt", () => { const out = []; for (const t of Object.values(A().tx)) { if (t.st === "annulee") continue; for (const sp of t.splits || []) mvPush(out, t, sp, t.date); } return out; });
 function schMoves(until) {
   return memo("xms" + until, () => { const D = A(), out = [];
     for (const s of Object.values(D.sch)) {
-      if (s.paused || !s.next || !((s.splits || []).some(isMove) || Object.values(s.ov || {}).some(o => (o?.splits || []).some(isMove)))) continue;
+      const mv = x => isMove(x) || isFeed(x);
+      if (s.paused || !s.next || !((s.splits || []).some(mv) || Object.values(s.ov || {}).some(o => (o?.splits || []).some(mv)))) continue;
       let d = s.next, left = s.left, g = 0;
       while (d <= until && g++ < 500) {
         if (s.end && d > s.end) break; if (left != null && left <= 0) break;
@@ -1845,7 +1878,7 @@ function lineBudget(l, ps, depth = 0) {
 function linePlanned(l, ps, pe, occ) {
   const af = bAccs(budgetOf(l)), m = lineMatcher(l); let s = 0;
   for (const o of occ) { if (o.kind === "bud" || o.kind === "half" || o.kind === "prorata" || o.date < ps || o.date > pe) continue; if (af.length && !af.includes(o.account)) continue;
-    for (const sp of o.splits || []) { if (noStat(sp) || sp.nobud || sp.hf || bdgElsewhere(sp, l.budget) || !m(sp.cat)) continue; if (l.income ? sp.amount > 0 : sp.amount < 0) s += l.income ? sp.amount : -sp.amount; } }
+    for (const sp of o.splits || []) { if (noStat(sp) || isFeed(sp) || sp.nobud || sp.hf || bdgElsewhere(sp, l.budget) || !m(sp.cat)) continue; if (l.income ? sp.amount > 0 : sp.amount < 0) s += l.income ? sp.amount : -sp.amount; } }
   return r2(s);
 }
 /* Déjà prévu dans l'échéancier sur la période (opérations rattachées au budget, pas encore passées) */
@@ -2214,7 +2247,7 @@ function CatField({v, set, id, income}) {
 
 function txDesc(t, a) {
   const sp = t.splits || [];
-  if (sp.length === 1 && sp[0].to) { const c = t.account === a ? sp[0].cat : sp[0].cat2; return (t.account === a ? "→ " + accName(sp[0].to) : "← " + accName(t.account)) + (c ? " · " + catName(c) : ""); }
+  if (sp.length === 1 && sp[0].to) { const c = t.account === a ? sp[0].cat : arrOf(sp[0]).map(x => catName(x.cat)).join(", "); return (t.account === a ? "→ " + accName(sp[0].to) : "← " + accName(t.account)) + (c ? " · " + (t.account === a ? catName(c) : c) : ""); }
   if (t.kind === "loan") return "capital + intérêts";
   if (sp.length > 1) return "ventilée · " + sp.length + " parts";
   return catName(sp[0]?.cat);
@@ -3984,7 +4017,7 @@ function SchedImport({close}) {
 /* ============ Feuille opération / échéance ============ */
 const FIELDS = {payee: "Tiers", pay: "Moyen de paiement", shares: "Dépense partagée", comment: "Commentaire"};
 const showF = k => (S().fields || {})[k] !== false;
-const withOpt = (o, x) => { if (x?.bm) o.bm = Number(x.bm); if (x?.nobud) o.nobud = true; if (x?.refund) o.refund = true; if (x?.noRep) o.noRep = true; if (x?.noAvg) o.noAvg = true; if (x?.owner) o.owner = x.owner;
+const withOpt = (o, x) => { if (x?.bm) o.bm = Number(x.bm); if (x?.nobud) o.nobud = true; if (x?.refund) o.refund = true; else if (x?.feed) o.feed = true; if (x?.noRep) o.noRep = true; if (x?.noAvg) o.noAvg = true; if (x?.owner) o.owner = x.owner;
   if (x?.bdg && Object.values(A().bud).some(l => l.budget === x.bdg && lineMatcher(l)(o.cat || null))) o.bdg = x.bdg; return o; };
 /* Libellés déjà connus (opérations + échéancier), proposés dès la 1re lettre : les plus fréquents d'abord */
 function nameSuggest(v, max = 5) {
@@ -4002,12 +4035,12 @@ const topNames = (max = 6) => memo("topn", () => { const m = {};
   return Object.values(m).filter(e => e.n >= 2).sort((a, b) => b.n - a.n).map(e => e.t); }).slice(0, max);
 const suggest = field => memo("sg" + field, () => { const c = {}; for (const t of Object.values(A().tx)) if (t[field]) c[t[field]] = (c[t[field]] || 0) + 1; return Object.entries(c).sort((a, b) => b[1] - a[1]).map(x => x[0]).slice(0, 60); });
 const HL = ["", "#F2643D", "#F0A52E", "#3BA55C", "#2F6FED", "#7B61FF"];
-function SplitOpts({o, set}) {
+function SplitOpts({o, set, income}) {
   return html`<div class="field" style="gap:8px">
     <${Field} label="Budget" id=${"bm" + Math.random().toString(36).slice(2, 6)}><select aria-label="Rattachement au budget" value=${o.nobud ? "x" : String(o.bm || 0)} onChange=${e => { const v = e.target.value; set(v === "x" ? {...o, nobud: true, bm: 0} : {...o, nobud: false, bm: Number(v)}); }}>
       <option value="0">Période de l'opération</option><option value="-1">Mois précédent</option><option value="1">Mois suivant</option><option value="x">Exclure des budgets</option></select></${Field}>
     ${people().length > 0 && html`<${Field} label="Qui a dépensé" id=${"ow" + Math.random().toString(36).slice(2, 6)}><select aria-label="Qui a dépensé" value=${o.owner || ""} onChange=${e => set({...o, owner: e.target.value || null})}><option value="">Titulaire du compte</option><option value="me">Moi</option>${people().map(p => html`<option value=${p.id}>${p.name}</option>`)}</select></${Field}>`}
-    <${Toggle} on=${!!o.refund} set=${v => set({...o, refund: v})} label="Remboursement" sub="Vient en déduction de la dépense de la catégorie, au lieu de compter comme un revenu." />
+    ${!income && html`<${Toggle} on=${!!o.refund} set=${v => set({...o, refund: v, feed: false})} label="Remboursement" sub="Vient en déduction de la dépense de la catégorie, au lieu de compter comme un revenu." />`}
     <${Toggle} on=${!!o.noRep} set=${v => set({...o, noRep: v})} label="Exclure des rapports" />
     <${Toggle} on=${!!o.noAvg} set=${v => set({...o, noAvg: v})} label="Exclure de la moyenne du solde" sub="Pour une dépense exceptionnelle qui fausserait la prévision par la moyenne." />
   </div>`;
@@ -4023,9 +4056,9 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
   const [mode, setMode] = useState(preset?.mode || (tr0 ? "transfer" : init.amount > 0 ? "income" : "expense"));
   const [f, setF] = useState(() => ({
     name: init.name || "", date: isSch ? (preset?.next || init.next || today()) : init.date, account: init.account || defAcc,
-    to: tr0 ? sp0[0].to : "", amt: amtStr(init.amount), cat: sp0.length === 1 ? sp0[0].cat || null : null, cat2: tr0 ? sp0[0].cat2 || null : null, c2t: false,
-    split: sp0.length > 1, splits: sp0.map(s => ({cat: s.cat || null, to: s.to || "", tr: !!s.to, amt: partStr(s.amount * (init.amount > 0 ? 1 : -1)), memo: s.memo || "", bm: s.bm || 0, nobud: !!s.nobud, refund: !!s.refund, noRep: !!s.noRep, noAvg: !!s.noAvg, owner: s.owner || null, bdg: s.bdg || null})),
-    opt: (s => ({bm: s.bm || 0, nobud: !!s.nobud, refund: !!s.refund, noRep: !!s.noRep, noAvg: !!s.noAvg, owner: s.owner || null, bdg: s.bdg || null}))(sp0[0] || {}), vdate: init.vdate || "", payee: init.payee || "", project: init.project || "", hl: init.hl || "", more: !!(init.vdate || init.project || init.hl || init.payee || init.comment || init.shares?.length || init.repay || init.num || (init.st && init.st !== "saisie" && !(base && base.virtual)) || (sp0[0] && (sp0[0].bm || sp0[0].nobud || sp0[0].refund || sp0[0].noRep))),
+    to: tr0 ? sp0[0].to : "", amt: amtStr(init.amount), cat: sp0.length === 1 ? sp0[0].cat || null : null, cat2: tr0 ? sp0[0].cat2 || (sp0[0].arr?.[0]?.cat || null) : null, c2t: false, arrOn: !!(tr0 && sp0[0].arr?.length > 1), arr: tr0 && sp0[0].arr?.length > 1 ? sp0[0].arr.map(x => ({cat: x.cat || null, amt: amtStr(x.amount)})) : [], mt: !!base,
+    split: sp0.length > 1, splits: sp0.map(s => ({cat: s.cat || null, to: s.to || "", tr: !!s.to, amt: partStr(s.amount * (init.amount > 0 ? 1 : -1)), memo: s.memo || "", bm: s.bm || 0, nobud: !!s.nobud, refund: !!s.refund, feed: !!s.feed, noRep: !!s.noRep, noAvg: !!s.noAvg, owner: s.owner || null, bdg: s.bdg || null})),
+    opt: (s => ({bm: s.bm || 0, nobud: !!s.nobud, refund: !!s.refund, feed: !!s.feed, noRep: !!s.noRep, noAvg: !!s.noAvg, owner: s.owner || null, bdg: s.bdg || null}))(sp0[0] || {}), vdate: init.vdate || "", payee: init.payee || "", project: init.project || "", hl: init.hl || "", more: !!(init.vdate || init.project || init.hl || init.payee || init.comment || init.shares?.length || init.repay || init.num || (init.st && init.st !== "saisie" && !(base && base.virtual)) || (sp0[0] && (sp0[0].bm || sp0[0].nobud || sp0[0].refund || sp0[0].noRep))),
     pay: init.pay || "cb", num: init.num || "", comment: init.comment || "", st: init.st || "saisie", st2: init.st2 || "saisie",
     shares: init.shares || [], repay: init.repay || "", half: !!init.half, prorata: !!init.prorata, rep: false, freq: init.freq || {n: 1, u: "m"}, offM: init.offM || [], end: init.end || "", left: init.left ?? "",
     auto: !!init.auto, paused: !!init.paused,
@@ -4037,10 +4070,21 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
   /* Virement (v70) : la catégorie d'arrivée reprend celle du départ tant qu'on ne l'a pas changée (nouveau virement seulement) */
   const setCat = v => setF(x => ({...x, cat: v, ...(!base && !x.c2t ? {cat2: v} : {})}));
   /* Ce que le virement change dans le budget de chaque côté (nouveau virement : « il reste A → B ») */
-  const trFx = (acc, c, v) => { if (!acc || !c || !(total > 0) || (base && !base.virtual)) return null;
-    const b = budgetsFor(acc, c)[0], l = b && linesOf(b.id).find(x => !x.income && lineMatcher(x)(c)), x = l && lineAt(l, f.date || today()); if (!x) return null;
-    const nm = "Budget " + (linesOf(b.id).length > 1 ? b.name + " · " + capF(lineName(l)) : b.name);
-    return html`<div class="ffx"><span class="grow" style="min-width:0"><span class="ffx-k">${nm} · il reste</span><b class="amt">${fmt0(x.rest)} → ${fmt0(r2(x.rest + v))}</b></span><span class=${"ffx-p p-" + (v < 0 ? "rose" : "mint")}>${v < 0 ? "−" : "+"}${fmt0(Math.abs(v))}</span></div>`; };
+  /* Le budget de dépense d'une catégorie sur un compte, et son reste à la date (v70, v71) */
+  const fxOf = (acc, c) => { if (!acc || !c) return null; const b = budgetsFor(acc, c)[0], l = b && linesOf(b.id).find(x => !x.income && lineMatcher(x)(c)), x = l && lineAt(l, f.date || today()); return x ? {b, l, x, nm: "Budget " + (linesOf(b.id).length > 1 ? b.name + " · " + capF(lineName(l)) : b.name)} : null; };
+  const fresh = !(base && !base.virtual);
+  const trFx = (acc, c, v) => { if (!(total > 0) || !fresh) return null; const o = fxOf(acc, c); if (!o) return null;
+    return html`<div class="ffx"><span class="grow" style="min-width:0"><span class="ffx-k">${o.nm} · il reste</span><b class="amt">${fmt0(o.x.rest)} → ${fmt0(r2(o.x.rest + v))}</b></span><span class=${"ffx-p p-" + (v < 0 ? "rose" : "mint")}>${v < 0 ? "−" : "+"}${fmt0(Math.abs(v))}</span></div>`; };
+  /* Arrivée répartie (v71) : la dernière part vide prend ce qui reste */
+  const arrParts = () => { const ps = f.arr.map(x => ({cat: x.cat || null, amount: r2(calc(x.amt) || 0), blank: !String(x.amt || "").trim()}));
+    const last = ps[ps.length - 1]; if (last && last.blank && total > 0) last.amount = r2(total - ps.slice(0, -1).reduce((a, x) => a + x.amount, 0)); return ps; };
+  const setArr = (i, o) => setF(x => ({...x, arr: x.arr.map((p, j) => j === i ? {...p, ...o} : p)}));
+  const arrOn = () => setF(x => ({...x, arrOn: true, arr: [{cat: x.cat2 || null, amt: ""}, {cat: null, amt: ""}].map((p, i) => i === 0 && total > 0 ? {...p, amt: ""} : p)}));
+  const arrOff = () => setF(x => ({...x, arrOn: false, cat2: x.arr.find(p => p.cat)?.cat || x.cat2, c2t: true}));
+  /* Revenu (v71) : reste un revenu, rembourse une dépense ou alimente le budget ; par défaut comme la dernière fois pour ce libellé */
+  const incMode = o => o?.feed ? "feed" : o?.refund ? "refund" : "inc";
+  const modeOpt = m => ({refund: m === "refund", feed: m === "feed"});
+  const setIncCat = v => setF(x => { const m = !x.mt && v ? lastMode(x.name, v) : null; return {...x, cat: v, ...(m ? {opt: {...x.opt, ...modeOpt(m)}} : {})}; });
   const sg = mode === "income" ? 1 : -1;
   const splitSum = r2(f.splits.reduce((s, x) => s + (calc(x.amt) || 0), 0));
   const locked = !isSch && base && !base.virtual && (base.st === "verrouillee");
@@ -4054,7 +4098,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
   const pickSugg = t => {
     const sp = t.splits || [];
     setMode(sp.length === 1 && sp[0].to ? "transfer" : t.amount > 0 ? "income" : "expense");
-    setF(x => ({...x, name: t.name, amt: x.amt || amtStr(t.amount), cat: sp.length === 1 && !sp[0].to ? sp[0].cat : sp.length === 1 && sp[0].to && sp[0].cat ? sp[0].cat : x.cat, ...(sp.length === 1 && sp[0].to && sp[0].cat2 ? {cat2: sp[0].cat2, c2t: true} : {}), to: sp.length === 1 && sp[0].to ? sp[0].to : x.to, pay: t.pay || x.pay, payee: x.payee || t.payee || "", project: x.project || t.project || "", account: x.account}));
+    setF(x => ({...x, name: t.name, amt: x.amt || amtStr(t.amount), cat: sp.length === 1 && !sp[0].to ? sp[0].cat : sp.length === 1 && sp[0].to && sp[0].cat ? sp[0].cat : x.cat, ...(sp.length === 1 && sp[0].to && sp[0].cat2 ? {cat2: sp[0].cat2, c2t: true} : {}), ...(sp.length === 1 && !sp[0].to && t.amount > 0 && (sp[0].feed || sp[0].refund) ? {opt: {...x.opt, refund: !!sp[0].refund, feed: !!sp[0].feed}} : {}), to: sp.length === 1 && sp[0].to ? sp[0].to : x.to, pay: t.pay || x.pay, payee: x.payee || t.payee || "", project: x.project || t.project || "", account: x.account}));
     setSugg([]);
   };
   const startSplit = () => {
@@ -4069,7 +4113,14 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
     let splits, amount;
     if (mode === "transfer") {
       if (!f.to || f.to === f.account) return setErr("Choisis le compte qui reçoit le virement.");
-      amount = -total; splits = [{to: f.to, amount: -total, ...(f.cat ? {cat: f.cat} : {}), ...(f.cat2 && A().acc[f.to]?.type !== "pret" ? {cat2: f.cat2} : {}), ...(f.cat && f.opt?.bdg ? {bdg: f.opt.bdg} : {})}];
+      amount = -total; const noArr = A().acc[f.to]?.type === "pret";
+      let arr = null;
+      if (f.arrOn && !noArr) { const ps = arrParts(); if (ps.some(x => x.amount && !x.cat)) return setErr("Choisis le budget de chaque part à l'arrivée.");
+        const sum = r2(ps.reduce((a, x) => a + x.amount, 0)); if (ps.some(x => x.amount < 0)) return setErr("Une part à l'arrivée ne peut pas être négative.");
+        if (Math.abs(sum - total) > 0.004) return setErr(`La répartition fait ${fmt(sum)} pour un virement de ${fmt(total)}. Écart : ${fmt(total - sum)}.`);
+        arr = ps.filter(x => x.amount && x.cat).map(x => ({cat: x.cat, amount: x.amount})); }
+      const one = arr && arr.length === 1 ? arr[0].cat : null;
+      splits = [{to: f.to, amount: -total, ...(f.cat ? {cat: f.cat} : {}), ...(arr && arr.length > 1 ? {arr} : one ? {cat2: one} : f.cat2 && !noArr && !f.arrOn ? {cat2: f.cat2} : {}), ...(f.cat && f.opt?.bdg ? {bdg: f.opt.bdg} : {})}];
     } else if (f.split) {
       if (f.splits.some(s => s.tr && (calc(s.amt) || 0) && (!s.to || s.to === f.account))) return setErr("Choisis le compte de chaque virement de la ventilation.");
       splits = f.splits.map(s => { const v = calc(s.amt) || 0; const o = s.tr && s.to ? {to: s.to, amount: r2(sg * v), ...(s.cat ? {cat: s.cat} : {}), ...(s.bdg ? {bdg: s.bdg} : {})} : withOpt({cat: s.cat || null, amount: r2(sg * v)}, s); if (s.memo) o.memo = s.memo; return o; }).filter(s => s.amount);
@@ -4135,7 +4186,14 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
     ${(sugg.length > 0 || (!base && !isSch && !f.name.trim() && topNames(6).length > 0)) && html`<div class="fsugg" aria-label="Libellés habituels">${(sugg.length ? sugg : topNames(6)).map(t => html`<button type="button" class="chip" onClick=${() => pickSugg(t)}><${CatGlyph} id=${t.splits?.[0]?.cat} box=${24} s=${14} /> ${t.name}</button>`)}</div>`}
     ${mode !== "transfer" && html`<div class="fcard">
       <div class="frow"><span class="fic p-butter"><${Ic} n="tag" s=${18} /></span><label class="fl" for="op-name">Libellé</label><input id="op-name" class="fin" value=${f.name} onInput=${e => onName(e.target.value)} placeholder=${mode === "transfer" ? "Virement" : "Monoprix, loyer…"} autocomplete="off" /></div>
-      ${!f.split && html`<${CatRow} v=${f.cat} set=${v => set("cat", v)} income=${mode === "income"} />`}
+      ${!f.split && html`<${CatRow} v=${f.cat} set=${v => mode === "income" ? setIncCat(v) : set("cat", v)} income=${mode === "income"} />`}
+      ${!f.split && mode === "income" && f.cat && cat(f.cat)?.type !== "rev" && (o => { const m = incMode(f.opt), nm = o ? o.l && budgetOf(o.l) ? budgetOf(o.l).name : catName(f.cat) : null, pick = v => setF(x => ({...x, mt: true, opt: {...x.opt, ...modeOpt(v)}}));
+        const opt = (v, t, sub, dis) => html`<button type="button" class=${"fmode-o" + (m === v ? " on" : "")} aria-pressed=${m === v ? "true" : "false"} disabled=${dis} onClick=${() => pick(v)}><span class="fmode-r" aria-hidden="true"></span><span class="fmode-t"><b>${t}</b><span>${sub}</span></span></button>`;
+        return html`<div class="fmode" role="group" aria-label="Ce que ce revenu fait au budget"><span class="fmode-q">${nm ? "Pour le budget " + nm + ", ce revenu…" : "Ce revenu…"}</span>
+          ${opt("inc", "Reste un revenu", "Le budget ne bouge pas.")}
+          ${opt("refund", "Rembourse une dépense", "Déduit de ce qui a été dépensé en " + catName(f.cat) + ".")}
+          ${opt("feed", "Alimente le budget", o ? "Ajouté au budget " + nm + ", comme un virement reçu." : "Aucun budget pour cette catégorie sur ce compte.", !o && m !== "feed")}</div>
+          ${m !== "inc" && o && total > 0 && fresh && html`<div class="ffx"><span class="grow" style="min-width:0"><span class="ffx-k">${o.nm} · il reste</span><b class="amt">${fmt0(o.x.rest)} → ${fmt0(r2(o.x.rest + total))}</b></span><span class="ffx-p p-mint">+${fmt0(total)}</span></div>`}`; })(fxOf(f.account, f.cat))}
       ${!f.split && mode !== "transfer" && (bs => bs.length > 1 && html`<select aria-label="Budget concerné" value=${f.opt?.bdg || ""} onChange=${e => set("opt", {...f.opt, bdg: e.target.value || null})} class="fsel"><option value="">Budget : tous ceux de cette catégorie</option>${bs.map(b => html`<option value=${b.id}>Budget : ${b.name}</option>`)}</select>`)(budgetsFor(f.account, f.cat))}
       ${!f.split && mode !== "transfer" && f.cat && (par => { const ks = budKids(par); return ks.length > 0 && html`<div class="fkids pc p-sky" role="group" aria-label=${kidQ(par)}><span class="fkq">${kidQ(par)}</span>
         <span class="fkch">${ks.map(k => html`<button type="button" class=${"chip-k" + (f.cat === k.id ? " on" : "")} aria-pressed=${f.cat === k.id ? "true" : "false"} onClick=${() => set("cat", k.id)}><${CatGlyph} id=${k.id} box=${28} s=${15} />${k.name}</button>`)}</span>
@@ -4157,20 +4215,30 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
     <span class="fside">À l'arrivée</span>
     <div class="fcard">
       <div class="frow"><span class="fic p-sky"><${Ic} n="swap" s=${18} /></span><label class="fl" for="op-to">Compte</label><${AccSelect} id="op-to" v=${f.to} set=${v => set("to", v)} none="Choisir…" exclude=${f.account} /></div>
-      ${A().acc[f.to]?.type !== "pret" && html`<${CatRow} id="op-cat2" v=${f.cat2} set=${v => setF(x => ({...x, cat2: v, c2t: true}))} income=${false} label="Catégorie" clear />`}
-      ${A().acc[f.to]?.type !== "pret" && trFx(f.to, f.cat2, total)}
+      ${A().acc[f.to]?.type !== "pret" && !f.arrOn && html`<${CatRow} id="op-cat2" v=${f.cat2} set=${v => setF(x => ({...x, cat2: v, c2t: true}))} income=${false} label="Catégorie" clear />`}
+      ${A().acc[f.to]?.type !== "pret" && !f.arrOn && trFx(f.to, f.cat2, total)}
+      ${A().acc[f.to]?.type !== "pret" && f.arrOn && (ps => { const sum = r2(ps.reduce((a, x) => a + x.amount, 0)), left = r2((total || 0) - sum), ok = Math.abs(left) < 0.005 && total > 0;
+        return html`<div class="fpart-h"><span>Réparti entre ${f.arr.length} budgets</span><span class=${"fpill " + (ok ? "ok" : "bad")}>${ok ? "Tout est réparti" : left > 0 ? "Reste " + fmt(left) : fmt(-left) + " de trop"}</span></div>
+        ${f.arr.map((p, i) => html`<div class="fpart">
+          <${CatRow} id=${"op-arr" + i} v=${p.cat} set=${v => setArr(i, {cat: v})} income=${false} label=${"Budget " + (i + 1)} />
+          <div class="fpart-a"><span class="grow fpart-fx">${(o => o && ps[i].amount > 0 && fresh ? "il reste " + fmt0(o.x.rest) + " → " + fmt0(r2(o.x.rest + ps[i].amount)) : p.cat ? "" : "Choisis un budget")(fxOf(f.to, p.cat))}</span>
+            <input class="fpart-in" inputmode="decimal" aria-label=${"Montant pour " + (p.cat ? catName(p.cat) : "le budget " + (i + 1))} value=${p.amt} placeholder=${i === f.arr.length - 1 && total > 0 ? amtStr(Math.max(0, ps[i].amount)) : "0"} onInput=${e => setArr(i, {amt: e.target.value})} />
+            ${f.arr.length > 2 && html`<button type="button" class="ibtn plain" aria-label=${"Retirer le budget " + (i + 1)} onClick=${() => setF(x => ({...x, arr: x.arr.filter((_, j) => j !== i)}))}><${Ic} n="x" s=${16} /></button>`}</div></div>`)}
+        <button type="button" class="frow frow-btn fpart-add" onClick=${() => setF(x => ({...x, arr: [...x.arr.map((p, j) => j === x.arr.length - 1 && !String(p.amt || "").trim() && total > 0 ? {...p, amt: amtStr(Math.max(0, r2(total - x.arr.slice(0, -1).reduce((a, q) => a + (calc(q.amt) || 0), 0))))} : p), {cat: null, amt: ""}]}))}><span class="fic fpart-plus"><${Ic} n="plus" s=${16} /></span><span class="fl" style="color:var(--ink);font-weight:600">Ajouter un budget</span></button>`; })(arrParts())}
     </div>
-    <p class="help fside-h">${base && !base.virtual ? "Une catégorie de chaque côté : l'argent passe d'un budget à l'autre, sans compter comme une dépense." : "La catégorie d'arrivée reprend celle du départ. Change-la pour faire passer l'argent d'un budget à l'autre."}</p>`}
+    ${A().acc[f.to]?.type !== "pret" && f.to && html`<button type="button" class="link flink" onClick=${() => f.arrOn ? arrOff() : arrOn()}><${Ic} n="split" s=${16} />${f.arrOn ? "Une seule catégorie à l'arrivée" : "Répartir entre plusieurs budgets"}</button>`}
+    <p class="help fside-h">${base && !base.virtual ? "Une catégorie de chaque côté : l'argent passe d'un budget à l'autre, sans compter comme une dépense." : f.arrOn ? "Chaque budget reçoit sa part. La dernière part vide prend ce qui reste." : "La catégorie d'arrivée reprend celle du départ. Change-la pour faire passer l'argent d'un budget à l'autre."}</p>`}
     ${mode !== "transfer" && !f.split && html`<button type="button" class="link flink" onClick=${startSplit}><${Ic} n="split" s=${16} />Répartir sur plusieurs catégories</button>`}
     ${mode !== "transfer" && f.split && html`<div class="field"><span class="lb">Ventilation</span>
           ${f.splits.map((s, i) => html`<div class="split">
-            ${s.tr ? html`<div style="display:flex;flex-direction:column;gap:2px;min-width:0"><select aria-label="Virement vers" value=${s.to} onChange=${e => { const n = [...f.splits]; n[i] = {...s, to: e.target.value}; set("splits", n); }}><option value="">Virement vers…</option>${accList().filter(a => a.id !== f.account).map(a => html`<option value=${a.id}>${a.name}</option>`)}</select>${(s.memo || s.cat) && html`<span class="t2" style="font-size:12px;padding-left:6px">${s.memo || catName(s.cat)}</span>`}</div>` : html`<div style="display:flex;flex-direction:column;gap:2px;min-width:0"><${CatField} v=${s.cat} set=${v => { const n = [...f.splits]; n[i] = {...s, cat: v}; set("splits", n); }} income=${mode === "income"} />${s.memo && html`<span class="t2" style="font-size:12px;padding-left:6px">${s.memo}</span>`}</div>`}
+            ${s.tr ? html`<div style="display:flex;flex-direction:column;gap:2px;min-width:0"><select aria-label="Virement vers" value=${s.to} onChange=${e => { const n = [...f.splits]; n[i] = {...s, to: e.target.value}; set("splits", n); }}><option value="">Virement vers…</option>${accList().filter(a => a.id !== f.account).map(a => html`<option value=${a.id}>${a.name}</option>`)}</select>${(s.memo || s.cat) && html`<span class="t2" style="font-size:12px;padding-left:6px">${s.memo || catName(s.cat)}</span>`}</div>` : html`<div style="display:flex;flex-direction:column;gap:2px;min-width:0"><${CatField} v=${s.cat} set=${v => { const n = [...f.splits]; n[i] = {...s, cat: v}; set("splits", n); }} income=${mode === "income"} />${s.memo && html`<span class="t2" style="font-size:12px;padding-left:6px">${s.memo}</span>`}
+              ${mode === "income" && s.cat && cat(s.cat)?.type !== "rev" && !String(s.amt || "").trim().startsWith("-") && html`<select class=${"fmode-s m-" + incMode(s)} aria-label=${"Ce que la part " + catName(s.cat) + " fait au budget"} value=${incMode(s)} onChange=${e => { const n = [...f.splits]; n[i] = {...s, ...modeOpt(e.target.value)}; set("splits", n); }}><option value="inc">Reste un revenu</option><option value="refund">Rembourse une dépense</option><option value="feed">Alimente le budget</option></select>`}</div>`}
             ${html`<button type="button" class="ibtn plain" aria-label="Inverser le signe de la part" title="Part en négatif" style=${"font-weight:700;font-size:17px" + (String(s.amt).trim().startsWith("-") ? ";color:var(--neg)" : "")} onClick=${() => { const n = [...f.splits], v = String(s.amt || "").trim(); n[i] = {...s, amt: v.startsWith("-") ? v.slice(1) : "-" + v}; set("splits", n); }}>±</button>`}
             <input inputmode="decimal" value=${s.amt} placeholder="0,00" aria-label="Montant de la part" onInput=${e => { const n = [...f.splits]; n[i] = {...s, amt: e.target.value}; set("splits", n); }} style="text-align:right" />
-            <button type="button" class="ibtn plain" aria-label="Retirer la part" onClick=${() => { const n = f.splits.filter((_, j) => j !== i); if (n.length <= 1) setF(x => ({...x, split: false, cat: n[0]?.cat || x.cat, opt: n[0] ? {bm: n[0].bm || 0, nobud: !!n[0].nobud, refund: !!n[0].refund, noRep: !!n[0].noRep} : x.opt, splits: n})); else set("splits", n); }}><${Ic} n="x" s=${16} /></button>
+            <button type="button" class="ibtn plain" aria-label="Retirer la part" onClick=${() => { const n = f.splits.filter((_, j) => j !== i); if (n.length <= 1) setF(x => ({...x, split: false, cat: n[0]?.cat || x.cat, opt: n[0] ? {bm: n[0].bm || 0, nobud: !!n[0].nobud, refund: !!n[0].refund, feed: !!n[0].feed, noRep: !!n[0].noRep} : x.opt, splits: n})); else set("splits", n); }}><${Ic} n="x" s=${16} /></button>
           </div>
           ${!s.tr && (f.more || s.so) && html`<button type="button" class="link" style="align-self:flex-start;font-size:13px;margin-top:-6px" onClick=${() => { const n = [...f.splits]; n[i] = {...s, so: !s.so}; set("splits", n); }}>${s.so ? "Masquer les options" : "Options de la part" + (s.bm || s.nobud || s.refund || s.noRep ? " (modifiées)" : "")}</button>`}
-          ${s.so && html`<div style="padding:10px;border-radius:14px;background:var(--surface2)"><${Field} label="Note" id=${"sm" + i}><input id=${"sm" + i} value=${s.memo} onInput=${e => { const n = [...f.splits]; n[i] = {...s, memo: e.target.value}; set("splits", n); }} /></${Field}><${SplitOpts} o=${s} set=${o => { const n = [...f.splits]; n[i] = {...s, ...o}; set("splits", n); }} /></div>`}`)}
+          ${s.so && html`<div style="padding:10px;border-radius:14px;background:var(--surface2)"><${Field} label="Note" id=${"sm" + i}><input id=${"sm" + i} value=${s.memo} onInput=${e => { const n = [...f.splits]; n[i] = {...s, memo: e.target.value}; set("splits", n); }} /></${Field}><${SplitOpts} o=${s} set=${o => { const n = [...f.splits]; n[i] = {...s, ...o}; set("splits", n); }} income=${mode === "income"} /></div>`}`)}
           <div style="display:flex;justify-content:space-between;align-items:center">
             <span style="display:flex;gap:14px;flex-wrap:wrap"><button type="button" class="link" onClick=${() => set("splits", [...f.splits, {cat: null, to: "", amt: total > 0 ? amtStr(Math.max(0, total - splitSum)) : "", memo: ""}])}>+ Ajouter une part</button>
             <button type="button" class="link" onClick=${() => set("splits", [...f.splits, {cat: null, to: "", tr: true, amt: total > 0 ? amtStr(Math.max(0, total - splitSum)) : "", memo: ""}])}>+ Ajouter un virement</button></span>
@@ -4211,7 +4279,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
       ${mode === "transfer" && f.to && html`<${Field} label=${"Statut côté " + accName(f.to)}><${Seg} v=${f.st2 === "verrouillee" ? "pointee" : f.st2} set=${v => set("st2", v)} opts=${[["prevue","Prévue"],["saisie","Créée"],["pointee","Validée"]]} /></${Field}>`}`}
       <${Field} label="Note" id="op-com"><textarea id="op-com" value=${f.comment} onInput=${e => set("comment", e.target.value)} placeholder="Facultatif"></textarea></${Field}>
       ${!isSch && (A().acc[f.account]?.type === "carte" || f.vdate) && html`<${Field} label="Date de débit (carte)" id="op-vd" help="Elle décide sur quel débit de la carte l'achat tombe."><input id="op-vd" type="date" value=${f.vdate || f.date} onInput=${e => set("vdate", e.target.value)} /></${Field}>`}
-      ${mode !== "transfer" && !f.split && html`<${SplitOpts} o=${f.opt} set=${o => set("opt", o)} />`}
+      ${mode !== "transfer" && !f.split && html`<${SplitOpts} o=${f.opt} set=${o => set("opt", o)} income=${mode === "income"} />`}
     </div>`}
     </fieldset>
     ${err && html`<div class="banner" role="alert" style="background:color-mix(in srgb,var(--neg) 14%,var(--surface))">${err}</div>`}
@@ -4812,7 +4880,10 @@ function EnvDetail({b, lines, line, d0}) {
   const dl = cur ? daysBetween(t, e.pe) + 1 : 0, carry = x1 ? r2(x1.bud - baseAmt(x1.l, x1.ps) - lineMoved(x1.l, x1.ps, x1.pe)) : 0;
   /* Virements à deux catégories de la période (v70) */
   const mvs = e.ps && !e.income ? e.main.flatMap(x => lineMoves(x.l, x.ps, x.pe)) : [], mvSum = envMoved(e);
-  const mvTxt = mvSum > .004 ? ` · dont ${fmt0(mvSum)} reçus par virement` : mvSum < -.004 ? ` · ${fmt0(-mvSum)} versés par virement` : "";
+  const mvTxt = mvSum > .004 ? ` · dont ${fmt0(mvSum)} reçus` : mvSum < -.004 ? ` · ${fmt0(-mvSum)} versés` : "";
+  const mvIn = mvs.some(x => x.v > 0), mvOut = mvs.some(x => x.v < 0), mvH = (mvIn && mvOut ? "Reçus et versés " : mvIn ? "Reçus " : "Versés ") + (e.ps ? perOf(ref, e.ps, e.pe) : "");
+  const mvOpen = x => x.t.virtual ? SHEET.open({type: "op", kind: "tx", occ: x.t, acc: x.acc}) : SHEET.open({type: "op", kind: "tx", src: A().tx[x.t.id] || x.t, acc: x.acc});
+  const mvSub = x => dayShort(x.d) + " · " + (x.kind === "feed" ? "revenu qui alimente le budget" : (x.v > 0 ? "← " : "→ ") + accName(x.other) + (x.ocats.length ? " · " + x.ocats.map(catName).join(", ") : "")) + (x.t.virtual ? " · prévu" : "");
   const heroTxt = !e.ps ? "" : mixed ? fmt(e.spent) + " dépensés" + (e.plan > .004 ? " · " + fmt(e.plan) + " prévus" : "") + " · " + e.main.length + " enveloppes en cours" : e.income ? (e.rest > 0 ? `Encore ${fmt(e.rest)} attendus` : "Objectif atteint")
     : e.ps > t ? (e.plan > .004 ? fmt(e.plan) + " déjà prévus" : "Pas encore commencé")
     : fmt(e.spent) + " dépensés" + (e.plan > .004 ? " · " + fmt(e.plan) + " à venir" : "") + (cur && e.rest > 0 && dl > 0 ? ` · environ ${fmt0(e.rest / dl)} par jour jusqu'au ${e.pe.slice(0, 7) === t.slice(0, 7) ? P(e.pe).getDate() : dayShort(e.pe)}` : "");
@@ -4849,9 +4920,9 @@ function EnvDetail({b, lines, line, d0}) {
         ${txs.length ? (all ? txs : txs.slice(0, 6)).map(tx => html`<${TxRow} t=${tx} showAcc />`) : html`<div class="empty" style="padding:14px 18px 20px;font-size:14px">Rien pour l'instant.</div>`}
         ${txs.length > 6 && !all && html`<button class="row" style="justify-content:center;color:var(--accent);font-weight:600;min-height:48px" onClick=${() => setAll(true)}>Voir les ${txs.length} opérations</button>`}
       </section>`}
-      ${mvs.length > 0 && html`<section class="card" style="padding-top:4px" aria-label="Virements entre budgets"><div class="sec-h" style="margin:12px 16px 6px"><h2>Virements entre budgets</h2><span class="t2">${mvSum >= 0 ? "+" : "−"}${fmt0(Math.abs(mvSum))}</span></div>
-        ${mvs.map(x => html`<${TxRow} t=${x.t} a=${x.acc} />`)}
-        <p class="help" style="margin:4px 16px 14px">Ni dépense ni revenu : l'argent passe d'un budget à l'autre.</p></section>`}
+      ${mvs.length > 0 && html`<section class="card" style="padding-top:4px" aria-label="Reçus et versés"><div class="sec-h" style="margin:12px 16px 6px"><h2>${mvH}</h2><span class="t2" style=${mvSum > 0 ? "color:var(--pos);font-weight:700" : ""}>${mvSum >= 0 ? "+" : "−"}${fmt0(Math.abs(mvSum))}</span></div>
+        ${mvs.map(x => html`<button class="row mvrow" onClick=${() => mvOpen(x)}><${CatGlyph} id=${x.cat} box=${40} s=${18} /><span class="grow" style="min-width:0"><div class="t1">${x.t.name || "Virement"}</div><div class="t2" style="white-space:normal">${mvSub(x)}</div></span><span class="amt" style=${"font-weight:700" + (x.v > 0 ? ";color:var(--pos)" : "")}>${fmt(x.v, true)}</span></button>`)}
+        <p class="help" style="margin:4px 16px 14px">Ils changent le montant du budget, pas ce qui a été dépensé.</p></section>`}
       ${bars.length > 1 && !mixed && html`<section class="card" style="padding:12px 16px 14px"><div class="sec-h" style="margin:0 0 8px"><h2>${w.hist}</h2></div>
         <${HistBars} bars=${bars} sel=${e.ps} col=${col} income=${e.income} onPick=${pick} />
         <p class="help" style="margin:10px 0 0">Pointillés : le montant prévu. Touche une barre pour revoir cette période.</p></section>`}
@@ -5468,7 +5539,7 @@ function CatSheet({id, parent, close}) {
   const c0 = id ? cat(id) : null;
   const [f, setF] = useState(() => c0 ? {...c0} : {name: "", icon: null, color: parent ? cat(parent)?.color : COLORS[0], parent: parent || null, type: parent ? cat(parent)?.type : "dep"});
   const set = (k, v) => setF(o => ({...o, [k]: v}));
-  const used = id ? Object.values(A().tx).filter(t => (t.splits || []).some(s => s.cat === id || s.cat2 === id)).length : 0;
+  const used = id ? Object.values(A().tx).filter(t => (t.splits || []).some(s => s.cat === id || s.cat2 === id || (s.arr || []).some(x => x.cat === id))).length : 0;
   const save = () => { if (!f.name.trim()) return; Store.put({...f, k: "cat", id: c0?.id || "cat_" + slug(f.name) + "_" + Math.random().toString(36).slice(2, 5), name: f.name.trim().toLowerCase()}); close(); };
   return html`<${Sheet} title=${c0 ? "Catégorie" : "Nouvelle catégorie"} close=${close} right=${html`<button class="link" onClick=${save}>Enregistrer</button>`}>
     <div style="display:flex;gap:12px;align-items:flex-end"><${CatGlyph} k=${(CAT_IC[f.icon] && f.icon) || guessIc(f.name) || (f.parent && catIc(f.parent)) || "tag"} col=${f.color || (f.parent && catColor(f.parent)) || "#8A93AD"} box=${52} s=${28} /><div style="flex:1"><${Field} label="Nom" id="ct-n"><input id="ct-n" value=${f.name} onInput=${e => set("name", e.target.value)} /></${Field}></div></div>
@@ -5477,7 +5548,7 @@ function CatSheet({id, parent, close}) {
     <${Field} label="Dans" id="ct-p"><select id="ct-p" value=${f.parent || ""} onChange=${e => set("parent", e.target.value || null)}><option value="">Catégorie principale</option>${topCats().filter(c => c.id !== id).map(c => html`<option value=${c.id}>${c.name}</option>`)}</select></${Field}>
     ${!f.parent && html`<${Seg} v=${f.type || "dep"} set=${v => set("type", v)} opts=${[["dep", "Dépenses"], ["rev", "Revenus"], ["both", "Les deux"]]} />`}
     <button class="btn pri" onClick=${save}>Enregistrer</button>
-    ${c0 && html`<button class="btn danger" onClick=${() => confirmIt("Supprimer cette catégorie ?", used ? `${used} opérations deviendront « sans catégorie ».` : "Elle n'est utilisée par aucune opération.", "Supprimer", async () => { close(); const ops = Object.values(A().tx).filter(t => (t.splits || []).some(s => s.cat === id || s.cat2 === id)).map(t => ["put", {...t, splits: t.splits.map(s => s.cat === id || s.cat2 === id ? {...s, ...(s.cat === id ? {cat: null} : {}), ...(s.cat2 === id ? {cat2: null} : {})} : s)}]); ops.push(...kids(id).map(k => ["put", {...k, parent: null}]), ...Object.values(A().bud).filter(b => b.cat === id).map(b => ["del", b]), ["del", c0]); await Store.bulk(ops); })}>Supprimer</button>`}
+    ${c0 && html`<button class="btn danger" onClick=${() => confirmIt("Supprimer cette catégorie ?", used ? `${used} opérations deviendront « sans catégorie ».` : "Elle n'est utilisée par aucune opération.", "Supprimer", async () => { close(); const ops = Object.values(A().tx).filter(t => (t.splits || []).some(s => s.cat === id || s.cat2 === id || (s.arr || []).some(x => x.cat === id))).map(t => ["put", {...t, splits: t.splits.map(s => s.cat === id || s.cat2 === id || (s.arr || []).some(x => x.cat === id) ? {...s, ...(s.cat === id ? {cat: null} : {}), ...(s.cat2 === id ? {cat2: null} : {}), ...((s.arr || []).some(x => x.cat === id) ? {arr: s.arr.filter(x => x.cat !== id)} : {})} : s)}]); ops.push(...kids(id).map(k => ["put", {...k, parent: null}]), ...Object.values(A().bud).filter(b => b.cat === id).map(b => ["del", b]), ["del", c0]); await Store.bulk(ops); })}>Supprimer</button>`}
   </${Sheet}>`;
 }
 function RulesView() {
