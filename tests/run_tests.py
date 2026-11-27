@@ -35,7 +35,7 @@ import fixture_icompta  # noqa: E402
 
 # ---------------------------------------------------------------- serveur (avec accès de test aux calculs)
 HOOK = ('window.__dbg = {A, S, Store, Hist, NAV, SHEET, occurrences, balance, amtFor, accList, today, budgets, lineAt, cardNext, cardPending, '
-        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf, parseBankText, half50, half50Due, half50Msg, halfBase, healthChecks, hKey, kidsOf, cardNext, runBal, addDays, updCheck, UPD, APP_VERSION, prItems, nextPending, fitViewport, bdgGroups, dueAsks, dueStart, dailySeries, lineMoved, lineMoves, flows, monthBilan};\n')
+        'halfBase, halfParts, halfName, halfFrom, halfJoint, halfNeedsOk, halfDate, healthChecksAll, dataChecks, lineBudget, lineActual, prOn, prMonth, glanceState, shownBal, cats, catIc, guessIc, baseAmt, envAt, lineAt, lineById, linesOf, setLineAmount, restEndOf, parseBankText, half50, half50Due, half50Msg, halfBase, healthChecks, hKey, kidsOf, cardNext, runBal, addDays, updCheck, UPD, APP_VERSION, prItems, nextPending, fitViewport, bdgGroups, dueAsks, dueStart, dailySeries, lineMoved, lineMoves, flows, monthBilan};\n')
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -2559,6 +2559,54 @@ def ventilation_categorie_cinquante(br, url):
     dec = a.js("const {T} = D.halfBase('2026-12'); return T && [T.amount, T.splits.filter(s => s.hf).length];")
     check(dec == [-25, 1], "virement 50/50 de décembre validé : %s (attendu −25, 1 moitié)" % dec)
     a.no_errors("ventilation et 50/50")
+    a.close()
+
+
+@test
+def cinquante_cinquante_date(br, url):
+    """v73 : date du remboursement 50/50 réglable (avant-dernier jour ou le N du mois suivant), dès le mois en cours s'il n'est pas validé ; les moitiés quittent l'ancienne date."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    j = a.acc_id("Joint")
+    a.js("""D.Store.put({k: 'tx', id: 'tx_v73', account: arg, date: '2026-11-12', name: 'Cinéma test', amount: -40, splits: [{amount: -40, cat: null}], st: 'saisie', half: true});""", j)
+    a.wait(500)
+    ids = a.js("const {T, M} = D.halfBase('2026-11'); return [T.id, M.id];")
+
+    def old_pair():
+        return a.js("return arg.map(id => [D.A().tx[id].date, D.A().tx[id].amount, D.A().tx[id].splits.filter(s => s.hf).length]);", ids)
+
+    def occs():
+        return sorted(a.js("return D.occurrences('2027-01-15').filter(o => o.kind === 'half' && o.date < '2026-12-31').map(o => [o.date, o.amount]);"))
+    check(old_pair() == [["2026-11-29", -50, 1], ["2026-11-29", 50, 1]], "départ : %s" % old_pair())
+
+    def setting(seg, day=None):
+        a.js("D.SHEET.open({type: 'half'});")
+        a.wait(500)
+        sh = a.pg.locator(".sheet").last
+        sh.locator('.seg button:has-text("%s")' % seg).click()
+        a.wait(200)
+        if day:
+            sh.locator("#hs-d").select_option(day)
+            a.wait(200)
+        when = sh.locator("#hs-when").inner_text() if sh.locator("#hs-when").count() else ""
+        a.pg.screenshot(path=os.path.join(OUT, "cinquante-date-%s.png" % (day or "fin")))
+        sh.locator("button.btn.pri").click()
+        a.wait(900)
+        return when
+    when = setting("Mois suivant", "1")
+    check("Novembre sera remboursé le 1er déc." in when and "le 1er de chaque mois" in when, "aperçu de la date : %s" % when)
+    dates = a.js("return [D.halfDate('2026-10'), D.halfDate('2026-11'), D.halfDate('2027-01')];")
+    check(dates == ["2026-10-30", "2026-12-01", "2027-02-01"], "dates du 50/50 : %s" % dates)
+    check(old_pair() == [["2026-11-29", -30, 0], ["2026-11-29", 30, 0]], "moitiés restées sur le 29 nov. : %s" % old_pair())
+    check(occs() == [["2026-12-01", -20], ["2026-12-01", 20]], "50/50 de novembre prévu le 1er déc. : %s" % occs())
+    setting("Mois suivant", "5")
+    check(a.js("return D.halfDate('2026-11');") == "2026-12-05", "jour 5 : %s" % a.js("return D.halfDate('2026-11');"))
+    check(occs() == [["2026-12-05", -20], ["2026-12-05", 20]], "50/50 de novembre le 5 déc. : %s" % occs())
+    when = setting("Avant-dernier jour")
+    check("le 29 nov." in when, "retour à l'avant-dernier jour : %s" % when)
+    check(old_pair() == [["2026-11-29", -50, 1], ["2026-11-29", 50, 1]], "moitiés revenues sur le 29 nov. : %s" % old_pair())
+    check(occs() == [], "opérations 50/50 prévues en trop : %s" % occs())
+    a.no_errors("date du 50/50")
     a.close()
 
 
