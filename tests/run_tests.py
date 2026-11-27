@@ -2492,6 +2492,76 @@ def real_truth(path, dates):
     return {nm: [round(db.execute(q, (aid, d)).fetchone()[0] or 0, 2) for d in dates] for aid, nm in names.items()}
 
 
+@test
+def ventilation_categorie_cinquante(br, url):
+    """v72 : catégorie d'une part virement (pastille + grille), moitiés 50/50 à part et non modifiables ; réenregistrer le virement ou l'opération de Claire, ou valider l'opération 50/50 prévue, ne double plus les moitiés."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    j = a.acc_id("Joint")
+    cs = a.js("return D.cats().filter(c => c.type !== 'rev').slice(0, 3).map(c => [c.id, c.name]);")
+    a.js("""const [j, c] = arg; D.Store.put({k: 'tx', id: 'tx_v72_a', account: j, date: '2026-11-12', name: 'Pizzeria', amount: -43, splits: [{amount: -43, cat: c[1][0]}], st: 'saisie', half: true});""", [j, cs])
+    a.wait(500)
+
+    def pair(k="2026-11"):
+        return a.js("""const {T, M} = D.halfBase(arg); return [T && T.amount, M && M.amount, T && T.splits.filter(s => s.hf).length, M && M.splits.filter(s => s.hf).length];""", k)
+    check(pair() == [-51.5, 51.5, 1, 1], "paire de départ : %s" % pair())
+    tid = a.js("return D.halfBase('2026-11').T.id;")
+    # 1. le virement : pastille de catégorie sur la part fixe, bloc 50/50 non modifiable
+    a.js("D.SHEET.open({type: 'op', kind: 'tx', src: D.A().tx[arg]});", tid)
+    a.wait(600)
+    sh = a.pg.locator(".sheet").last
+    check(sh.locator(".fhalf").count() == 1, "pas de bloc 50/50 dans la fiche du virement")
+    check(sh.locator(".fhalf-r").count() == 1 and "Pizzeria" in sh.locator(".fhalf").inner_text(), "ligne 50/50 absente : %s" % sh.locator(".fhalf").inner_text())
+    check(sh.locator('[aria-label="Montant de la part"]').count() == 1, "les moitiés 50/50 sont encore des parts modifiables")
+    check("Équilibrée" in sh.inner_text(), "ventilation pas équilibrée à l'ouverture")
+    sh.locator(".fpchip").first.click()
+    a.wait(300)
+    check(sh.locator(".fpgrid").count() == 1, "la pastille n'ouvre pas la grille des catégories")
+    sh.locator('.fpgrid .catbtn:has-text("%s")' % cs[0][1]).first.click()
+    a.wait(300)
+    check(cs[0][1] in sh.locator(".fpchip").first.inner_text(), "catégorie choisie absente de la pastille")
+    a.pg.screenshot(path=os.path.join(OUT, "ventilation-categorie-50-50.png"))
+    sh.locator('button:has-text("Enregistrer")').last.click()
+    a.wait(800)
+    fixed = a.js("return D.A().tx[arg].splits.filter(s => !s.hf).map(s => [s.amount, s.cat, s.to]);", tid)
+    check(fixed == [[-30, cs[0][0], j]], "part fixe du virement : %s" % fixed)
+    check(pair() == [-51.5, 51.5, 1, 1], "virement réenregistré : moitiés doublées %s" % pair())
+    # 2. l'opération de Claire, réenregistrée sans rien changer
+    mid = a.js("return D.halfBase('2026-11').M.id;")
+    a.js("D.SHEET.open({type: 'op', kind: 'tx', src: D.A().tx[arg]});", mid)
+    a.wait(600)
+    sh = a.pg.locator(".sheet").last
+    check("La moitié de Claire" in sh.locator(".fhalf").inner_text(), "bloc 50/50 de Claire : %s" % sh.locator(".fhalf").inner_text())
+    sh.locator('button:has-text("Enregistrer")').last.click()
+    a.wait(800)
+    check(pair() == [-51.5, 51.5, 1, 1], "opération de Claire réenregistrée : %s" % pair())
+    # 3. toucher une ligne ouvre la dépense d'origine par-dessus ; sa catégorie changée suit dans la fiche ouverte
+    a.js("D.SHEET.open({type: 'op', kind: 'tx', src: D.A().tx[arg]});", tid)
+    a.wait(600)
+    a.pg.locator(".sheet").last.locator(".fhalf-r").first.click()
+    a.wait(500)
+    check(a.pg.locator(".sheet").count() == 2 and a.pg.locator(".sheet").last.locator("#op-name").input_value() == "Pizzeria", "la ligne 50/50 n'ouvre pas la dépense d'origine")
+    a.js("D.Store.put({...D.A().tx.tx_v72_a, splits: [{amount: -43, cat: arg}]});", cs[2][0])
+    a.pg.locator(".sheet").last.locator('button:has-text("Annuler")').first.click()
+    a.wait(500)
+    check(cs[2][1] in a.pg.locator(".sheet").last.locator(".fhalf").inner_text(), "le bloc 50/50 ne suit pas la catégorie de la dépense")
+    a.pg.locator(".sheet").last.locator('button:has-text("Enregistrer")').last.click()
+    a.wait(800)
+    check(pair() == [-51.5, 51.5, 1, 1], "après changement de catégorie : %s" % pair())
+    # 4. décembre : valider l'opération 50/50 prévue (sans base) ne double plus les moitiés
+    a.js("""D.Store.put({k: 'tx', id: 'tx_v72_dec', account: arg, date: '2026-12-05', name: 'Cadeau', amount: -50, splits: [{amount: -50, cat: null}], st: 'saisie', half: true});""", j)
+    a.wait(500)
+    a.js("const o = D.occurrences('2027-01-31').find(o => o.kind === 'half' && o.amount < 0); D.SHEET.open({type: 'op', kind: 'tx', occ: o});")
+    a.wait(600)
+    check(a.pg.locator(".sheet").last.locator(".fhalf").count() == 1, "pas de bloc 50/50 dans l'opération prévue")
+    a.pg.locator(".sheet").last.locator("button.btn.pri").click()
+    a.wait(800)
+    dec = a.js("const {T} = D.halfBase('2026-12'); return T && [T.amount, T.splits.filter(s => s.hf).length];")
+    check(dec == [-25, 1], "virement 50/50 de décembre validé : %s (attendu −25, 1 moitié)" % dec)
+    a.no_errors("ventilation et 50/50")
+    a.close()
+
+
 def real_test(path):
     def vrai_fichier_icompta(br, url):
         """Vrai fichier iCompta : soldes projetés de chaque compte = iCompta (aujourd'hui → +13 mois)."""

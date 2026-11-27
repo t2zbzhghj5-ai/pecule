@@ -455,6 +455,24 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .fpart-h{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px 6px;font-size:13px;font-weight:600;color:var(--muted)}
 .fpill{font-size:12.5px;font-weight:700;border-radius:10px;padding:4px 9px}.fpill.ok{background:var(--p-mint);color:var(--pi-mint)}.fpill.bad{background:var(--p-peach);color:var(--pi-peach)}
 .fpart{display:flex;flex-direction:column}
+/* v72 : catégorie d'une part virement et bloc 50/50 de la ventilation */
+.fvent-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.fpc-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;margin-top:4px}
+.fpchip{display:inline-flex;align-items:center;gap:7px;min-height:36px;max-width:100%;border:1.5px solid transparent;border-radius:18px;background:var(--card);color:var(--ink);padding:0 12px 0 4px;font:inherit;font-size:14.5px;font-weight:600}
+.fpchip.none{background:none;border:1.5px dashed var(--muted);color:var(--muted);padding:0 12px}
+.fpchip.on{border:1.5px solid var(--ink)}
+.fpchip-t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.fpchip-c{color:var(--muted);transition:transform .2s}.fpchip.on .fpchip-c{transform:rotate(90deg)}
+.fpc-memo{font-size:12px;min-width:0}
+.fpgrid{display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:16px;background:var(--surface2);border:1px solid var(--line)}
+.fhalf{display:flex;flex-direction:column;gap:8px;background:var(--p-lilac);color:var(--pi-lilac);border-radius:22px;padding:14px 12px 12px}
+.fhalf-h{display:flex;align-items:center;gap:8px;padding:0 4px;font-size:14.5px;font-weight:700}
+.fhalf-h b{font-size:15.5px}
+.fhalf-s{font-size:12.5px;line-height:1.45;padding:0 4px}
+.fhalf-r{display:flex;align-items:center;gap:10px;border:0;border-radius:16px;background:var(--bg);color:var(--ink);padding:10px 12px 10px 8px;text-align:left;font:inherit;min-height:56px;width:100%;box-sizing:border-box}
+.fhalf-n{flex-grow:1;min-width:0;display:flex;flex-direction:column}
+.fhalf-n b{font-size:15.5px;font-weight:600}.fhalf-n span{font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fhalf-r>.amt{font-size:15.5px;font-weight:700;white-space:nowrap}
 .fpart-a{display:flex;align-items:center;gap:8px;padding:0 14px 10px 62px}
 .fpart-fx{font-size:12.5px;color:var(--muted)}
 .fpart-in{width:96px;flex:none;height:44px;border:0;border-radius:14px;background:var(--bg);color:var(--ink);font-weight:700;text-align:right;padding:0 12px;box-sizing:border-box}
@@ -1143,7 +1161,7 @@ function halfOccs(start, until) {
   };
   for (const [k, txs] of Object.entries(byM)) {
     const d = halfDate(k); if (d > until || d < addDays(start, -40)) continue;
-    const {mine: mine0, hers: hers0} = halfParts(k), strip = a => a.map(({hf, ...x}) => x), mine = strip(mine0), hers = strip(hers0), {T, M} = halfBase(k);
+    const {mine, hers} = halfParts(k), {T, M} = halfBase(k); /* v72 : les moitiés gardent leur marque hf (valider l'opération prévue ne les double plus) */
     emit("tx_half_" + k, from, "Virement au " + accName(j) + " (50/50)", mine, d, T);
     emit("tx_halfm_" + k, j, halfName(), hers, d, M);
   }
@@ -1268,7 +1286,7 @@ function calc(str) {
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
 /* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
-const APP_VERSION = 71;
+const APP_VERSION = 72;
 /* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
 const NEWS = {
   54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
@@ -1288,7 +1306,8 @@ const NEWS = {
   68: ["Valider une opération datée après aujourd'hui (un salaire versé la veille, par exemple) : Pécule te propose de la dater d'aujourd'hui pour qu'elle compte tout de suite dans le solde validé."],
   69: ["Fiche de saisie : le montant s'affiche en entier avec ses centimes (58,10 €), sans être coupé ni collé au « € »."],
   70: ["Virement entre tes comptes : une catégorie au départ et une à l'arrivée. L'argent passe d'un budget à l'autre (par exemple d'un budget de cadeaux sur un livret vers un budget de sorties sur le compte courant), sans compter comme une dépense.", "Le budget de chaque côté montre ce qu'il a reçu ou versé ; les Analyses ne comptent pas ces virements."],
-  71: ["Virement : l'arrivée peut se répartir entre plusieurs budgets (« Répartir entre plusieurs budgets »). La dernière part vide prend ce qui reste.", "Revenu : sous la catégorie, choisis s'il reste un revenu, rembourse une dépense ou alimente le budget. Pécule reprend le choix de la dernière fois pour le même libellé."]
+  71: ["Virement : l'arrivée peut se répartir entre plusieurs budgets (« Répartir entre plusieurs budgets »). La dernière part vide prend ce qui reste.", "Revenu : sous la catégorie, choisis s'il reste un revenu, rembourse une dépense ou alimente le budget. Pécule reprend le choix de la dernière fois pour le même libellé."],
+  72: ["Ventilation : une part « virement » peut avoir sa catégorie (touche la pastille sous le compte).", "Les moitiés 50/50 sont regroupées à part, calculées par Pécule : touche une ligne pour ouvrir la dépense. Enregistrer le virement 50/50 ne double plus les moitiés."]
 };
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));
@@ -4045,19 +4064,35 @@ function SplitOpts({o, set, income}) {
     <${Toggle} on=${!!o.noAvg} set=${v => set({...o, noAvg: v})} label="Exclure de la moyenne du solde" sub="Pour une dépense exceptionnelle qui fausserait la prévision par la moyenne." />
   </div>`;
 }
+/* v72 : moitiés 50/50 d'une ventilation, calculées par Pécule. Non modifiables ici : toucher une ligne ouvre la dépense d'origine
+   (sa catégorie vaut pour les deux moitiés). */
+function HalfBlock({parts, date}) {
+  const D = A(), mine = parts.some(p => p.to), j = halfJoint(), mm = Number((date || today()).slice(5, 7)) - 1;
+  const tot = r2(parts.reduce((a, p) => a + Math.abs(p.amount || 0), 0));
+  return html`<div class="fhalf" role="group" aria-label="50/50 calculé par Pécule">
+    <div class="fhalf-h"><${Ic} n="lock" s=${16} /><span class="grow">50/50 · calculé par Pécule</span><b class="amt">${fmt(tot)}</b></div>
+    <span class="fhalf-s">${mine ? "Ta moitié" : "La moitié de " + halfName()} des dépenses partagées du ${accName(j)} en ${MOIS_L[mm] || ""}.</span>
+    ${parts.map(p => { const t = p.hf && p.hf !== "adj" ? D.tx[p.hf] : null;
+      const paid = t ? r2(-(t.splits || []).filter(x => !x.to && (x.amount || 0) < 0 && (x.cat || null) === (p.cat || null)).reduce((a, x) => a + x.amount, 0)) : 0;
+      const body = html`<${CatGlyph} id=${p.cat} box=${36} s=${17} /><span class="fhalf-n"><b>${p.cat ? catName(p.cat) : "Sans catégorie"}</b><span>${p.memo || ""}${paid > 0 ? " · payé " + h50Eur(paid) : ""}</span></span><b class="amt">${fmt(Math.abs(p.amount || 0))}</b>`;
+      return t ? html`<button type="button" class="fhalf-r" aria-label=${"Ouvrir la dépense " + t.name} onClick=${() => SHEET.open({type: "op", kind: "tx", src: t})}>${body}<span class="muted" aria-hidden="true">›</span></button>` : html`<div class="fhalf-r">${body}</div>`; })}
+    <span class="fhalf-s">${mine ? "Touche une ligne pour ouvrir la dépense. Sa catégorie vaut pour les deux moitiés." : "Chaque moitié garde la catégorie de la dépense d'origine. Touche une ligne pour l'ouvrir."}</span>
+  </div>`;
+}
 function OpSheet({kind, src, occ, acc, preset, close}) {
   const isSch = kind === "sch";
   const base = src || occ || null;
   const accs = accList();
   const defAcc = acc || (accs.find(inCash) || accs[0])?.id;
   const init = base ? clone(base) : {account: defAcc, date: today(), next: today(), name: "", amount: 0, splits: [{cat: null, amount: 0}], st: "saisie", pay: "cb", ...(preset?.tx || {})};
-  const sp0 = init.splits || [];
-  const tr0 = sp0.length === 1 && !!sp0[0].to;
+  const spAll = init.splits || [], hf0 = spAll.filter(s => s.hf), sp0 = spAll.filter(s => !s.hf);
+  /* v72 : les moitiés 50/50 (hf) sont calculées par Pécule : affichées à part, jamais modifiées ni perdues par la fiche */
+  const tr0 = !hf0.length && sp0.length === 1 && !!sp0[0].to;
   const [mode, setMode] = useState(preset?.mode || (tr0 ? "transfer" : init.amount > 0 ? "income" : "expense"));
   const [f, setF] = useState(() => ({
     name: init.name || "", date: isSch ? (preset?.next || init.next || today()) : init.date, account: init.account || defAcc,
     to: tr0 ? sp0[0].to : "", amt: amtStr(init.amount), cat: sp0.length === 1 ? sp0[0].cat || null : null, cat2: tr0 ? sp0[0].cat2 || (sp0[0].arr?.[0]?.cat || null) : null, c2t: false, arrOn: !!(tr0 && sp0[0].arr?.length > 1), arr: tr0 && sp0[0].arr?.length > 1 ? sp0[0].arr.map(x => ({cat: x.cat || null, amt: amtStr(x.amount)})) : [], mt: !!base,
-    split: sp0.length > 1, splits: sp0.map(s => ({cat: s.cat || null, to: s.to || "", tr: !!s.to, amt: partStr(s.amount * (init.amount > 0 ? 1 : -1)), memo: s.memo || "", bm: s.bm || 0, nobud: !!s.nobud, refund: !!s.refund, feed: !!s.feed, noRep: !!s.noRep, noAvg: !!s.noAvg, owner: s.owner || null, bdg: s.bdg || null})),
+    split: sp0.length > 1 || hf0.length > 0, splits: sp0.map(s => ({cat: s.cat || null, to: s.to || "", tr: !!s.to, amt: partStr(s.amount * (init.amount > 0 ? 1 : -1)), memo: s.memo || "", bm: s.bm || 0, nobud: !!s.nobud, refund: !!s.refund, feed: !!s.feed, noRep: !!s.noRep, noAvg: !!s.noAvg, owner: s.owner || null, bdg: s.bdg || null})),
     opt: (s => ({bm: s.bm || 0, nobud: !!s.nobud, refund: !!s.refund, feed: !!s.feed, noRep: !!s.noRep, noAvg: !!s.noAvg, owner: s.owner || null, bdg: s.bdg || null}))(sp0[0] || {}), vdate: init.vdate || "", payee: init.payee || "", project: init.project || "", hl: init.hl || "", more: !!(init.vdate || init.project || init.hl || init.payee || init.comment || init.shares?.length || init.repay || init.num || (init.st && init.st !== "saisie" && !(base && base.virtual)) || (sp0[0] && (sp0[0].bm || sp0[0].nobud || sp0[0].refund || sp0[0].noRep))),
     pay: init.pay || "cb", num: init.num || "", comment: init.comment || "", st: init.st || "saisie", st2: init.st2 || "saisie",
     shares: init.shares || [], repay: init.repay || "", half: !!init.half, prorata: !!init.prorata, rep: false, freq: init.freq || {n: 1, u: "m"}, offM: init.offM || [], end: init.end || "", left: init.left ?? "",
@@ -4086,7 +4121,12 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
   const modeOpt = m => ({refund: m === "refund", feed: m === "feed"});
   const setIncCat = v => setF(x => { const m = !x.mt && v ? lastMode(x.name, v) : null; return {...x, cat: v, ...(m ? {opt: {...x.opt, ...modeOpt(m)}} : {})}; });
   const sg = mode === "income" ? 1 : -1;
-  const splitSum = r2(f.splits.reduce((s, x) => s + (calc(x.amt) || 0), 0));
+  /* Moitiés 50/50 à jour (la dépense d'origine peut changer pendant que la fiche est ouverte) */
+  const hfNow = () => { if (!hf0.length) return []; if (base && !base.virtual) return (A().tx[base.id]?.splits || spAll).filter(s => s.hf);
+    const m = /^tx_half(m?)_(\d{4}-\d{2})$/.exec(base?.id || ""); if (m) { const hp = halfParts(m[2]); return m[1] ? hp.hers : hp.mine; } return hf0; };
+  const hfP = hfNow(), hfSum = r2(hfP.reduce((a, x) => a + sg * (x.amount || 0), 0)), hfRef = useRef(null);
+  useEffect(() => { const was = hfRef.current; hfRef.current = hfSum; if (was !== null && Math.abs(was - hfSum) > .004) setF(x => ({...x, amt: amtStr(r2((calc(x.amt) || 0) + hfSum - was))})); }, [hfSum]);
+  const splitSum = r2(f.splits.reduce((s, x) => s + (calc(x.amt) || 0), 0) + hfSum);
   const locked = !isSch && base && !base.virtual && (base.st === "verrouillee");
   const per = people();
 
@@ -4123,7 +4163,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
       splits = [{to: f.to, amount: -total, ...(f.cat ? {cat: f.cat} : {}), ...(arr && arr.length > 1 ? {arr} : one ? {cat2: one} : f.cat2 && !noArr && !f.arrOn ? {cat2: f.cat2} : {}), ...(f.cat && f.opt?.bdg ? {bdg: f.opt.bdg} : {})}];
     } else if (f.split) {
       if (f.splits.some(s => s.tr && (calc(s.amt) || 0) && (!s.to || s.to === f.account))) return setErr("Choisis le compte de chaque virement de la ventilation.");
-      splits = f.splits.map(s => { const v = calc(s.amt) || 0; const o = s.tr && s.to ? {to: s.to, amount: r2(sg * v), ...(s.cat ? {cat: s.cat} : {}), ...(s.bdg ? {bdg: s.bdg} : {})} : withOpt({cat: s.cat || null, amount: r2(sg * v)}, s); if (s.memo) o.memo = s.memo; return o; }).filter(s => s.amount);
+      splits = [...f.splits.map(s => { const v = calc(s.amt) || 0; const o = s.tr && s.to ? {to: s.to, amount: r2(sg * v), ...(s.cat ? {cat: s.cat} : {}), ...(s.bdg ? {bdg: s.bdg} : {})} : withOpt({cat: s.cat || null, amount: r2(sg * v)}, s); if (s.memo) o.memo = s.memo; return o; }).filter(s => s.amount), ...hfNow()];
       const sum = r2(splits.reduce((a, s) => a + sg * s.amount, 0));
       if (Math.abs(sum - total) > 0.004) return setErr(`La ventilation fait ${fmt(sum)} pour un montant de ${fmt(total)}. Écart : ${fmt(total - sum)}.`);
       amount = r2(splits.reduce((a, s) => a + s.amount, 0));
@@ -4177,7 +4217,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
     ${locked && html`<div class="banner"><${Ic} n="lock" s=${18} /><span class="grow">Verrouillée par un relevé. <button class="link" onClick=${() => { Store.put({...base, st: "pointee"}); close(); toast("Déverrouillée"); }}>Déverrouiller</button></span></div>`}
     <fieldset disabled=${locked} style="border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:16px;min-width:0">
     <div class=${"famt p-" + (mode === "income" ? "mint" : mode === "transfer" ? "sky" : "peach")}>
-      ${!(occ && occ.kind !== "sch") && html`<div class="famt-seg"><${Seg} cls=${mode === "expense" ? "exp" : mode === "income" ? "inc" : ""} v=${mode} set=${m => { setMode(m); if (m === "transfer") set("split", false); }} opts=${[["expense","Dépense"],["income","Revenu"],["transfer","Virement"]]} /></div>`}
+      ${!(occ && occ.kind !== "sch") && !hfP.length && html`<div class="famt-seg"><${Seg} cls=${mode === "expense" ? "exp" : mode === "income" ? "inc" : ""} v=${mode} set=${m => { setMode(m); if (m === "transfer") set("split", false); }} opts=${[["expense","Dépense"],["income","Revenu"],["transfer","Virement"]]} /></div>`}
       <label class="famt-l" for="op-amt">Montant</label>
       <div class="famt-v"><span class="famt-box"><span class="famt-sz" aria-hidden="true">${f.amt || "0,00"}</span><input id="op-amt" class="amount-in" inputmode="decimal" placeholder="0,00" value=${f.amt} onInput=${e => set("amt", e.target.value)} onBlur=${() => { const v = calc(f.amt); if (!isNaN(v)) set("amt", amtStr(v)); }} aria-label="Montant en euros"  /></span><span class="famt-eur" aria-hidden="true">€</span></div>
       ${/[+*/]|.-/.test(f.amt) && !isNaN(total) && html`<div class="famt-h">= ${fmt(total)}</div>`}
@@ -4229,21 +4269,23 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
     ${A().acc[f.to]?.type !== "pret" && f.to && html`<button type="button" class="link flink" onClick=${() => f.arrOn ? arrOff() : arrOn()}><${Ic} n="split" s=${16} />${f.arrOn ? "Une seule catégorie à l'arrivée" : "Répartir entre plusieurs budgets"}</button>`}
     <p class="help fside-h">${base && !base.virtual ? "Une catégorie de chaque côté : l'argent passe d'un budget à l'autre, sans compter comme une dépense." : f.arrOn ? "Chaque budget reçoit sa part. La dernière part vide prend ce qui reste." : "La catégorie d'arrivée reprend celle du départ. Change-la pour faire passer l'argent d'un budget à l'autre."}</p>`}
     ${mode !== "transfer" && !f.split && html`<button type="button" class="link flink" onClick=${startSplit}><${Ic} n="split" s=${16} />Répartir sur plusieurs catégories</button>`}
-    ${mode !== "transfer" && f.split && html`<div class="field"><span class="lb">Ventilation</span>
+    ${mode !== "transfer" && f.split && html`<div class="field"><span class="lb fvent-h">Ventilation<span class=${"pill " + (Math.abs(splitSum - (total || 0)) < 0.005 ? "ok" : "bad")}>${Math.abs(splitSum - (total || 0)) < 0.005 ? "Équilibrée" : "Reste " + fmt((total || 0) - splitSum)}</span></span>
           ${f.splits.map((s, i) => html`<div class="split">
-            ${s.tr ? html`<div style="display:flex;flex-direction:column;gap:2px;min-width:0"><select aria-label="Virement vers" value=${s.to} onChange=${e => { const n = [...f.splits]; n[i] = {...s, to: e.target.value}; set("splits", n); }}><option value="">Virement vers…</option>${accList().filter(a => a.id !== f.account).map(a => html`<option value=${a.id}>${a.name}</option>`)}</select>${(s.memo || s.cat) && html`<span class="t2" style="font-size:12px;padding-left:6px">${s.memo || catName(s.cat)}</span>`}</div>` : html`<div style="display:flex;flex-direction:column;gap:2px;min-width:0"><${CatField} v=${s.cat} set=${v => { const n = [...f.splits]; n[i] = {...s, cat: v}; set("splits", n); }} income=${mode === "income"} />${s.memo && html`<span class="t2" style="font-size:12px;padding-left:6px">${s.memo}</span>`}
+            ${s.tr ? html`<div style="display:flex;flex-direction:column;gap:2px;min-width:0"><select aria-label="Virement vers" value=${s.to} onChange=${e => { const n = [...f.splits]; n[i] = {...s, to: e.target.value}; set("splits", n); }}><option value="">Virement vers…</option>${accList().filter(a => a.id !== f.account).map(a => html`<option value=${a.id}>${a.name}</option>`)}</select>
+              <span class="fpc-row"><button type="button" class=${"fpchip" + (s.cat ? "" : " none") + (s.co ? " on" : "")} aria-expanded=${s.co ? "true" : "false"} aria-label=${s.cat ? "Catégorie de la part : " + catName(s.cat) : "Choisir une catégorie pour cette part"} onClick=${() => { const n = [...f.splits]; n[i] = {...s, co: !s.co}; set("splits", n); }}>${s.cat ? html`<${CatGlyph} id=${s.cat} box=${26} s=${14} /><span class="fpchip-t">${catName(s.cat)}</span>` : html`<${Ic} n="plus" s=${14} /><span class="fpchip-t">Catégorie</span>`}<span class="fpchip-c" aria-hidden="true">›</span></button>${s.memo && html`<span class="t2 fpc-memo">${s.memo}</span>`}</span></div>` : html`<div style="display:flex;flex-direction:column;gap:2px;min-width:0"><${CatField} v=${s.cat} set=${v => { const n = [...f.splits]; n[i] = {...s, cat: v}; set("splits", n); }} income=${mode === "income"} />${s.memo && html`<span class="t2" style="font-size:12px;padding-left:6px">${s.memo}</span>`}
               ${mode === "income" && s.cat && cat(s.cat)?.type !== "rev" && !String(s.amt || "").trim().startsWith("-") && html`<select class=${"fmode-s m-" + incMode(s)} aria-label=${"Ce que la part " + catName(s.cat) + " fait au budget"} value=${incMode(s)} onChange=${e => { const n = [...f.splits]; n[i] = {...s, ...modeOpt(e.target.value)}; set("splits", n); }}><option value="inc">Reste un revenu</option><option value="refund">Rembourse une dépense</option><option value="feed">Alimente le budget</option></select>`}</div>`}
             ${html`<button type="button" class="ibtn plain" aria-label="Inverser le signe de la part" title="Part en négatif" style=${"font-weight:700;font-size:17px" + (String(s.amt).trim().startsWith("-") ? ";color:var(--neg)" : "")} onClick=${() => { const n = [...f.splits], v = String(s.amt || "").trim(); n[i] = {...s, amt: v.startsWith("-") ? v.slice(1) : "-" + v}; set("splits", n); }}>±</button>`}
             <input inputmode="decimal" value=${s.amt} placeholder="0,00" aria-label="Montant de la part" onInput=${e => { const n = [...f.splits]; n[i] = {...s, amt: e.target.value}; set("splits", n); }} style="text-align:right" />
-            <button type="button" class="ibtn plain" aria-label="Retirer la part" onClick=${() => { const n = f.splits.filter((_, j) => j !== i); if (n.length <= 1) setF(x => ({...x, split: false, cat: n[0]?.cat || x.cat, opt: n[0] ? {bm: n[0].bm || 0, nobud: !!n[0].nobud, refund: !!n[0].refund, feed: !!n[0].feed, noRep: !!n[0].noRep} : x.opt, splits: n})); else set("splits", n); }}><${Ic} n="x" s=${16} /></button>
+            <button type="button" class="ibtn plain" aria-label="Retirer la part" onClick=${() => { const n = f.splits.filter((_, j) => j !== i); if (n.length <= 1 && !hfP.length) setF(x => ({...x, split: false, cat: n[0]?.cat || x.cat, opt: n[0] ? {bm: n[0].bm || 0, nobud: !!n[0].nobud, refund: !!n[0].refund, feed: !!n[0].feed, noRep: !!n[0].noRep} : x.opt, splits: n})); else set("splits", n); }}><${Ic} n="x" s=${16} /></button>
           </div>
+          ${s.tr && s.co && html`<div class="fpgrid"><${CatGrid} v=${s.cat} income=${mode === "income"} onPick=${x => { const n = [...f.splits]; n[i] = {...s, cat: x, co: false, bdg: null}; set("splits", n); }} /><p class="help" style="margin:0">Avec une catégorie, la part compte dans cette catégorie sur le compte ${accName(f.account)}, comme dans iCompta. Sans catégorie, c'est un simple virement.</p></div>`}
           ${!s.tr && (f.more || s.so) && html`<button type="button" class="link" style="align-self:flex-start;font-size:13px;margin-top:-6px" onClick=${() => { const n = [...f.splits]; n[i] = {...s, so: !s.so}; set("splits", n); }}>${s.so ? "Masquer les options" : "Options de la part" + (s.bm || s.nobud || s.refund || s.noRep ? " (modifiées)" : "")}</button>`}
           ${s.so && html`<div style="padding:10px;border-radius:14px;background:var(--surface2)"><${Field} label="Note" id=${"sm" + i}><input id=${"sm" + i} value=${s.memo} onInput=${e => { const n = [...f.splits]; n[i] = {...s, memo: e.target.value}; set("splits", n); }} /></${Field}><${SplitOpts} o=${s} set=${o => { const n = [...f.splits]; n[i] = {...s, ...o}; set("splits", n); }} income=${mode === "income"} /></div>`}`)}
           <div style="display:flex;justify-content:space-between;align-items:center">
             <span style="display:flex;gap:14px;flex-wrap:wrap"><button type="button" class="link" onClick=${() => set("splits", [...f.splits, {cat: null, to: "", amt: total > 0 ? amtStr(Math.max(0, total - splitSum)) : "", memo: ""}])}>+ Ajouter une part</button>
             <button type="button" class="link" onClick=${() => set("splits", [...f.splits, {cat: null, to: "", tr: true, amt: total > 0 ? amtStr(Math.max(0, total - splitSum)) : "", memo: ""}])}>+ Ajouter un virement</button></span>
-            <span class=${"pill " + (Math.abs(splitSum - (total || 0)) < 0.005 ? "ok" : "bad")}>${Math.abs(splitSum - (total || 0)) < 0.005 ? "Équilibrée" : "Reste " + fmt((total || 0) - splitSum)}</span>
-          </div></div>`}
+          </div>
+          ${hfP.length > 0 && html`<${HalfBlock} parts=${hfP} date=${f.date} />`}</div>`}
     <div class="fhead">Options</div>
     <div class="fcard fopts">
     ${isSch ? html`
