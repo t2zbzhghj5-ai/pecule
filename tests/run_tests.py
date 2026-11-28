@@ -1168,8 +1168,111 @@ def restauration_exacte(br, url):
     a.wait(3500)
     after = a.js(snap)
     check(not a.js("return !!D.A().tx.tx_apres;"), "l'opération saisie après la sauvegarde est toujours là")
+    cp = a.pg.evaluate("() => [JSON.parse(localStorage.getItem('pecule-copie-op-info') || 'null'), (localStorage.getItem('pecule-copie-op') || '').includes('tx_apres')]")
+    check(cp[0] and cp[0]["why"] == "restauration" and cp[1], "copie d'avant la restauration : %s" % cp)
     check(set(before) == set(after), "%d différence(s) après restauration" % len(set(before) ^ set(after)))
     a.no_errors("restauration")
+    a.close()
+
+
+@test
+def securite_enregistrement_echoue(br, url):
+    """v79 : si l'enregistrement sur l'appareil échoue, un bandeau le dit tout de suite (et disparaît quand ça remarche) ; place pleine : les copies de sécurité sont retirées avant tes données."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    a.pg.evaluate("""() => { const o = Storage.prototype.setItem; window.__failSave = true;
+      Storage.prototype.setItem = function (k, v) { if (k === 'pecule-local' && window.__failSave) { const e = new Error('plein'); e.name = 'QuotaExceededError'; throw e; } return o.call(this, k, v); }; }""")
+    a.js("D.Store.put({k: 'tx', id: 'tx_se1', account: D.accList()[0].id, date: '2026-11-11', name: 'Essai', amount: -5, splits: [{amount: -5}], st: 'saisie'});")
+    a.wait(500)
+    bar = a.pg.locator(".saveerr")
+    check(bar.count() == 1 and "n'arrive plus à enregistrer" in bar.inner_text(), "bandeau absent")
+    check(bar.locator("button:has-text('Télécharger')").count() == 1, "bouton Télécharger absent")
+    a.pg.evaluate("() => { window.__failSave = false; }")
+    a.js("D.Store.put({...D.A().tx.tx_se1, name: 'Essai 2'});")
+    a.wait(500)
+    check(a.pg.locator(".saveerr").count() == 0, "bandeau toujours là alors que l'enregistrement remarche")
+    check("Essai 2" in a.pg.evaluate("() => localStorage.getItem('pecule-local')"), "pas enregistré après retour")
+    a.pg.evaluate("""() => { localStorage.setItem('pecule-copie-op', '[]'); localStorage.setItem('pecule-copie-op-info', JSON.stringify({why: 'restauration', at: '2026-11-11T10:00', count: 0}));
+      const o = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (k === 'pecule-local' && localStorage.getItem('pecule-copie-op') !== null) { const e = new Error('plein'); e.name = 'QuotaExceededError'; throw e; } return o.call(this, k, v); }; }""")
+    a.js("D.Store.put({...D.A().tx.tx_se1, name: 'Essai 3'});")
+    a.wait(500)
+    check(a.pg.locator(".saveerr").count() == 0, "place pleine : bandeau alors que les copies pouvaient être retirées")
+    st = a.pg.evaluate("() => [localStorage.getItem('pecule-local').includes('Essai 3'), localStorage.getItem('pecule-copie-op')]")
+    check(st == [True, None], "place pleine : %s" % st)
+    a.errors[:] = [e for e in a.errors if "enregistrement impossible" not in e]
+    a.no_errors("enregistrement échoué")
+    a.close()
+
+
+@test
+def securite_donnees_illisibles(br, url):
+    """v79 : des données illisibles au démarrage ne sont jamais remplacées ; écran « Récupérer » (copie à télécharger, restauration d'une sauvegarde)."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    good = a.pg.evaluate("() => localStorage.getItem('pecule-local')")
+    docs = [d for d in json.loads(good) if d.get("k") != "bak"]
+    path = os.path.join(OUT, "securite-sauvegarde.json")
+    json.dump({"app": "pecule", "version": 1, "date": "2026-11-11", "docs": docs}, open(path, "w", encoding="utf-8"), ensure_ascii=False)
+    bad = good[: len(good) // 2]
+    a.pg.evaluate("(v) => localStorage.setItem('pecule-local', v)", bad)
+    a.pg.reload()
+    a.wait(2500)
+    check("Impossible de lire tes données" in a.body(), "écran de récupération absent")
+    check(a.pg.locator('button:has-text("Réessayer")').count() == 1, "bouton Réessayer absent")
+    a.wait(1500)
+    st = a.pg.evaluate("() => [localStorage.getItem('pecule-local'), localStorage.getItem('pecule-secours')]")
+    check(st[0] == bad, "les données illisibles ont été remplacées")
+    check(st[1] == bad, "copie de secours absente")
+    with a.pg.expect_download() as dl:
+        a.pg.click("text=Télécharger la copie de mes données")
+    out = os.path.join(OUT, "securite-illisible.json")
+    dl.value.save_as(out)
+    check(open(out, encoding="utf-8").read() == bad, "copie téléchargée différente")
+    a.pg.set_input_files("#rc-r", path)
+    a.wait(600)
+    check("Remplacer par la sauvegarde du" in a.body(), "confirmation absente")
+    a.pg.click('button:has-text("Remplacer")')
+    a.wait(3000)
+    check("Impossible de lire" not in a.body(), "toujours sur l'écran de récupération")
+    n = a.js("return Object.keys(D.A().tx).length;")
+    check(n == len([d for d in docs if d["k"] == "tx"]), "opérations après restauration : %s" % n)
+    check(a.pg.evaluate("() => localStorage.getItem('pecule-secours')") == bad, "copie de secours perdue")
+    a.errors[:] = [e for e in a.errors if "données illisibles" not in e]
+    a.no_errors("données illisibles")
+    a.close()
+
+
+@test
+def securite_copies(br, url):
+    """v79 : copie avant chaque nouvelle version ; Réglages › Sauvegarde › Copies de sécurité : revenir à cet état (réversible)."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    n0 = a.js("return D.Store.all().length;")
+    a.pg.evaluate("() => localStorage.setItem('pecule-run', '78')")
+    a.pg.reload()
+    a.wait(2500)
+    info = a.pg.evaluate("() => JSON.parse(localStorage.getItem('pecule-copie-maj-info') || 'null')")
+    check(info and info["why"] == "maj" and info["from"] == 78 and info["count"] == n0 and info["at"].startswith("2026-11-11"), "copie avant la mise à jour : %s" % info)
+    check(a.pg.evaluate("() => localStorage.getItem('pecule-run')") == str(info["to"]), "version notée")
+    a.js("D.NAV.push({v: 'data'});")
+    a.wait(500)
+    row = a.pg.locator("[data-copy=maj]")
+    check(row.count() == 1 and ("Avant la mise à jour 78\u00a0→\u00a0%d" % info["to"]) in row.inner_text(), "ligne de la copie : %s" % (row.inner_text() if row.count() else None))
+    a.js("D.Store.put({k: 'tx', id: 'tx_cp1', account: D.accList()[0].id, date: '2026-11-11', name: 'Après la copie', amount: -7, splits: [{amount: -7}], st: 'saisie'});")
+    a.wait(400)
+    row.locator("button:has-text('Revenir')").click()
+    a.wait(400)
+    a.pg.locator('.sheet button:has-text("Revenir")').last.click()
+    a.wait(2500)
+    check(not a.js("return !!D.A().tx.tx_cp1;"), "l'opération saisie après la copie est toujours là")
+    op = a.pg.evaluate("() => JSON.parse(localStorage.getItem('pecule-copie-op-info') || 'null')")
+    check(op and op["why"] == "retour", "copie d'avant le retour : %s" % op)
+    a.pg.locator("[data-copy=op] button:has-text('Revenir')").click()
+    a.wait(400)
+    a.pg.locator('.sheet button:has-text("Revenir")').last.click()
+    a.wait(2500)
+    check(a.js("return !!D.A().tx.tx_cp1;"), "retour annulé : l'opération n'est pas revenue")
+    a.no_errors("copies de sécurité")
     a.close()
 
 

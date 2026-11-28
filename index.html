@@ -215,6 +215,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .mhead{font-size:13px;font-weight:600;color:var(--muted);padding:12px 16px 6px;background:var(--surface)}
 .empty{text-align:center;color:var(--muted);padding:26px 18px;font-size:15px}
 .empty b{display:block;color:var(--ink);font-family:var(--display);font-size:18px;margin-bottom:4px}
+.saveerr{position:fixed;z-index:200;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top) + 8px);width:min(560px,calc(100% - 20px));align-items:center;background:color-mix(in srgb,var(--neg) 16%,var(--surface));border:1px solid color-mix(in srgb,var(--neg) 35%,transparent)}
 .banner{border-radius:16px;padding:12px 14px;background:color-mix(in srgb,var(--sun) 26%,var(--surface));font-size:14px;display:flex;gap:10px;align-items:flex-start}
 .toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;background:var(--surface);border-radius:14px;border:1px solid var(--line);width:100%;text-align:left}
 .toggle .sw{width:46px;height:28px;border-radius:99px;background:var(--line);position:relative;flex:none;transition:background .2s}
@@ -1348,7 +1349,7 @@ function calc(str) {
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
 /* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
-const APP_VERSION = 78;
+const APP_VERSION = 79;
 /* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
 const NEWS = {
   54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
@@ -1375,7 +1376,8 @@ const NEWS = {
   75: ["50/50 : chaque dépense cochée crée ses deux lignes au jour du remboursement, ton virement vers le joint et la ligne « (50/50) » de l'autre personne. Elles suivent la dépense tant qu'elles ne sont pas validées.", "Ton virement 50/50 compte directement dans les budgets de ton compte, avec la catégorie que tu choisis. Tes opérations habituelles ne sont plus touchées."],
   76: ["50/50 : une seule paire par mois, ventilée avec une part par dépense, au lieu de deux lignes par dépense. Une fois validée, ce qui change ensuite part dans une paire « complément »."],
   77: ["50/50 : une part ajoutée à la main dans la paire du mois reste en place quand les dépenses changent."],
-  78: ["50/50 : le virement de la paire est « prévu » sur les deux comptes, comme l'autre ligne.", "50/50 : le message à envoyer annonce le montant total de la ligne, avec la part 50/50 en détail."]
+  78: ["50/50 : le virement de la paire est « prévu » sur les deux comptes, comme l'autre ligne.", "50/50 : le message à envoyer annonce le montant total de la ligne, avec la part 50/50 en détail."],
+  79: ["Sécurité des données : Pécule te prévient tout de suite si l'enregistrement échoue, et ne remplace jamais des données qu'il n'arrive pas à lire.", "Une copie de tes données est gardée avant chaque mise à jour, restauration, import ou effacement : Réglages › Sauvegarde › Copies de sécurité."]
 };
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));
@@ -1408,12 +1410,26 @@ const Store = {
     }
     clearTimeout(slow);
     this.mode = "local"; this.ready = true;
-    try { this.load(JSON.parse(localStorage.getItem("pecule-local") || "[]")); } catch {}
-    this.emit(); this.autoDone = true; setTimeout(autoRun, 300);
+    let raw = null; try { raw = localStorage.getItem(LS_MAIN); } catch {}
+    try { const l = JSON.parse(raw || "[]"); if (!Array.isArray(l)) throw new Error("format inattendu"); this.load(l); }
+    catch (e) { this.bad = {raw}; console.error("données illisibles", e); try { if (localStorage.getItem(LS_SOS) !== raw) localStorage.setItem(LS_SOS, raw); } catch {} }
+    if (!this.bad) { /* nouvelle version de l'app : copie des données telles qu'elles étaient, avant tout recalcul */
+      let run = null; try { run = localStorage.getItem(LS_RUN); } catch {}
+      if (A().set.set_main && run !== String(APP_VERSION)) { let from = Number(run) || null; if (!from) { try { from = Number(localStorage.getItem(VER_KEY)) || null; } catch {} } makeCopy("maj", {why: "maj", from: from === APP_VERSION ? null : from, to: APP_VERSION}); }
+      try { localStorage.setItem(LS_RUN, String(APP_VERSION)); } catch {}
+    }
+    this.emit(); this.autoDone = true; if (!this.bad) setTimeout(autoRun, 300);
   },
   all() { return KINDS.filter(k => k !== "bak").flatMap(k => Object.values(this.d[k])); },
   allRaw() { return KINDS.flatMap(k => Object.values(this.d[k])); },
-  saveLocal() { try { localStorage.setItem("pecule-local", JSON.stringify(this.allRaw())); } catch {} },
+  saveLocal() {
+    if (this.bad) return; /* données illisibles au démarrage : on n'écrit rien par-dessus */
+    const data = JSON.stringify(this.allRaw()); let err = null;
+    try { localStorage.setItem(LS_MAIN, data); }
+    catch (e) { err = e; if (dropCopies()) { try { localStorage.setItem(LS_MAIN, data); err = null; } catch (e2) { err = e2; } } } /* place pleine : les copies de sécurité passent après tes données */
+    const was = !!this.saveErr; this.saveErr = err ? {name: (err && err.name) || "Error"} : null;
+    if (was !== !!this.saveErr) { if (err) console.error("enregistrement impossible", err); setTimeout(() => this.emit(), 0); }
+  },
   w(id, f) {
     if (!this.col) { this.saveLocal(); return Promise.resolve(); }
     const run = async () => { for (let i = 0; ; i++) { try { return await f(); } catch (e) { if (e && e.code === "resource_exhausted" && i < 10) { await sleep(700 * (i + 1)); continue; } throw e; } } };
@@ -1429,6 +1445,34 @@ const Store = {
 };
 const A = () => Store.d;
 const S = () => A().set.set_main || {};
+
+/* ============ Filet de sécurité des données (v79) ============
+   - l'enregistrement sur l'appareil ne peut plus échouer en silence (Store.saveErr → bandeau rouge) ;
+   - des données présentes mais illisibles au démarrage ne sont jamais remplacées (Store.bad → écran « Récupérer mes données », copie dans pecule-secours) ;
+   - une copie à part (hors de pecule-local) juste avant chaque nouvelle version de l'app (« maj ») et avant chaque grosse opération (« op » :
+     restauration, import iCompta, effacement, retour à une copie). Réglages › Sauvegarde › Copies de sécurité. */
+const LS_MAIN = "pecule-local", LS_SOS = "pecule-secours", LS_RUN = "pecule-run", COPY_SLOTS = ["maj", "op"];
+const copyKey = s => "pecule-copie-" + s;
+const nowLocal = () => { const d = new Date(); return iso(d) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes()); };
+function copyInfo(slot) { try { const i = JSON.parse(localStorage.getItem(copyKey(slot) + "-info") || "null"); return i && i.at && localStorage.getItem(copyKey(slot)) ? {...i, slot} : null; } catch { return null; } }
+const copies = () => COPY_SLOTS.map(copyInfo).filter(Boolean).sort((a, b) => b.at.localeCompare(a.at));
+const copyDocs = slot => { try { const l = JSON.parse(localStorage.getItem(copyKey(slot)) || "null"); return Array.isArray(l) ? l : null; } catch { return null; } };
+function makeCopy(slot, info) {
+  const docs = Store.all(); /* sans les copies mensuelles */
+  try { localStorage.setItem(copyKey(slot), JSON.stringify(docs)); localStorage.setItem(copyKey(slot) + "-info", JSON.stringify({...info, at: nowLocal(), count: docs.length})); return true; }
+  catch (e) { try { localStorage.removeItem(copyKey(slot)); localStorage.removeItem(copyKey(slot) + "-info"); } catch {} console.warn("copie de sécurité impossible", e); return false; }
+}
+function dropCopies() { let n = 0; for (const s of COPY_SLOTS) { try { if (localStorage.getItem(copyKey(s))) n++; localStorage.removeItem(copyKey(s)); localStorage.removeItem(copyKey(s) + "-info"); } catch {} } return n; }
+const copyLabel = c => c.why === "maj" ? (c.from ? `Avant la mise à jour ${c.from}\u00a0→\u00a0${c.to}` : `Avant la version ${c.to}`) : c.why === "import" ? "Avant l'import iCompta" : c.why === "effacement" ? "Avant l'effacement" : c.why === "retour" ? "Avant le retour à une copie" : "Avant la restauration";
+const copyWhen = c => dayShort(c.at.slice(0, 10)) + " à " + Number(c.at.slice(11, 13)) + " h " + c.at.slice(14, 16);
+/* Remplace toutes les données (sauf les copies mensuelles) par docs : restauration d'un fichier ou retour à une copie */
+async function replaceAll(docs) {
+  docs = docs.filter(d => d && KINDS.includes(d.k) && d.k !== "bak");
+  const keep = new Set(docs.map(d => d.k + "|" + d.id)), same = d => JSON.stringify(A()[d.k]?.[d.id]) === JSON.stringify(d);
+  const gone = Store.all().filter(d => !keep.has(d.k + "|" + d.id));
+  await Store.bulk([...gone.map(d => ["del", d]), ...docs.filter(d => d.k !== "set" && !same(d)).map(d => ["put", d])]);
+  for (const d of docs.filter(d => d.k === "set")) if (!same(d)) await Store.put(d);
+}
 
 /* ============ Historique : annuler à tout moment ============ */
 const UI_KEYS = new Set(["prevSpan", "lastExport", "bakSnooze", "guideDone", "theme", "dashSpan", "glanceSpan", "planUntil", "mainAcc", "runMode", "hIgnore", "repAcc", "hidePlanned", "bdgAcc", "accSort", "accFlt", "txSort", "half50Sent"]);
@@ -2681,6 +2725,7 @@ async function makeBackup(force) {
 async function restoreBackup(b) {
   const data = b.docs.slice().sort((x, y) => x.part - y.part).map(d => d.data).join("");
   let docs; try { docs = JSON.parse(data); } catch { toast("Cette sauvegarde est incomplète, impossible de la restaurer"); return; }
+  makeCopy("op", {why: "restauration"});
   const keepIds = new Set(docs.map(d => d.id));
   const ops = [...Store.all().filter(d => !keepIds.has(d.id)).map(d => ["del", d]), ...docs.filter(d => KINDS.includes(d.k) && d.k !== "bak").map(d => ["put", d])];
   toast("Restauration en cours…"); await Store.bulk(ops); toast("Sauvegarde du " + dayShort(b.date) + " restaurée");
@@ -5651,14 +5696,13 @@ function DataView() {
     const file = e.target.files[0]; if (!file) return;
     try { const j = JSON.parse(await file.text()); if (j.app !== "pecule" || !Array.isArray(j.docs)) throw 0;
       confirmIt("Restaurer cette sauvegarde ?", `Tes données reviendront exactement à leur état du ${j.date ? dayShort(String(j.date).slice(0, 10)) : "jour de la sauvegarde"} (${j.docs.length} éléments). Ce qui a été saisi ou importé depuis sera effacé.`, "Restaurer", async () => {
-        toast("Restauration en cours…"); const docs = j.docs.filter(d => KINDS.includes(d.k) && d.k !== "bak"), keep = new Set(docs.map(d => d.k + "|" + d.id));
-        const gone = Store.all().filter(d => d.k !== "bak" && !keep.has(d.k + "|" + d.id));
-        await Store.bulk([...gone.map(d => ["del", d]), ...docs.filter(d => d.k !== "set").map(d => ["put", d])]); for (const d of docs.filter(d => d.k === "set")) await Store.put(d);
+        toast("Restauration en cours…"); makeCopy("op", {why: "restauration"}); await replaceAll(j.docs);
         toast("Sauvegarde restaurée"); }, false);
     } catch { toast("Ce fichier n'est pas une sauvegarde Pécule"); }
   };
   return html`<${Top} title="Sauvegarde" back /><main class="scr">
     <div class="card" style="padding:14px 16px"><div class="kv"><span>Opérations</span><span>${n}</span></div><div class="kv"><span>Comptes</span><span>${Object.keys(A().acc).length}</span></div><div class="kv"><span>Échéances</span><span>${Object.keys(A().sch).length}</span></div></div>
+    <${SafetyCopies} />
     <div class="field"><span class="lb">Sauvegardes automatiques</span>
       <div class="help">Pécule garde une copie complète de tes données au début de chaque mois, pour les 3 derniers mois, dans ton espace.</div>
       <div class="card">${backups().length ? backups().map(b => html`<div class="row"><span class="ic sm" style="background:var(--surface2)">🗂️</span><span class="grow"><div class="t1">${monthLabel(b.month)}</div><div class="t2">copie du ${dayShort(b.date)} · ${b.docs[0]?.count || "?"} éléments${b.docs.length !== b.parts ? " · incomplète" : ""}</div></span>
@@ -5670,8 +5714,49 @@ function DataView() {
     <div class="field"><span class="lb">iCompta</span><div class="help">Reprendre une base iCompta : comptes, opérations en cours, échéancier, catégories, budgets.</div><button class="btn" onClick=${() => SHEET.open({type: "icImport"})}>Importer depuis iCompta</button></div>
     <button class="btn" onClick=${() => SHEET.open({type: "export", ids: accList(true).map(a => a.id)})}>Exporter toutes les opérations (CSV, QIF, OFX)</button>
     <${Field} label="Restaurer une sauvegarde" id="dv-r"><input id="dv-r" type="file" accept=".json,application/json" onChange=${restore} /></${Field}>
-    <button class="btn danger" onClick=${() => confirmIt("Tout effacer ?", "Comptes, opérations, échéances, budgets et réglages seront supprimés" + (STANDALONE ? " de cet appareil" : " sur tous tes appareils") + ". Fais une sauvegarde avant.", "Tout effacer", async () => { toast("Effacement…"); await Store.bulk(Store.all().filter(d => d.id !== "set_main").map(d => ["del", d])); Store.del(A().set.set_main); })}>Tout effacer</button>
+    <button class="btn danger" onClick=${() => confirmIt("Tout effacer ?", "Comptes, opérations, échéances, budgets et réglages seront supprimés" + (STANDALONE ? " de cet appareil" : " sur tous tes appareils") + ". Fais une sauvegarde avant.", "Tout effacer", async () => { toast("Effacement…"); makeCopy("op", {why: "effacement"}); await Store.bulk(Store.all().filter(d => d.id !== "set_main").map(d => ["del", d])); Store.del(A().set.set_main); })}>Tout effacer</button>
   </main>`;
+}
+function SafetyCopies() {
+  const cps = copies();
+  const back = c => confirmIt("Revenir à cet état ?", `Tes données reviendront à leur état du ${copyWhen(c)} (${c.count} éléments). L'état actuel est gardé dans une copie : tu pourras y revenir.`, "Revenir", async () => {
+    const docs = copyDocs(c.slot); if (!docs) return toast("Cette copie est illisible");
+    toast("Retour en cours…"); makeCopy("op", {why: "retour"}); await replaceAll(docs); toast("Données revenues au " + copyWhen(c)); }, false);
+  const dl = c => saveFile(`pecule-copie-${c.at.slice(0, 10)}-${c.slot}.json`, JSON.stringify({app: "pecule", version: 1, date: c.at.slice(0, 10), docs: copyDocs(c.slot) || []}, null, 1), "application/json");
+  return html`<div class="field"><span class="lb">Copies de sécurité</span>
+    <div class="help">Pécule garde aussi une copie de tes données juste avant chaque nouvelle version de l'app, et avant chaque restauration, import ou effacement. Si quelque chose ne va pas, tu peux revenir à cet état.</div>
+    <div class="card">${cps.length ? cps.map(c => html`<div class="row" data-copy=${c.slot}><span class="ic sm" style="background:var(--surface2);color:var(--accent)"><${Ic} n="shield" s=${18} /></span><span class="grow" style="min-width:0"><div class="t1" style="white-space:normal">${copyLabel(c)}</div><div class="t2" style="white-space:normal">${copyWhen(c)} · ${c.count} éléments · <button class="link" style="font-size:inherit;padding:0" onClick=${() => dl(c)}>Télécharger</button></div></span>
+      <button class="btn sm" onClick=${() => back(c)}>Revenir</button></div>`) : html`<div class="empty" style="padding:14px 16px">Aucune copie pour l'instant.</div>`}</div></div>`;
+}
+/* Données illisibles au démarrage : rien n'est remplacé sans ton choix */
+function Recover() {
+  const raw = (Store.bad && Store.bad.raw) || "", [pick, setPick] = useState(null), [msg, setMsg] = useState("");
+  const cps = copies().filter(c => copyDocs(c.slot));
+  const onFile = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    try { const j = JSON.parse(await f.text()); if (j.app !== "pecule" || !Array.isArray(j.docs)) throw 0; setMsg(""); setPick({label: "la sauvegarde du " + (j.date ? dayShort(String(j.date).slice(0, 10)) : "fichier"), docs: j.docs.filter(d => d && KINDS.includes(d.k) && d.k !== "bak")}); }
+    catch { setMsg("Ce fichier n'est pas une sauvegarde Pécule."); } };
+  const apply = () => { try { if (localStorage.getItem(LS_SOS) !== raw) localStorage.setItem(LS_SOS, raw); } catch {}
+    try { localStorage.setItem(LS_MAIN, JSON.stringify(pick.docs)); } catch { return setMsg("Enregistrement impossible sur cet appareil. Télécharge la copie de tes données et garde-la."); }
+    location.reload(); };
+  const box = "padding:16px;display:flex;flex-direction:column;gap:10px", txt = "font-size:14px;line-height:1.45";
+  return html`<div class="ob recover">
+    <h1>Pécule</h1>
+    <p class="lead">Impossible de lire tes données au démarrage.</p>
+    <div class="banner" role="alert">Elles n'ont pas été effacées : elles sont gardées de côté sur cet appareil, et rien ne sera enregistré tant que tu n'as pas choisi quoi faire.</div>
+    ${msg && html`<div class="help" style="color:var(--neg)">${msg}</div>`}
+    ${pick ? html`<div class="card" style=${box}><b>Remplacer par ${pick.label} ?</b><span class="muted" style=${txt}>${pick.docs.length} éléments. Les données illisibles restent gardées de côté sur cet appareil.</span>
+        <button class="btn pri" onClick=${apply}>Remplacer</button><button class="btn" onClick=${() => setPick(null)}>Annuler</button></div>`
+      : html`<button class="btn pri" onClick=${() => location.reload()}>Réessayer</button>
+      <div class="card" style=${box}><b>Garder une copie</b><span class="muted" style=${txt}>Télécharge ces données telles qu'elles sont, pour les garder ou les faire réparer.</span>
+        <button class="btn" onClick=${() => saveFile(`pecule-donnees-illisibles-${today()}.json`, raw, "application/json")}>Télécharger la copie de mes données</button></div>
+      <div class="card" style=${box}><b>Repartir d'une sauvegarde</b><span class="muted" style=${txt}>Choisis ton dernier fichier « pecule-sauvegarde-….json ».</span>
+        <label class="btn" style="display:flex;align-items:center;justify-content:center;cursor:pointer">Restaurer une sauvegarde<input id="rc-r" type="file" accept=".json,application/json" style="display:none" onChange=${onFile} /></label>
+        ${cps.map(c => html`<button class="btn" onClick=${() => setPick({label: "la copie « " + copyLabel(c).toLowerCase() + " » du " + copyWhen(c), docs: copyDocs(c.slot)})}>${copyLabel(c)} · ${copyWhen(c)}</button>`)}</div>`}
+  </div>`;
+}
+/* Enregistrement impossible : bandeau tant que ça dure */
+function SaveErrBar() {
+  return html`<div class="banner saveerr" role="alert"><span class="grow"><b>Pécule n'arrive plus à enregistrer sur cet appareil.</b> Ce que tu modifies maintenant sera perdu à la fermeture de l'app : télécharge une sauvegarde tout de suite.</span><button class="btn sm pri" onClick=${exportJSON}>Télécharger</button></div>`;
 }
 async function moveCat(arr, i) { const l = arr.map((x, k) => ({...x, order: k})); [l[i].order, l[i - 1].order] = [i - 1, i]; await Store.bulk([["put", l[i]], ["put", l[i - 1]]]); }
 function CatsView() {
@@ -6096,6 +6181,7 @@ function IcImport({close}) {
     catch (x) { setErr(x && x.message ? x.message : "Lecture impossible."); } setBusy(null); };
   const run = async () => {
     const ops = [];
+    if (had) makeCopy("op", {why: "import"});
     if (had) for (const k of ["acc", "tx", "sch", "bdg", "bud", "cat"]) for (const o of Object.values(A()[k] || {})) ops.push(["del", o]);
     const strip = sp => sp.map(x => { const y = {...x}; if (!opt.cat) delete y.cat; if (!opt.bdg) { delete y.bdg; delete y.bm; } return y; });
     const fixTx = o => ({...o, splits: strip(o.splits || []), ...(o.ov ? {ov: Object.fromEntries(Object.entries(o.ov).map(([k, v]) => [k, {...v, splits: strip(v.splits || [])}]))} : {})});
@@ -6356,13 +6442,15 @@ function App() {
   const hasSet = !!A().set.set_main;
   if (!NEWS_DONE && (hasSet || Store.ready)) { NEWS_DONE = true; newsBoot(hasSet); }
   { const th = S().theme; const el = document.documentElement; if (th === "light" || th === "dark") { if (el.dataset.theme !== th) el.dataset.theme = th; } else if (el.dataset.theme) delete el.dataset.theme; }
+  if (Store.bad) return html`<${Recover} /><${ToastHost} />`;
   if (Store.mode === "error") return html`<div class="ob"><h1>Pécule</h1><p class="lead">Impossible d'accéder à tes données pour le moment. Recharge la page dans un instant.</p></div>`;
   if (!hasSet && !Store.ready) return html`<div class="ob" style="align-items:center;text-align:center;padding-top:30vh"><h1>Pécule</h1><p class="lead">${Store.mode === "slow" ? "Tes données mettent du temps à arriver… vérifie ta connexion." : "Chargement de tes comptes…"}</p></div>`;
-  if (!hasSet) return html`<${Onboarding} /><${ToastHost} />`;
+  if (!hasSet) return html`<${Onboarding} />${Store.saveErr && html`<${SaveErrBar} />`}<${ToastHost} />`;
   if (S().pin && UNLOCKED !== S().pin) return html`<${LockScreen} onOk=${() => setV(x => x + 1)} />`;
   const top = stack[stack.length - 1];
   const content = top ? html`<${View} v=${top} key=${stack.length} />` : tab === "comptes" ? html`<${Accounts} />` : tab === "echeancier" ? html`<${Schedules} />` : tab === "budgets" ? html`<${Budgets} />` : tab === "analyses" ? html`<${Reports} />` : tab === "prev" ? html`<${Previsions} />` : tab === "mes" ? html`<${AccListView} asTab />` : html`<${Accounts} />`;
   return html`<div class="app">
+    ${Store.saveErr && html`<${SaveErrBar} />`}
     ${content}
     <nav class="tabbar" aria-label="Navigation"><div class="tabbar-in"><div class="side side-brand" aria-hidden="true">Pécule</div>${[...TABS.slice(0, 2), null, ...TABS.slice(2), "sep", ...TABS_SIDE].map(x => x === "sep" ? html`<div class="side side-sep"></div>` : x ? (([k, l, ic, side]) => html`<button class=${"tab" + (side ? " side" : "") + (tab === k && !top ? " on" : "")} aria-current=${tab === k && !top ? "page" : null} onClick=${() => NAV.tab(k)}><${Ic} n=${ic} s=${22} />${l}</button>`)(x) : html`<div class="tab-plus" style="position:relative"><button aria-label="Saisir" onClick=${() => SHEET.open({type: "quick"})}><${Ic} n="plus" s=${22} w=${2.6} /><span class="plus-l" aria-hidden="true">Saisir</span></button></div>`)}</div></nav>
     ${sheets.map((s, i) => html`<${SheetHost} key=${s.key} s=${s} close=${() => setSheets(x => x.filter(y => y.key !== s.key))} />`)}
@@ -6371,7 +6459,7 @@ function App() {
 }
 /* 50/50 (v75) : chaque dépense cochée a ses deux lignes (virement vers le joint, ligne de la partenaire), tenues à jour par halfSync */
 let halfT = null;
-Store.sub(() => { if (halfT) return; halfT = setTimeout(() => { halfT = null; try { jointMigrate(); halfCatMigrate(); halfSync(); prSync(); } catch (e) { console.error(e); } }, 60); });
+Store.sub(() => { if (halfT || Store.bad) return; halfT = setTimeout(() => { halfT = null; try { jointMigrate(); halfCatMigrate(); halfSync(); prSync(); } catch (e) { console.error(e); } }, 60); });
 /* Haut de l'écran : c'est #app qui défile, pas la page */
 function appTop() { const el = document.getElementById("app"); if (el) el.scrollTop = 0; }
 /* iOS décale parfois la page quand le clavier se ferme : on la remet en place pour que la barre du bas reste collée en bas */
