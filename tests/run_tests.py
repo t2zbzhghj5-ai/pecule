@@ -564,7 +564,7 @@ def cinquante_cinquante(br, url):
     a.js("""D.Store.put({k: 'tx', id: 'tx_test_dec', account: arg, date: '2026-12-05', name: 'Cadeau', amount: -50, splits: [{amount: -50, cat: null}], st: 'saisie', half: true});""", j)
     a.wait(400)
     dec = a.js("return D.occurrences('2027-01-31').filter(o => o.kind === 'half').map(o => [o.name, o.amount, o.date]);")
-    check(sorted(dec) == sorted([["Virement au Joint (50/50)", -25, "2026-12-30"], ["Claire", 25, "2026-12-30"]]), "prévues de décembre : %s" % dec)
+    check(sorted(dec) == sorted([["Virement au Joint (50/50)", -25, "2026-12-30"], ["Claire (50/50)", 25, "2026-12-30"]]), "prévues de décembre : %s" % dec)
     a.no_errors("50/50")
     a.close()
 
@@ -2538,13 +2538,13 @@ def ventilation_categorie_cinquante(br, url):
     # 3. toucher une ligne ouvre la dépense d'origine par-dessus ; sa catégorie changée suit dans la fiche ouverte
     a.js("D.SHEET.open({type: 'op', kind: 'tx', src: D.A().tx[arg]});", tid)
     a.wait(600)
-    a.pg.locator(".sheet").last.locator(".fhalf-r").first.click()
+    a.pg.locator(".sheet").last.locator(".fhalf-o").first.click()
     a.wait(500)
     check(a.pg.locator(".sheet").count() == 2 and a.pg.locator(".sheet").last.locator("#op-name").input_value() == "Pizzeria", "la ligne 50/50 n'ouvre pas la dépense d'origine")
     a.js("D.Store.put({...D.A().tx.tx_v72_a, splits: [{amount: -43, cat: arg}]});", cs[2][0])
     a.pg.locator(".sheet").last.locator('button:has-text("Annuler")').first.click()
     a.wait(500)
-    check(cs[2][1] in a.pg.locator(".sheet").last.locator(".fhalf").inner_text(), "le bloc 50/50 ne suit pas la catégorie de la dépense")
+    check(a.pg.locator(".sheet").last.locator(".fhalf .fpchip.none").count() == 1, "v74 : la moitié a pris une catégorie toute seule")
     a.pg.locator(".sheet").last.locator('button:has-text("Enregistrer")').last.click()
     a.wait(800)
     check(pair() == [-51.5, 51.5, 1, 1], "après changement de catégorie : %s" % pair())
@@ -2607,6 +2607,79 @@ def cinquante_cinquante_date(br, url):
     check(old_pair() == [["2026-11-29", -50, 1], ["2026-11-29", 50, 1]], "moitiés revenues sur le 29 nov. : %s" % old_pair())
     check(occs() == [], "opérations 50/50 prévues en trop : %s" % occs())
     a.no_errors("date du 50/50")
+    a.close()
+
+
+@test
+def cinquante_cinquante_categories_choisies(br, url):
+    """v74 : aucune catégorie d'office pour les moitiés 50/50 ; Nicolas choisit celle de sa moitié et celle de la partenaire, chacune de son côté, et elles restent."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    j = a.acc_id("Joint")
+    cs = a.js("return D.cats().filter(c => c.type !== 'rev').slice(0, 3).map(c => [c.id, c.name]);")
+    a.js("""const [j, c] = arg; D.Store.put({k: 'tx', id: 'tx_v74', account: j, date: '2026-11-12', name: 'Pizzeria', amount: -43, splits: [{amount: -43, cat: c}], st: 'saisie', half: true});""", [j, cs[0][0]])
+    a.wait(500)
+
+    def cats():
+        return a.js("""const {T, M} = D.halfBase('2026-11'); return [T.splits.filter(s => s.hf).map(s => [s.cat || null, !!s.refund]), M.splits.filter(s => s.hf).map(s => [s.cat || null, !!s.refund])];""")
+    check(cats() == [[[None, False]], [[None, False]]], "catégories d'office : %s" % cats())
+    # ta moitié : « Comme la dépense »
+    a.js("D.SHEET.open({type: 'op', kind: 'tx', src: D.A().tx[D.halfBase('2026-11').T.id]});")
+    a.wait(600)
+    sh = a.pg.locator(".sheet").last
+    sh.locator(".fhalf .fpchip").first.click()
+    a.wait(300)
+    check(sh.locator('.fhalf button:has-text("Comme la dépense")').count() == 1, "raccourci « Comme la dépense » absent")
+    sh.locator('.fhalf button:has-text("Comme la dépense")').click()
+    a.wait(300)
+    a.pg.screenshot(path=os.path.join(OUT, "cinquante-categories-choisies.png"))
+    sh.locator('button:has-text("Enregistrer")').last.click()
+    a.wait(800)
+    check(cats() == [[[cs[0][0], False]], [[None, False]]], "ta moitié : %s" % cats())
+    # la moitié de Claire : une autre catégorie, choisie dans la grille
+    a.js("D.SHEET.open({type: 'op', kind: 'tx', src: D.A().tx[D.halfBase('2026-11').M.id]});")
+    a.wait(600)
+    sh = a.pg.locator(".sheet").last
+    sh.locator(".fhalf .fpchip").first.click()
+    a.wait(300)
+    sh.locator(".fhalf .fpgrid .catbtn:has-text('%s')" % cs[1][1]).first.click()
+    a.wait(300)
+    sh.locator('button:has-text("Enregistrer")').last.click()
+    a.wait(800)
+    check(cats() == [[[cs[0][0], False]], [[cs[1][0], True]]], "moitié de Claire : %s" % cats())
+    hc = a.js("return D.A().tx.tx_v74.halfCat;")
+    check(hc == {"me": {"0": cs[0][0]}, "her": {"0": cs[1][0]}}, "choix gardés sur la dépense : %s" % hc)
+    # la dépense change (montant, catégorie) : les choix restent, les montants suivent
+    a.js("D.Store.put({...D.A().tx.tx_v74, amount: -60, splits: [{amount: -60, cat: arg}]});", cs[2][0])
+    a.wait(600)
+    check(cats() == [[[cs[0][0], False]], [[cs[1][0], True]]], "après changement de la dépense : %s" % cats())
+    amts = a.js("const {T, M} = D.halfBase('2026-11'); return [T.splits.filter(s => s.hf)[0].amount, M.splits.filter(s => s.hf)[0].amount];")
+    check(amts == [-30, 30], "montants des moitiés : %s" % amts)
+    # même choix depuis la dépense : sous « Remboursement 50/50 », ta moitié et celle de Claire
+    a.js("D.SHEET.open({type: 'op', kind: 'tx', src: D.A().tx.tx_v74});")
+    a.wait(600)
+    sh = a.pg.locator(".sheet").last
+    chips = sh.locator(".fhcat .fpchip")
+    check(chips.count() == 2 and cs[0][1] in chips.nth(0).inner_text() and cs[1][1] in chips.nth(1).inner_text(), "choix affichés dans la dépense : %s" % sh.locator(".fhcat").inner_text() if sh.locator(".fhcat").count() else "pas de choix dans la dépense")
+    chips.nth(0).click()
+    a.wait(300)
+    sh.locator(".fhcat .fpgrid .catbtn:has-text('%s')" % cs[2][1]).first.click()
+    a.wait(300)
+    a.pg.screenshot(path=os.path.join(OUT, "cinquante-categories-depense.png"))
+    sh.locator('button:has-text("Enregistrer")').last.click()
+    a.wait(900)
+    check(cats() == [[[cs[2][0], False]], [[cs[1][0], True]]], "choix changé depuis la dépense : %s" % cats())
+    # la ligne de Claire créée par Pécule s'appelle « Claire (50/50) »
+    a.js("D.Store.put({k: 'tx', id: 'tx_v74_dec', account: arg, date: '2026-12-08', name: 'Cadeau', amount: -50, splits: [{amount: -50, cat: null}], st: 'saisie', half: true});", j)
+    a.wait(500)
+    nm = a.js("return D.occurrences('2027-01-15').filter(o => o.kind === 'half' && o.date.startsWith('2026-12') && o.amount > 0).map(o => o.name);")
+    check(nm == ["Claire (50/50)"], "nom de la ligne de Claire : %s" % nm)
+    # une seule fois : les 50/50 déjà saisis avant la v74 gardent leur catégorie
+    a.js("const [j, c] = arg; D.Store.bulk([['put', {...D.S(), k: 'set', id: 'set_main', halfCatMig: false}], ['put', {k: 'tx', id: 'tx_v74_old', account: j, date: '2026-11-14', name: 'Ancien', amount: -20, splits: [{amount: -20, cat: c}], st: 'saisie', half: true}]]);", [j, cs[0][0]])
+    a.wait(800)
+    mig = a.js("return [D.A().tx.tx_v74_old.halfCat, !!D.S().halfCatMig, D.A().tx.tx_v74.halfCat.me['0']];")
+    check(mig == [{"me": {"0": cs[0][0]}, "her": {"0": cs[0][0]}}, True, cs[2][0]], "reprise des anciens 50/50 : %s" % mig)
+    a.no_errors("catégories 50/50 choisies")
     a.close()
 
 

@@ -469,10 +469,18 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .fhalf-h{display:flex;align-items:center;gap:8px;padding:0 4px;font-size:14.5px;font-weight:700}
 .fhalf-h b{font-size:15.5px}
 .fhalf-s{font-size:12.5px;line-height:1.45;padding:0 4px}
-.fhalf-r{display:flex;align-items:center;gap:10px;border:0;border-radius:16px;background:var(--bg);color:var(--ink);padding:10px 12px 10px 8px;text-align:left;font:inherit;min-height:56px;width:100%;box-sizing:border-box}
+.fhalf-r{display:flex;flex-direction:column;gap:4px;border-radius:16px;background:var(--bg);color:var(--ink);padding:8px 12px 6px 8px}
+.fhalf-l{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0}
+.fhalf-o{display:flex;align-items:center;gap:6px;border:0;background:none;color:var(--muted);font:inherit;font-size:12.5px;text-align:left;padding:4px 4px;min-height:32px;width:100%;box-sizing:border-box}
+.fhalf-r .fpgrid{margin:2px 0 6px}
+.fhcat{display:flex;flex-direction:column;gap:10px;padding:2px 14px 14px}
+.fhcat-p{display:flex;flex-direction:column;gap:8px}
+.fhcat-l{font-size:13px;font-weight:600;color:var(--muted)}
+.fhcat-r{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0}
+.fhcat-k{font-size:15px;min-width:0}
 .fhalf-n{flex-grow:1;min-width:0;display:flex;flex-direction:column}
 .fhalf-n b{font-size:15.5px;font-weight:600}.fhalf-n span{font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fhalf-r>.amt{font-size:15.5px;font-weight:700;white-space:nowrap}
+.fhalf-l>.amt{font-size:15.5px;font-weight:700;white-space:nowrap}
 .fpart-a{display:flex;align-items:center;gap:8px;padding:0 14px 10px 62px}
 .fpart-fx{font-size:12.5px;color:var(--muted)}
 .fpart-in{width:96px;flex:none;height:44px;border:0;border-radius:14px;background:var(--bg);color:var(--ink);font-weight:700;text-align:right;padding:0 12px;box-sizing:border-box}
@@ -1026,6 +1034,14 @@ function ConfirmSheet({kind, items, close}) {
 const isJoint = id => { const a = id && A().acc[id]; return !!a && !!a.joint && a.type === "courant" && !a.hidden; };
 const halfJoint = () => { const h = S().halfJoint; if (isJoint(h)) return h; return accList().find(a => isJoint(a.id))?.id || null; };
 /* Une fois, à la mise à jour : marque comme joint le compte où des dépenses 50/50 ont déjà été cochées (ou choisi dans les réglages) */
+/* v74 : une seule fois, les dépenses 50/50 existantes reçoivent comme choix la catégorie que leurs moitiés avaient jusqu'ici */
+function halfCatMigrate() {
+  const D = A(), st = S(); if (st.halfCatMig || !Object.keys(D.acc).length) return; const ops = [];
+  for (const t of Object.values(D.tx)) { if (!t.half || t.halfCat) continue; const me = {}, her = {};
+    (t.splits || []).forEach((x, i) => { if (!x.to && (x.amount || 0) < 0 && x.cat) { me[i] = x.cat; her[i] = x.cat; } });
+    if (Object.keys(me).length) ops.push(["put", {...t, halfCat: {me, her}}]); }
+  ops.push(["put", {...st, k: "set", id: "set_main", halfCatMig: true}]); Store.bulk(ops);
+}
 function jointMigrate() {
   const D = A(), st = S(); if (st.jointMig || !Object.keys(D.acc).length) return;
   if (!Object.values(D.acc).some(a => a.joint)) {
@@ -1053,8 +1069,10 @@ const isJointAcc = id => { const j = halfJoint(), a = A().acc[id]; return !!j &&
 const normN = x => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
 const halfGuess = () => memo("halfGuess", () => { const j = halfJoint(); if (!j) return null;
   const c = Object.values(A().tx).filter(t => t.account === j && t.st !== "annulee" && !t.kind && !!halfMonthOf(t.date) && (t.amount || 0) > 0 && !(t.splits || []).some(x => x.to)).sort((a, b) => b.date.localeCompare(a.date));
-  return c.length ? c[0].name.trim() : null; });
+  return c.length ? c[0].name.replace(/\s*\((50\/50|prorata)\)\s*$/i, "").trim() : null; });
 const halfName = () => S().halfName || (J()?.partner && A().per?.[J().partner]?.name) || halfGuess() || "Partenaire";
+/* v74 : la ligne de la partenaire créée par Pécule s'appelle « Marie (50/50) » (demande de Nicolas) ; une opération « Marie » déjà là reste la base */
+const halfLine = () => halfName() + " (50/50)";
 /* v73 : date du remboursement 50/50 réglable (Réglages › Remboursement 50/50). S().halfDays = [{since: "AAAA-MM", next, day}] :
    à partir du mois since, le 50/50 du mois k est remboursé le jour day du mois suivant (next) ; sinon l'avant-dernier jour du mois k (règle d'origine).
    Chaque règle ne vaut que pour les mois à partir de son since : les mois déjà remboursés gardent leur date. */
@@ -1068,30 +1086,36 @@ const dayWord = n => Number(n) === 1 ? "1er" : String(n);
 const dayShort1 = d => dayShort(d).replace(/^1(?=\s)/, "1er");
 const halfWhen = (r = halfRule(ym(today()))) => r && r.next ? "le " + dayWord(r.day) + " du mois suivant" : "l'avant-dernier jour du mois";
 /* Parts 50/50 d'un mois : ta moitié (virement vers le joint) et sa moitié (sa rentrée sur le joint). hf = opération d'origine */
+/* Moitié de la partenaire : rembourse la dépense quand sa catégorie est une catégorie de dépense (ou mixte) ; sans catégorie ou catégorie de revenus : simple revenu */
+const halfRefund = c => !!c && cat(c)?.type !== "rev";
 function halfParts(k) { return memo("hp" + k, () => {
   const D = A(), j = halfJoint(), mine = [], hers = []; if (!j) return {mine, hers};
   const txs = Object.values(D.tx).filter(t => t.half && t.st !== "annulee" && isJointAcc(t.account) && ym(t.date) === k).sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
-  for (const t of txs) for (const sp of t.splits || []) {
-    if (sp.to) continue; const v = sp.amount || 0; if (v >= 0) continue;
-    const me = r2(v / 2), her = r2(v - me), memo = `${t.name} · ${dayShort(t.date)}`;
-    mine.push({to: j, cat: sp.cat || null, amount: me, memo, hf: t.id}); hers.push({cat: sp.cat || null, amount: -her, memo, refund: true, hf: t.id});
-  }
+  /* v74 : aucune catégorie d'office (demande de Nicolas : « le tout automatique ne me convient pas ») — Pécule calcule les montants,
+     la catégorie de chaque moitié est celle choisie dans la fiche (t.halfCat, par part de la dépense : me = ta moitié, her = celle de la partenaire) */
+  for (const t of txs) (t.splits || []).forEach((sp, i) => {
+    if (sp.to) return; const v = sp.amount || 0; if (v >= 0) return;
+    const me = r2(v / 2), her = r2(v - me), memo = `${t.name} · ${dayShort(t.date)}`, hc = t.halfCat || {}, cm = hc.me?.[i] || null, ch = hc.her?.[i] || null;
+    mine.push({to: j, cat: cm, amount: me, memo, hf: t.id, hi: i}); hers.push({cat: ch, amount: -her, memo, ...(halfRefund(ch) ? {refund: true} : {}), hf: t.id, hi: i});
+  });
   for (const x of (S().halfAdj || []).filter(x => x.k === k && Number(x.amount) > 0)) { const v = r2(Number(x.amount)), memo = x.memo || "Ajout manuel"; mine.push({to: j, cat: x.cat || null, amount: -v, memo, hf: "adj"}); hers.push({cat: x.cat || null, amount: v, memo, refund: true, hf: "adj"}); }
   return {mine, hers}; }); }
 /* Virement et opération de la partenaire déjà présents le jour du remboursement (avant-dernier jour du mois, ou le jour réglé ; saisis à la main ou importés d'iCompta) :
    les nouvelles dépenses 50/50 s'y ajoutent tant qu'ils ne sont pas validés par la banque */
 function halfBase(k) { return memo("hb" + k, () => {
-  const j = halfJoint(), from = halfFrom(), d = halfDate(k), nm = normN(halfName()); if (!j || !from) return {};
+  const j = halfJoint(), from = halfFrom(), d = halfDate(k), nm = normN(halfName()), nm2 = normN(halfLine()); if (!j || !from) return {};
   const list = Object.values(A().tx).filter(t => t.date === d && t.st !== "annulee" && (!t.kind || t.kind === "half"));
   const sp = t => t.splits || [];
   const T = list.find(t => t.id === "tx_half_" + k) || list.find(t => t.account === from && sp(t).some(x => x.hf)) || list.find(t => t.account === from && sp(t).length && sp(t).every(x => x.to === j));
-  const M = list.find(t => t.id === "tx_halfm_" + k) || list.find(t => t.account === j && !sp(t).some(x => x.to) && normN(t.name) === nm);
+  const M = list.find(t => t.id === "tx_halfm_" + k) || list.find(t => t.account === j && !sp(t).some(x => x.to) && (normN(t.name) === nm || normN(t.name) === nm2));
   return {T, M}; }); }
 const halfOpen = t => !!t && !["pointee", "verrouillee"].includes(t.st) && !["pointee", "verrouillee"].includes(t.st2);
 function halfSync() {
   if (!Store.ready) return; const D = A(), j = halfJoint(), from = halfFrom(); if (!j || !from) return;
   /* v73 : date du remboursement changée → une opération 50/50 créée par Pécule (validée depuis l'échéancier, pas encore à la banque) suit la nouvelle date */
-  for (const t of Object.values(D.tx)) { const m = /^tx_half(m?)_(\d{4}-\d{2})$/.exec(t.id); if (m && halfOpen(t) && t.st !== "annulee" && t.date !== halfDate(m[2])) Store.put({...t, date: halfDate(m[2])}); }
+  for (const t of Object.values(D.tx)) { const m = /^tx_half(m?)_(\d{4}-\d{2})$/.exec(t.id); if (!m || !halfOpen(t) || t.st === "annulee") continue;
+    const o = {}; if (t.date !== halfDate(m[2])) o.date = halfDate(m[2]); if (m[1] && normN(t.name) === normN(halfName())) o.name = halfLine(); /* v74 */
+    if (Object.keys(o).length) Store.put({...t, ...o}); }
   const months = new Set();
   for (const t of Object.values(D.tx)) { if (t.half && isJointAcc(t.account)) months.add(ym(t.date)); if ((t.splits || []).some(x => x.hf)) months.add(halfMonthOf(t.date) || ym(t.date)); }
   for (const x of S().halfAdj || []) if (x.k) months.add(x.k);
@@ -1179,7 +1203,7 @@ function halfOccs(start, until) {
     const d = halfDate(k); if (d > until || d < addDays(start, -40)) continue;
     const {mine, hers} = halfParts(k), {T, M} = halfBase(k); /* v72 : les moitiés gardent leur marque hf (valider l'opération prévue ne les double plus) */
     emit("tx_half_" + k, from, "Virement au " + accName(j) + " (50/50)", mine, d, T);
-    emit("tx_halfm_" + k, j, halfName(), hers, d, M);
+    emit("tx_halfm_" + k, j, halfLine(), hers, d, M);
   }
   return out;
 }
@@ -1302,7 +1326,7 @@ function calc(str) {
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
 /* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
-const APP_VERSION = 73;
+const APP_VERSION = 74;
 /* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
 const NEWS = {
   54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
@@ -1324,7 +1348,8 @@ const NEWS = {
   70: ["Virement entre tes comptes : une catégorie au départ et une à l'arrivée. L'argent passe d'un budget à l'autre (par exemple d'un budget de cadeaux sur un livret vers un budget de sorties sur le compte courant), sans compter comme une dépense.", "Le budget de chaque côté montre ce qu'il a reçu ou versé ; les Analyses ne comptent pas ces virements."],
   71: ["Virement : l'arrivée peut se répartir entre plusieurs budgets (« Répartir entre plusieurs budgets »). La dernière part vide prend ce qui reste.", "Revenu : sous la catégorie, choisis s'il reste un revenu, rembourse une dépense ou alimente le budget. Pécule reprend le choix de la dernière fois pour le même libellé."],
   72: ["Ventilation : une part « virement » peut avoir sa catégorie (touche la pastille sous le compte).", "Les moitiés 50/50 sont regroupées à part, calculées par Pécule : touche une ligne pour ouvrir la dépense. Enregistrer le virement 50/50 ne double plus les moitiés."],
-  73: ["Remboursement 50/50 : choisis sa date dans Réglages › Compte joint › Remboursement 50/50, l'avant-dernier jour du mois ou un jour du mois suivant (par exemple le 1er)."]
+  73: ["Remboursement 50/50 : choisis sa date dans Réglages › Compte joint › Remboursement 50/50, l'avant-dernier jour du mois ou un jour du mois suivant (par exemple le 1er)."],
+  74: ["50/50 : plus de catégorie d'office pour les moitiés. Choisis celle de ta moitié et celle de l'autre moitié dans la dépense (sous « Remboursement 50/50 ») ou sur les lignes 50/50. Les 50/50 déjà saisis gardent la leur.", "La ligne de l'autre personne créée par Pécule porte « (50/50) » après son prénom."]
 };
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));
@@ -1846,7 +1871,7 @@ function bSplits(b) {
     }
     const hf = halfFrom();
     if (af && hf && af.has(hf)) for (const t of Object.values(A().tx)) { if (!t.half || t.st === "annulee" || !isJointAcc(t.account) || af.has(t.account)) continue;
-      for (const s of t.splits || []) { if (s.to || (s.amount || 0) >= 0) continue; out.push({d: t.date, cat: s.cat || null, a: r2(s.amount / 2), rf: false, t}); } }
+      (t.splits || []).forEach((s, i) => { const c = t.halfCat?.me?.[i]; if (s.to || (s.amount || 0) >= 0 || !c) return; out.push({d: t.date, cat: c, a: r2(s.amount / 2), rf: false, t}); }); }
     /* ajouts manuels 50/50 avec catégorie : ta part compte dans tes budgets */
     if (af && hf && af.has(hf) && halfJoint()) for (const x of S().halfAdj || []) { if (!x.cat || !(Number(x.amount) > 0)) continue; out.push({d: halfDate(x.k) > eom(x.k) ? eom(x.k) : halfDate(x.k), cat: x.cat, a: -r2(Number(x.amount)), rf: false, t: {id: "adj_" + x.k + x.cat, adj: true, name: x.memo || "Ajout manuel (50/50)", date: halfDate(x.k)}}); }
     return out;
@@ -4089,20 +4114,38 @@ function SplitOpts({o, set, income}) {
     <${Toggle} on=${!!o.noAvg} set=${v => set({...o, noAvg: v})} label="Exclure de la moyenne du solde" sub="Pour une dépense exceptionnelle qui fausserait la prévision par la moyenne." />
   </div>`;
 }
-/* v72 : moitiés 50/50 d'une ventilation, calculées par Pécule. Non modifiables ici : toucher une ligne ouvre la dépense d'origine
-   (sa catégorie vaut pour les deux moitiés). */
-function HalfBlock({parts, date}) {
-  const D = A(), mine = parts.some(p => p.to), j = halfJoint(), mm = Number((date || today()).slice(5, 7)) - 1;
+/* v72 : moitiés 50/50 d'une ventilation. Montants calculés par Pécule (non modifiables ici).
+   v74 : la catégorie de chaque moitié est choisie par Nicolas (pastille, vide d'office ; « Comme la dépense » en raccourci) ;
+   la ligne du dessous ouvre la dépense d'origine par-dessus. */
+function HalfBlock({parts, date, onCat}) {
+  const D = A(), mine = parts.some(p => p.to), j = halfJoint(), mm = Number((date || today()).slice(5, 7)) - 1, [open, setOpen] = useState(null);
   const tot = r2(parts.reduce((a, p) => a + Math.abs(p.amount || 0), 0));
   return html`<div class="fhalf" role="group" aria-label="50/50 calculé par Pécule">
     <div class="fhalf-h"><${Ic} n="lock" s=${16} /><span class="grow">50/50 · calculé par Pécule</span><b class="amt">${fmt(tot)}</b></div>
     <span class="fhalf-s">${mine ? "Ta moitié" : "La moitié de " + halfName()} des dépenses partagées du ${accName(j)} en ${MOIS_L[mm] || ""}.</span>
-    ${parts.map(p => { const t = p.hf && p.hf !== "adj" ? D.tx[p.hf] : null;
-      const paid = t ? r2(-(t.splits || []).filter(x => !x.to && (x.amount || 0) < 0 && (x.cat || null) === (p.cat || null)).reduce((a, x) => a + x.amount, 0)) : 0;
-      const body = html`<${CatGlyph} id=${p.cat} box=${36} s=${17} /><span class="fhalf-n"><b>${p.cat ? catName(p.cat) : "Sans catégorie"}</b><span>${p.memo || ""}${paid > 0 ? " · payé " + h50Eur(paid) : ""}</span></span><b class="amt">${fmt(Math.abs(p.amount || 0))}</b>`;
-      return t ? html`<button type="button" class="fhalf-r" aria-label=${"Ouvrir la dépense " + t.name} onClick=${() => SHEET.open({type: "op", kind: "tx", src: t})}>${body}<span class="muted" aria-hidden="true">›</span></button>` : html`<div class="fhalf-r">${body}</div>`; })}
-    <span class="fhalf-s">${mine ? "Touche une ligne pour ouvrir la dépense. Sa catégorie vaut pour les deux moitiés." : "Chaque moitié garde la catégorie de la dépense d'origine. Touche une ligne pour l'ouvrir."}</span>
+    ${parts.map((p, n) => { const t = p.hf && p.hf !== "adj" ? D.tx[p.hf] : null, key = p.hf + ":" + p.hi + ":" + n, op = open === key, can = !!t && p.hi !== undefined;
+      const src = t ? (t.splits || [])[p.hi] : null, ecat = src && src.cat ? src.cat : null;
+      const paid = src ? r2(-(src.amount || 0)) : 0, pick = c => { setOpen(null); onCat && onCat(p, c); };
+      const chip = can ? html`<button type="button" class=${"fpchip" + (p.cat ? "" : " none") + (op ? " on" : "")} aria-expanded=${op ? "true" : "false"} aria-label=${p.cat ? "Catégorie de la moitié : " + catName(p.cat) : "Choisir la catégorie de cette moitié"} onClick=${() => setOpen(op ? null : key)}>${p.cat ? html`<${CatGlyph} id=${p.cat} box=${26} s=${14} /><span class="fpchip-t">${catName(p.cat)}</span>` : html`<${Ic} n="plus" s=${14} /><span class="fpchip-t">Catégorie</span>`}<span class="fpchip-c" aria-hidden="true">›</span></button>`
+        : html`<span class="fhalf-n"><b>${p.cat ? catName(p.cat) : "Sans catégorie"}</b></span>`;
+      return html`<div class="fhalf-r">
+        <div class="fhalf-l">${chip}<b class="amt">${fmt(Math.abs(p.amount || 0))}</b></div>
+        ${t ? html`<button type="button" class="fhalf-o" aria-label=${"Ouvrir la dépense " + t.name} onClick=${() => SHEET.open({type: "op", kind: "tx", src: t})}><span class="grow">${p.memo || t.name}${paid > 0 ? " · payé " + h50Eur(paid) : ""}</span><span aria-hidden="true">›</span></button>` : html`<span class="fhalf-o">${p.memo || ""}</span>`}
+        ${op && html`<div class="fpgrid">${ecat && ecat !== p.cat && html`<button type="button" class="link" style="align-self:flex-start;font-size:14px" onClick=${() => pick(ecat)}>Comme la dépense : ${catName(ecat)}</button>`}<${CatGrid} v=${p.cat} income=${!mine} onPick=${pick} /></div>`}
+      </div>`; })}
+    <span class="fhalf-s">Pécule calcule les montants ; la catégorie de chaque moitié, c'est toi qui la choisis. Touche une dépense pour l'ouvrir.</span>
   </div>`;
+}
+/* v74 : dans la dépense cochée 50/50, la catégorie de chaque moitié (ta moitié, celle de la partenaire), vide d'office ; même choix que les pastilles des lignes 50/50 */
+function HalfCatPick({parts, hc, set}) {
+  const [open, setOpen] = useState(null);
+  const pick = (side, i, c) => { const n = JSON.parse(JSON.stringify(hc || {})); (n[side] ||= {})[i] = c || null; set(n); setOpen(null); };
+  return html`<div class="fhcat">${parts.map(p => html`<div class="fhcat-p">
+    ${parts.length > 1 && html`<span class="fhcat-l">${p.label}</span>`}
+    ${[["me", "Ta moitié"], ["her", "Moitié de " + halfName()]].map(([side, lbl]) => { const key = side + ":" + p.i, c = hc?.[side]?.[p.i] || null, op = open === key;
+      return html`<div class="fhcat-r"><span class="fhcat-k">${lbl}</span><button type="button" class=${"fpchip" + (c ? "" : " none") + (op ? " on" : "")} aria-expanded=${op ? "true" : "false"} aria-label=${lbl + " : " + (c ? catName(c) : "choisir une catégorie")} onClick=${() => setOpen(op ? null : key)}>${c ? html`<${CatGlyph} id=${c} box=${26} s=${14} /><span class="fpchip-t">${catName(c)}</span>` : html`<${Ic} n="plus" s=${14} /><span class="fpchip-t">Catégorie</span>`}<span class="fpchip-c" aria-hidden="true">›</span></button></div>
+      ${op && html`<div class="fpgrid">${p.cat && p.cat !== c && html`<button type="button" class="link" style="align-self:flex-start;font-size:14px" onClick=${() => pick(side, p.i, p.cat)}>Comme la dépense : ${catName(p.cat)}</button>`}<${CatGrid} v=${c} income=${side === "her"} onPick=${x => pick(side, p.i, x)} /></div>`}`; })}
+  </div>`)}<span class="help" style="margin:0">Pécule calcule les montants ; la catégorie de chaque moitié, c'est toi qui la choisis.</span></div>`;
 }
 function OpSheet({kind, src, occ, acc, preset, close}) {
   const isSch = kind === "sch";
@@ -4120,7 +4163,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
     split: sp0.length > 1 || hf0.length > 0, splits: sp0.map(s => ({cat: s.cat || null, to: s.to || "", tr: !!s.to, amt: partStr(s.amount * (init.amount > 0 ? 1 : -1)), memo: s.memo || "", bm: s.bm || 0, nobud: !!s.nobud, refund: !!s.refund, feed: !!s.feed, noRep: !!s.noRep, noAvg: !!s.noAvg, owner: s.owner || null, bdg: s.bdg || null})),
     opt: (s => ({bm: s.bm || 0, nobud: !!s.nobud, refund: !!s.refund, feed: !!s.feed, noRep: !!s.noRep, noAvg: !!s.noAvg, owner: s.owner || null, bdg: s.bdg || null}))(sp0[0] || {}), vdate: init.vdate || "", payee: init.payee || "", project: init.project || "", hl: init.hl || "", more: !!(init.vdate || init.project || init.hl || init.payee || init.comment || init.shares?.length || init.repay || init.num || (init.st && init.st !== "saisie" && !(base && base.virtual)) || (sp0[0] && (sp0[0].bm || sp0[0].nobud || sp0[0].refund || sp0[0].noRep))),
     pay: init.pay || "cb", num: init.num || "", comment: init.comment || "", st: init.st || "saisie", st2: init.st2 || "saisie",
-    shares: init.shares || [], repay: init.repay || "", half: !!init.half, prorata: !!init.prorata, rep: false, freq: init.freq || {n: 1, u: "m"}, offM: init.offM || [], end: init.end || "", left: init.left ?? "",
+    shares: init.shares || [], repay: init.repay || "", half: !!init.half, hc: JSON.parse(JSON.stringify(init.halfCat || {})), prorata: !!init.prorata, rep: false, freq: init.freq || {n: 1, u: "m"}, offM: init.offM || [], end: init.end || "", left: init.left ?? "",
     auto: !!init.auto, paused: !!init.paused,
   }));
   const [err, setErr] = useState("");
@@ -4149,7 +4192,14 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
   /* Moitiés 50/50 à jour (la dépense d'origine peut changer pendant que la fiche est ouverte) */
   const hfNow = () => { if (!hf0.length) return []; if (base && !base.virtual) return (A().tx[base.id]?.splits || spAll).filter(s => s.hf);
     const m = /^tx_half(m?)_(\d{4}-\d{2})$/.exec(base?.id || ""); if (m) { const hp = halfParts(m[2]); return m[1] ? hp.hers : hp.mine; } return hf0; };
-  const hfP = hfNow(), hfSum = r2(hfP.reduce((a, x) => a + sg * (x.amount || 0), 0)), hfRef = useRef(null);
+  const [hfOv, setHfOv] = useState({});
+  const hfLive = hfNow(), hfSum = r2(hfLive.reduce((a, x) => a + sg * (x.amount || 0), 0)), hfRef = useRef(null);
+  const hfP = hfLive.map(p => { const key = p.hf + ":" + p.hi; if (p.hi === undefined || !(key in hfOv)) return p; const c = hfOv[key] || null, q = {...p, cat: c};
+    if (!p.to) { delete q.refund; if (halfRefund(c)) q.refund = true; } return q; });
+  const hfCatSave = () => { const side = hfLive.some(p => p.to) ? "me" : "her", by = {};
+    for (const [key, c] of Object.entries(hfOv)) { const [id, hi] = key.split(":"), e = A().tx[id]; if (!e) continue;
+      const hc = by[id] ||= JSON.parse(JSON.stringify(e.halfCat || {})); (hc[side] ||= {})[hi] = c || null; }
+    for (const [id, hc] of Object.entries(by)) Store.put({...A().tx[id], halfCat: hc}); };
   useEffect(() => { const was = hfRef.current; hfRef.current = hfSum; if (was !== null && Math.abs(was - hfSum) > .004) setF(x => ({...x, amt: amtStr(r2((calc(x.amt) || 0) + hfSum - was))})); }, [hfSum]);
   const splitSum = r2(f.splits.reduce((s, x) => s + (calc(x.amt) || 0), 0) + hfSum);
   const locked = !isSch && base && !base.virtual && (base.st === "verrouillee");
@@ -4188,7 +4238,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
       splits = [{to: f.to, amount: -total, ...(f.cat ? {cat: f.cat} : {}), ...(arr && arr.length > 1 ? {arr} : one ? {cat2: one} : f.cat2 && !noArr && !f.arrOn ? {cat2: f.cat2} : {}), ...(f.cat && f.opt?.bdg ? {bdg: f.opt.bdg} : {})}];
     } else if (f.split) {
       if (f.splits.some(s => s.tr && (calc(s.amt) || 0) && (!s.to || s.to === f.account))) return setErr("Choisis le compte de chaque virement de la ventilation.");
-      splits = [...f.splits.map(s => { const v = calc(s.amt) || 0; const o = s.tr && s.to ? {to: s.to, amount: r2(sg * v), ...(s.cat ? {cat: s.cat} : {}), ...(s.bdg ? {bdg: s.bdg} : {})} : withOpt({cat: s.cat || null, amount: r2(sg * v)}, s); if (s.memo) o.memo = s.memo; return o; }).filter(s => s.amount), ...hfNow()];
+      splits = [...f.splits.map(s => { const v = calc(s.amt) || 0; const o = s.tr && s.to ? {to: s.to, amount: r2(sg * v), ...(s.cat ? {cat: s.cat} : {}), ...(s.bdg ? {bdg: s.bdg} : {})} : withOpt({cat: s.cat || null, amount: r2(sg * v)}, s); if (s.memo) o.memo = s.memo; return o; }).filter(s => s.amount), ...hfP];
       const sum = r2(splits.reduce((a, s) => a + sg * s.amount, 0));
       if (Math.abs(sum - total) > 0.004) return setErr(`La ventilation fait ${fmt(sum)} pour un montant de ${fmt(total)}. Écart : ${fmt(total - sum)}.`);
       amount = r2(splits.reduce((a, s) => a + s.amount, 0));
@@ -4218,10 +4268,15 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
     common.hl = f.hl || null;
     let t = {...(base && !base.virtual ? base : {}), k: "tx", id: base?.id || uid("tx"), ...common, date: f.date, st: f.st, num: f.pay === "cheque" ? f.num || null : null, repay: f.repay || null};
     if (mode === "transfer") t.st2 = f.st2; else delete t.st2;
-    if (!isSch && mode === "expense" && isJointAcc(f.account) && f.half) t.half = true; else delete t.half;
+    if (!isSch && mode === "expense" && isJointAcc(f.account) && f.half) { t.half = true;
+      /* v74 : choix des catégories des moitiés, rattachés aux parts enregistrées (index de t.splits) */
+      const idx = []; if (f.split) { let n = 0; for (const x of f.splits) { idx.push(calc(x.amt) ? n : null); if (calc(x.amt)) n++; } } else idx.push(0);
+      const hc = {}; for (const side of ["me", "her"]) for (const [i, c] of Object.entries(f.hc?.[side] || {})) { const k = idx[Number(i)]; if (c && k != null) (hc[side] ||= {})[k] = c; }
+      if (Object.keys(hc).length) t.halfCat = hc; else delete t.halfCat; } else delete t.half;
     if (occ) { t.kind = occ.kind; if (occ.sch) t.sch = occ.sch; if (occ.card) t.card = occ.card; if (occ.loanId) t.loanId = occ.loanId; }
     delete t.virtual; delete t.odate; delete t.edited;
     if (!base && mode !== "transfer" && !f.split && !f.cat) t = applyRules(t, {isNew: true});
+    if (Object.keys(hfOv).length) hfCatSave();
     if (occ) { validateOcc(occ, t); toast("Échéance validée"); }
     else Store.put(t);
     if (newlyVal(base && !base.virtual ? base : null, t)) askToday([t.id]);
@@ -4310,7 +4365,7 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
             <span style="display:flex;gap:14px;flex-wrap:wrap"><button type="button" class="link" onClick=${() => set("splits", [...f.splits, {cat: null, to: "", amt: total > 0 ? amtStr(Math.max(0, total - splitSum)) : "", memo: ""}])}>+ Ajouter une part</button>
             <button type="button" class="link" onClick=${() => set("splits", [...f.splits, {cat: null, to: "", tr: true, amt: total > 0 ? amtStr(Math.max(0, total - splitSum)) : "", memo: ""}])}>+ Ajouter un virement</button></span>
           </div>
-          ${hfP.length > 0 && html`<${HalfBlock} parts=${hfP} date=${f.date} />`}</div>`}
+          ${hfP.length > 0 && html`<${HalfBlock} parts=${hfP} date=${f.date} onCat=${(p, c) => setHfOv(o => ({...o, [p.hf + ":" + p.hi]: c}))} />`}</div>`}
     <div class="fhead">Options</div>
     <div class="fcard fopts">
     ${isSch ? html`
@@ -4332,7 +4387,8 @@ function OpSheet({kind, src, occ, acc, preset, close}) {
       ${prSchOk(f.account, mode === "transfer" ? f.to : null) && html`<${Toggle} on=${!!f.prorata} set=${v => set("prorata", v)} label="Au prorata des salaires" sub=${f.prorata ? `Comptée chaque mois dans ton virement au ${accName(halfJoint())} et la ligne ${(PR().name || "").trim() || "de l'autre personne"} (${Math.round(prRatio(ym(today())) * 100)} / ${100 - Math.round(prRatio(ym(today())) * 100)})` : "Partager cette échéance au prorata de vos salaires"} />`}`
     : html`
       ${!occ && html`<${Toggle} on=${f.st === "pointee" || f.st === "verrouillee"} set=${v => set("st", v ? "pointee" : "saisie")} label="Déjà passée à la banque" sub=${f.st === "pointee" || f.st === "verrouillee" ? "Comptée dans le solde validé" : f.st === "prevue" ? "Prévue : rien n'est encore débité" : "Comptée dans le solde validé une fois cochée"} />`}
-      ${!isSch && !occ && mode === "expense" && isJointAcc(f.account) && html`<${Toggle} on=${!!f.half} set=${v => set("half", v)} label="Remboursement 50/50" sub=${f.half ? `Moitié sur ton virement vers le joint, moitié sur « ${halfName()} », le ${dayShort1(halfDate(ym(f.date)))}.` : null} />`}
+      ${!isSch && !occ && mode === "expense" && isJointAcc(f.account) && html`<${Toggle} on=${!!f.half} set=${v => set("half", v)} label="Remboursement 50/50" sub=${f.half ? `Moitié sur ton virement vers le joint, moitié sur « ${halfName()} », le ${dayShort1(halfDate(ym(f.date))).replace(/\.$/, "")}.` : null} />
+        ${f.half && html`<${HalfCatPick} hc=${f.hc} set=${v => set("hc", v)} parts=${f.split ? f.splits.map((x, i) => ({i, cat: x.cat || null, tr: x.tr, v: calc(x.amt) || 0, label: (x.cat ? catName(x.cat) : "Part " + (i + 1)) + " · " + fmt(calc(x.amt) || 0)})).filter(x => !x.tr && x.v > 0) : [{i: 0, cat: f.cat || null}]} />`}`}
       ${!base && !occ && html`<${Toggle} on=${f.rep} set=${v => set("rep", v)} label="Répéter" sub=${f.rep ? "Devient une échéance prévue, 1re le " + dayShort(f.date) + "." : null} />
         ${f.rep && html`<div class="grid3">
           <${Field} label="Tous les" id="op-rn"><input id="op-rn" type="number" min="1" value=${f.freq.n} onInput=${e => set("freq", {...f.freq, n: e.target.value})} /></${Field}>
@@ -6289,7 +6345,7 @@ function App() {
 }
 /* 50/50 : les dépenses cochées s'ajoutent au virement et à l'opération de la partenaire du mois */
 let halfT = null;
-Store.sub(() => { if (halfT) return; halfT = setTimeout(() => { halfT = null; try { jointMigrate(); halfSync(); prSync(); } catch (e) { console.error(e); } }, 60); });
+Store.sub(() => { if (halfT) return; halfT = setTimeout(() => { halfT = null; try { jointMigrate(); halfCatMigrate(); halfSync(); prSync(); } catch (e) { console.error(e); } }, 60); });
 /* Haut de l'écran : c'est #app qui défile, pas la page */
 function appTop() { const el = document.getElementById("app"); if (el) el.scrollTop = 0; }
 /* iOS décale parfois la page quand le clavier se ferme : on la remet en place pour que la barre du bas reste collée en bas */
