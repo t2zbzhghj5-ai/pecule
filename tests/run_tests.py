@@ -2304,7 +2304,7 @@ def accueil_a_valider_solde(br, url):
 
 @test
 def comptes_solde_valide_cartes(br, url):
-    """Écran Comptes : les cartes affichent leur solde validé, comme les comptes (pas l'encours avec les opérations à valider)."""
+    """Écran Comptes (v80) : chaque carte affiche son prochain débit et sa date ; sa page garde le solde validé en tête (v48)."""
     a = App(br, url)
     a.import_ic(FICTIF)
     pg = a.pg
@@ -2315,14 +2315,55 @@ def comptes_solde_valide_cartes(br, url):
     check(abs(val - enc) > 0.004, "la carte devrait avoir une opération à valider")
     pg.evaluate("location.hash = '#mes'")
     a.wait(600)
-    row = pg.locator("button.row", has_text="Carte Joint").first.inner_text().replace("\u202f", " ").replace("\xa0", " ")
-    want = ("−" if val < 0 else "") + "{:,.2f}".format(abs(val)).replace(",", " ").replace(".", ",")
-    check(want in row, "ligne de la carte : %r (attendu le solde validé %s)" % (row, want))
+    row = pg.locator("button.arow", has_text="Carte Joint").first.inner_text().replace("\u202f", " ").replace("\xa0", " ")
+    nxt = a.js("const o = D.occurrences(D.addDays(D.today(), 40)).find(x => x.card === arg); return o ? [o.amount, o.date] : null;", c)
+    fm = lambda v: ("−" if v < 0 else "") + "{:,.2f}".format(abs(v)).replace(",", " ").replace(".", ",")
+    check(nxt and fm(nxt[0]) in row and "Débit le" in row, "ligne de la carte : %r (attendu le prochain débit %s)" % (row, nxt))
+    want = fm(val)
     a.js("D.NAV.push({v: 'acc', id: arg});", c)
     a.wait(500)
     hero = pg.inner_text("section.acc-hero").replace("\u202f", " ").replace("\xa0", " ")
     check("Solde validé" in hero and want in hero and "Encours" in hero, "en-tête de la carte : %r" % hero[:200])
     a.no_errors("comptes, solde validé des cartes")
+    a.close()
+
+
+@test
+def comptes_poches(br, url):
+    """v80 (maquette « A + B ») : écran Comptes en poches de couleur ; en haut ce qu'il y a à la banque et le débit des cartes ; plus de thème, de « Nouveau compte » ni de Personnes."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    pg.evaluate("location.hash = '#mes'")
+    a.wait(600)
+    norm = lambda s: s.replace("\u202f", " ").replace("\xa0", " ")
+    info = a.js("""const t = D.today(), occ = D.occurrences(D.addDays(t, 40)), L = D.accList();
+      const total = L.filter(x => ['courant', 'epargne', 'especes'].includes(x.type) && x.inTotal !== false).reduce((s, x) => s + D.shownBal(x), 0);
+      const deb = L.filter(x => x.type === 'carte').map(x => occ.find(o => o.card === x.id)).filter(Boolean);
+      return {total: Math.round(total * 100) / 100, deb: Math.round(deb.reduce((s, o) => s + o.amount, 0) * 100) / 100, dates: [...new Set(deb.map(o => o.date))]};""")
+    fm = lambda v: ("−" if v < 0 else "") + "{:,.2f}".format(abs(v)).replace(",", " ").replace(".", ",")
+    top = norm(pg.inner_text(".asum"))
+    check("À la banque aujourd'hui" in top and fm(info["total"]) in top, "en-tête : %r (total %s)" % (top, info["total"]))
+    check(len(info["dates"]) == 1 and "Débit des cartes le" in top and fm(info["deb"]) in top, "débit des cartes : %r %s" % (top, info))
+    body = pg.inner_text("main")
+    for bad in ["Nouveau compte", "Personnes", "Disponible"]:
+        check(bad not in body, "« %s » encore sur l'écran Comptes" % bad)
+    check(pg.locator('header [aria-label*="Apparence"]').count() == 0, "bouton du thème encore là")
+    poches = pg.locator(".apoche").evaluate_all("l => l.map(p => [p.className, p.querySelector('.arow .t1').textContent, [...p.querySelectorAll('.akids .t1')].map(x => x.textContent)])")
+    names = [x[1] for x in poches]
+    check(names[:2] == ["Courant", "Joint"], "poches : %s" % poches)
+    joint = [x for x in poches if x[1] == "Joint"][0]
+    check(set(joint[2]) == {"Carte Joint", "Carte Claire"} and all(" p-" in " " + x[0] for x in poches), "cartes du Joint ou couleur : %s" % poches)
+    sub = norm(pg.locator(".apoche", has_text="Courant").locator(".arow .t2").first.inner_text())
+    check(sub.startswith("Après le prévu, au "), "sous-titre du Courant : %r" % sub)
+    tiles = pg.locator(".atile .atn").all_inner_texts()
+    check(tiles == ["Livret", "Prêt"] and "Épargne et prêt" in body, "vignettes : %s" % tiles)
+    pret = norm(pg.locator(".atile", has_text="Prêt").inner_text())
+    check("restant dû" in pret and "−" not in pret.split("\n")[1], "prêt : %r" % pret)
+    pg.locator(".apoche", has_text="Joint").locator(".akids .arow", has_text="Carte Claire").click()
+    a.wait(500)
+    check("Carte Claire" in pg.inner_text("header"), "la carte ne s'ouvre pas")
+    a.no_errors("écran Comptes en poches")
     a.close()
 
 

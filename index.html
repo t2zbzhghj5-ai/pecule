@@ -25,7 +25,7 @@
   --p-peach:#FFE3D2; --pi-peach:#9C4313; --p-mint:#D6F2E4; --pi-mint:#11643E; --p-rose:#FFDDE4; --pi-rose:#A51F45; --pv-bar:#F0D56A; --pv-neg:#D9415F;
   --display:"Outfit",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
   --body:"Outfit",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
-  --r:22px;
+  --r:22px; --aov:rgba(255,255,255,.75); --aov2:rgba(255,255,255,.6);
   color-scheme:light;
 }
 @media (prefers-color-scheme: dark){
@@ -34,7 +34,7 @@
     --accent:#F2F3F8; --onacc:#13141D; --accent2:#8FDDB6; --hero:#2A2346; --hero2:#3A2F66; --hero-ink:#FFF1C2; --hero-muted:#FFDF7A; --sun:#FFD25E;
     --pos:#8FDDB6; --neg:#FF9FB5; --warn:#FFB98F; --low:#FFB98F; --shadow:none; --bmix:100%; --track:rgba(255,255,255,.14); --segon:#2E3044;
     --p-butter:#3A3115; --pi-butter:#FFDF7A; --pn-butter:#FFF1C2; --p-sky:#1B2A44; --pi-sky:#9EC2FF; --p-lilac:#2A2346; --pi-lilac:#C4B3FF;
-    --p-peach:#3C2517; --pi-peach:#FFB98F; --p-mint:#163427; --pi-mint:#8FDDB6; --p-rose:#3E1C26; --pi-rose:#FF9FB5; --pv-bar:#6E5C24; --pv-neg:#FF7A98;
+    --p-peach:#3C2517; --pi-peach:#FFB98F; --p-mint:#163427; --pi-mint:#8FDDB6; --p-rose:#3E1C26; --pi-rose:#FF9FB5; --pv-bar:#6E5C24; --pv-neg:#FF7A98; --aov:rgba(255,255,255,.08); --aov2:rgba(255,255,255,.06);
     color-scheme:dark;
   }
 }
@@ -43,7 +43,7 @@
   --accent:#F2F3F8; --onacc:#13141D; --accent2:#8FDDB6; --hero:#2A2346; --hero2:#3A2F66; --hero-ink:#FFF1C2; --hero-muted:#FFDF7A; --sun:#FFD25E;
   --pos:#8FDDB6; --neg:#FF9FB5; --warn:#FFB98F; --low:#FFB98F; --shadow:none; --bmix:100%; --track:rgba(255,255,255,.14); --segon:#2E3044;
   --p-butter:#3A3115; --pi-butter:#FFDF7A; --pn-butter:#FFF1C2; --p-sky:#1B2A44; --pi-sky:#9EC2FF; --p-lilac:#2A2346; --pi-lilac:#C4B3FF;
-  --p-peach:#3C2517; --pi-peach:#FFB98F; --p-mint:#163427; --pi-mint:#8FDDB6; --p-rose:#3E1C26; --pi-rose:#FF9FB5; --pv-bar:#6E5C24; --pv-neg:#FF7A98;
+  --p-peach:#3C2517; --pi-peach:#FFB98F; --p-mint:#163427; --pi-mint:#8FDDB6; --p-rose:#3E1C26; --pi-rose:#FF9FB5; --pv-bar:#6E5C24; --pv-neg:#FF7A98; --aov:rgba(255,255,255,.08); --aov2:rgba(255,255,255,.06);
   color-scheme:dark;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -369,6 +369,23 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 
 /* Maquette R : blocs pastel. .pc + --pb (fond) / --pi (texte de la couleur) posés en ligne ou par .p-xxx */
 .p-butter{--pb:var(--p-butter);--pi:var(--pi-butter)}.p-sky{--pb:var(--p-sky);--pi:var(--pi-sky)}.p-lilac{--pb:var(--p-lilac);--pi:var(--pi-lilac)}
+/* v80 : écran Comptes, maquette « A + B » : une liste claire, chaque compte dans une poche de sa couleur, ses cartes dedans */
+.asum{padding:12px 16px;display:flex;flex-direction:column;gap:2px}.asum .t2{font-size:13px;color:var(--muted)}
+.asum .asv{font-family:var(--display);font-size:28px;font-weight:700;letter-spacing:-.02em}
+.asd{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;padding-top:8px;border-top:1px solid var(--line);font-size:14px}
+.asd span{display:flex;align-items:center;gap:8px}.asd svg{color:var(--muted)}
+.apoche{background:var(--pb);border-radius:22px;padding:6px;display:flex;flex-direction:column}
+.arow{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;color:var(--ink);font:inherit;text-align:left;padding:6px 8px 8px;min-height:52px;cursor:pointer;border-radius:16px}
+.arow .grow{min-width:0;display:flex;flex-direction:column}.arow .t1,.arow .t2,.atile .t2{white-space:normal}.arow .t1{font-size:16px;font-weight:600}.arow .t2{font-size:13px;color:var(--pi)}.arow .t2 b{font-weight:700}
+.arow .amt{font-size:17px;font-weight:700;white-space:nowrap}.arow .t2.bad{color:var(--neg)}
+.aic{flex:none;width:34px;height:34px;border-radius:17px;background:var(--aov);color:var(--pi);display:flex;align-items:center;justify-content:center}
+.akids{background:var(--aov2);border-radius:16px;padding:0 12px}.akids .arow{padding:9px 0;min-height:48px;border-radius:0}
+.akids .arow+.arow{border-top:1px solid color-mix(in srgb,var(--pi) 15%,transparent)}.akids .arow svg{color:var(--pi);flex:none}
+.akids .t1{font-size:15px}.akids .arow .t2{font-size:12px;color:var(--muted)}.akids .amt{font-size:15px;font-weight:600}
+.atiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.atile{background:var(--pb);border:0;border-radius:22px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;text-align:left;color:var(--ink);font:inherit;cursor:pointer;min-width:0}
+.atn{display:flex;align-items:center;gap:6px;font-size:15px;font-weight:600;min-width:0}.atn svg{color:var(--pi);flex:none}
+.atv{font-family:var(--display);font-size:20px;font-weight:700;letter-spacing:-.02em;white-space:nowrap}.atile .t2{font-size:12px;color:var(--pi)}
 .p-peach{--pb:var(--p-peach);--pi:var(--pi-peach)}.p-mint{--pb:var(--p-mint);--pi:var(--pi-mint)}.p-rose{--pb:var(--p-rose);--pi:var(--pi-rose)}
 /* v64 : budget à plusieurs enveloppes (séjours) en pleine largeur ; choix du séjour dans la fiche */
 .bwide{grid-column:1/-1;background:var(--card);border-radius:26px;display:flex;flex-direction:column;min-width:0}
@@ -1349,7 +1366,7 @@ function calc(str) {
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
 /* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
-const APP_VERSION = 79;
+const APP_VERSION = 80;
 /* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
 const NEWS = {
   54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
@@ -1377,7 +1394,8 @@ const NEWS = {
   76: ["50/50 : une seule paire par mois, ventilée avec une part par dépense, au lieu de deux lignes par dépense. Une fois validée, ce qui change ensuite part dans une paire « complément »."],
   77: ["50/50 : une part ajoutée à la main dans la paire du mois reste en place quand les dépenses changent."],
   78: ["50/50 : le virement de la paire est « prévu » sur les deux comptes, comme l'autre ligne.", "50/50 : le message à envoyer annonce le montant total de la ligne, avec la part 50/50 en détail."],
-  79: ["Sécurité des données : Pécule te prévient tout de suite si l'enregistrement échoue, et ne remplace jamais des données qu'il n'arrive pas à lire.", "Une copie de tes données est gardée avant chaque mise à jour, restauration, import ou effacement : Réglages › Sauvegarde › Copies de sécurité."]
+  79: ["Sécurité des données : Pécule te prévient tout de suite si l'enregistrement échoue, et ne remplace jamais des données qu'il n'arrive pas à lire.", "Une copie de tes données est gardée avant chaque mise à jour, restauration, import ou effacement : Réglages › Sauvegarde › Copies de sécurité."],
+  80: ["Écran Comptes plus clair : chaque compte dans une poche de sa couleur, avec ce qu'il restera après le prévu ; chaque carte avec son prochain débit.", "En haut : ce que tu as à la banque aujourd'hui, et ce que les cartes prendront à leur prochain débit."]
 };
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));
@@ -3048,12 +3066,6 @@ function Ring({pct, size = 54, stroke = 6, color = "var(--accent)", children}) {
     <svg width=${size} height=${size} style="position:absolute;inset:0;transform:rotate(-90deg)" aria-hidden="true"><circle cx=${size / 2} cy=${size / 2} r=${r} fill="none" stroke="var(--surface2)" stroke-width=${stroke} /><circle cx=${size / 2} cy=${size / 2} r=${r} fill="none" stroke=${color} stroke-width=${stroke} stroke-linecap="round" stroke-dasharray=${`${c * p} ${c}`} /></svg>
     <span style="position:relative;font-size:12px;font-weight:800">${children}</span></span>`;
 }
-function MiniSpark({ser, color}) {
-  if (!ser || ser.length < 2) return null;
-  const W = 42, H = 24, v = ser.map(p => p[1]); let mn = Math.min(...v), mx = Math.max(...v); if (mx - mn < 1) { mx += 1; mn -= 1; }
-  const pts = ser.map((p, i) => [i * W / (ser.length - 1), 3 + (H - 6) * (1 - (p[1] - mn) / (mx - mn))]);
-  return html`<svg width=${W} height=${H} viewBox=${`0 0 ${W} ${H}`} aria-hidden="true" style="flex:none"><path d=${smoothPath(pts)} fill="none" stroke=${color} stroke-width="1.8" stroke-linecap="round" /><circle cx=${pts[pts.length - 1][0] - 1} cy=${pts[pts.length - 1][1]} r="2.4" fill=${color} /></svg>`;
-}
 const BUD_COLORS = ["#2F6FED","#F0A52E","#13A38A","#E3579A","#7B61FF","#F2643D","#0EA5C6","#3BA55C","#D2486E","#B7791F"];
 /* Maquette R : famille pastel la plus proche d'une couleur (budget, catégorie) */
 function pfam(col) {
@@ -3333,25 +3345,6 @@ function GlanceBudgets() {
   const id = mainAcc(); if (!id) return null; const g = glanceState(id);
   return html`<${BudgetCursors} id=${id} cardIds=${g.cardIds} card />`;
 }
-function AccRowG({a}) {
-  const t = today(), b = shownBal(a), E = restEndOf(a);
-  const eomB = r2(balance(a.id, {upTo: E}) + occurrences(E).reduce((s, o) => s + amtFor(o, a.id), 0));
-  let sub, trend = null;
-  if (a.type === "carte") { const nx = occurrences(addDays(t, 40)).find(o => o.card === a.id); sub = nx ? `débit le ${dayShort(nx.date)} · ${fmt0(-nx.amount)}` : "rien à débiter"; }
-  else if (a.type === "pret") sub = (() => { const lp = loanPlan(a); return lp && isFinite(lp.n) ? `${lp.n} mensualités restantes` : "capital restant dû"; })();
-  else { const d = r2(eomB - b); trend = d; sub = `au ${dayShort(E)} · ${fmt0(eomB)}`; }
-  const low = (a.warn != null && a.warn !== "" && eomB < Number(a.warn)) || (inCash(a) && eomB < 0);
-  const ser = a.type === "pret" ? null : dailySeries([a.id], addDays(t, -21), E);
-  const scol = low ? "var(--neg)" : trend != null && trend < 0 ? "var(--muted)" : "var(--accent)";
-  return html`<button class="row" onClick=${() => NAV.push({v: "acc", id: a.id})}>
-    <${AccIcon} a=${a} /><span class="grow"><div class="t1">${a.name}</div><div class=${"t2" + (low ? " bad" : "")}>${trend != null ? (trend >= 0 ? "↗ " : "↘ ") : ""}${sub}</div></span>
-    <${MiniSpark} ser=${ser} color=${scol} />
-    <span class="amt">${fmt(a.type === "pret" ? -b : b)}</span></button>`;
-}
-
-const THEME_NEXT = {auto: "light", light: "dark", dark: "auto"};
-const THEME_LBL = {auto: "Apparence automatique", light: "Apparence claire", dark: "Apparence sombre"};
-const THEME_ICON = {auto: "M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18zM12 3v18M12 7.5h4.5M12 12h6M12 16.5h4.5", light: "M12 3v2M12 19v2M5.6 5.6L7 7M17 17l1.4 1.4M3 12h2M19 12h2M5.6 18.4L7 17M17 7l1.4-1.4M12 8a4 4 0 1 0 0 8a4 4 0 0 0 0-8z", dark: "M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"};
 const ALL_IC = html`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5" /><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" /><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" /><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5" /></svg>`;
 function AccPill({cur, onPick, allLbl, keep}) {
   const main = cur !== undefined ? cur : mainAcc(), a = main && A().acc[main];
@@ -3479,8 +3472,11 @@ function Previsions() {
 }
 function AccListView({asTab}) {
   const [edit, setEdit] = useState(false);
-  const accs = accList(), per = people();
+  const accs = accList(), t = today();
   const total = r2(accs.filter(a => inTotal(a) && ["courant", "epargne", "especes"].includes(a.type)).reduce((s, a) => s + shownBal(a), 0));
+  /* prochain débit de chaque carte, et total par date de débit (en haut de l'écran) */
+  const occ = occurrences(addDays(t, 40)), nx = {}, deb = {};
+  for (const c of accs) if (c.type === "carte") { const n = occ.find(o => o.card === c.id); if (n) { nx[c.id] = n; const x = deb[n.date] ||= {amt: 0, n: 0}; x.amt = r2(x.amt + n.amount); x.n++; } }
   /* Réorganiser comme on le voit : un compte se déplace parmi ceux de son groupe (avec ses cartes), une carte parmi les cartes de son compte */
   const sibsOf = a => { const vis = accList(), tops = vis.filter(x => !isKid(vis, x)); return isKid(vis, a) ? kidsOf(vis, a.linked) : (accGroups(tops).find(g => g.list.some(x => x.id === a.id))?.list || []); };
   const move = async (a, dir) => {
@@ -3494,20 +3490,54 @@ function AccListView({asTab}) {
   };
   const editRow = a => { const sib = sibsOf(a), i = sib.findIndex(x => x.id === a.id); return html`<div class="row"><${AccIcon} a=${a} /><span class="grow t1">${a.name}</span><button class="ibtn plain" aria-label=${"Monter " + a.name} disabled=${i <= 0} onClick=${() => move(a, -1)}>↑</button><button class="ibtn plain" aria-label=${"Descendre " + a.name} disabled=${i < 0 || i >= sib.length - 1} onClick=${() => move(a, 1)}>↓</button></div>`; };
   return html`
-    <${Top} title=${asTab ? "Comptes" : "Mes comptes"} sub=${"Disponible " + fmt(total) + " (comptes et épargne)"} back=${!asTab} right=${edit ? html`<button class="ibtn" aria-label="Terminer la réorganisation" onClick=${() => setEdit(false)}><${Ic} n="check" /></button>` : html`<span style="display:flex;gap:6px">${(th => html`<button class="ibtn" aria-label=${THEME_LBL[th] + " (toucher pour changer)"} onClick=${() => Store.put({...S(), k: "set", id: "set_main", theme: THEME_NEXT[th]})}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d=${THEME_ICON[th]} /></svg></button>`)(S().theme || "auto")}<button class="ibtn" aria-label="Réglages" onClick=${() => NAV.push({v: "settings"})}><${Ic} n="gear" /></button></span>`} />
+    <${Top} title=${asTab ? "Comptes" : "Mes comptes"} back=${!asTab} right=${edit ? html`<button class="ibtn" aria-label="Terminer la réorganisation" onClick=${() => setEdit(false)}><${Ic} n="check" /></button>` : html`<button class="ibtn" aria-label="Réglages" onClick=${() => NAV.push({v: "settings"})}><${Ic} n="gear" /></button>`} />
     <main class="scr">
-      ${!edit && html`<${QuickEntry} kind="acc" />`}
+      ${!edit && accs.length > 0 && html`<div class="card asum"><span class="t2">À la banque aujourd'hui · comptes et épargne</span><span class="asv">${fmt(total)}</span>
+        ${Object.keys(deb).sort().map(d => html`<div class="asd"><span><${Ic} n="card" s=${18} />${deb[d].n > 1 ? "Débit des cartes" : "Débit de la carte"} le ${dayShort(d)}</span><b>${fmt(deb[d].amt)}</b></div>`)}</div>`}
       ${edit && html`<div class="help">Monte ou descends les comptes ; les cartes se rangent entre elles, sous leur compte. Pour créer un groupe, ouvre un compte et remplis « Groupe ».</div>`}
-      ${accGroups(accs.filter(a => !isKid(accs, a))).map(g => { const sum = r2(g.list.reduce((s, a) => s + shownBal(a), 0));
-        return html`<section><div class="sec-h"><h2>${g.label}</h2><span class="amt muted" style="font-size:15px">${fmt(sum)}</span></div>
-        <div class="card">${g.list.map(a => edit ? html`${editRow(a)}${kidsOf(accs, a.id).length > 0 && html`<div class="nest">${kidsOf(accs, a.id).map(c => editRow(c))}</div>`}` : html`<${AccRowG} a=${a} />${kidsOf(accs, a.id).length > 0 && html`<div class="nest">${kidsOf(accs, a.id).map(c => html`<${AccRowG} a=${c} />`)}</div>`}`)}</div></section>`; })}
-      ${per.length > 0 && html`<section><div class="sec-h"><h2>Personnes</h2><button class="link" onClick=${() => NAV.push({v:"people"})}>Gérer</button></div>
-        <div class="card">${per.map(p => { const b = personBal(p.id); return html`<button class="row" onClick=${() => NAV.push({v:"person", id:p.id})}>
-          <span class="ic" style="background:var(--surface2)">${p.emoji || "🙂"}</span><span class="grow"><div class="t1">${p.name}</div><div class="t2">${b > 0 ? "te doit" : b < 0 ? "tu lui dois" : "à jour"}</div></span>
-          <span class="amt ${b > 0 ? "pos" : b < 0 ? "bad" : "muted"}">${fmt(Math.abs(b))}</span></button>`; })}</div></section>`}
+      ${edit ? accGroups(accs.filter(a => !isKid(accs, a))).map(g => html`<section><div class="sec-h"><h2>${g.label}</h2></div>
+        <div class="card">${g.list.map(a => html`${editRow(a)}${kidsOf(accs, a.id).length > 0 && html`<div class="nest">${kidsOf(accs, a.id).map(c => editRow(c))}</div>`}`)}</div></section>`)
+        : accSections(accs.filter(a => !isKid(accs, a))).map(g => { const po = g.list.filter(a => !TILE_T.includes(a.type)), ti = g.list.filter(a => TILE_T.includes(a.type)), sum = r2(g.list.reduce((s, a) => s + shownBal(a), 0));
+        return html`<section class="asec"><div class="sec-h"><h2>${g.label}</h2>${!g.list.some(a => a.type === "pret") && html`<span class="amt muted" style="font-size:15px">${fmt(sum)}</span>`}</div>
+        <div style="display:flex;flex-direction:column;gap:10px">${po.map(a => html`<${AccPoche} a=${a} kids=${kidsOf(accs, a.id)} nx=${nx} />`)}
+        ${ti.length > 0 && html`<div class="atiles">${ti.map(a => html`<${AccTile} a=${a} />`)}</div>`}</div></section>`; })}
       <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap"><button class="link" onClick=${() => SHEET.open({type:"acc"})}>+ Ajouter un compte</button><button class="link" onClick=${() => { setEdit(!edit); scrollTo(0, 0); }}>${edit ? "Terminer" : "Réorganiser"}</button>${accList(true).some(a => a.hidden) && html`<button class="link" onClick=${() => NAV.push({v:"hidden"})}>Comptes masqués</button>`}</div>
 
     </main>`;
+}
+/* v80 : sections de l'écran Comptes ; « Épargne » et « Prêts » (groupes par défaut) n'en font qu'une, en vignettes */
+const TILE_T = ["epargne", "pret"];
+function accSections(tops) {
+  const out = [];
+  for (const g of accGroups(tops)) { const last = out[out.length - 1];
+    if (last && last.tiles && (g.key === "t:epargne" || g.key === "t:pret")) { last.list.push(...g.list); last.label = "Épargne et " + (last.list.filter(a => a.type === "pret").length > 1 ? "prêts" : "prêt"); }
+    else out.push({...g, list: [...g.list], tiles: g.key === "t:epargne" || g.key === "t:pret"}); }
+  return out;
+}
+/* couleur de la poche : celle du compte (fiche du compte › Couleur) ; le violet de la palette (#7B61FF) tombait dans le bleu */
+const accFam = a => String(a.color || "").toUpperCase() === "#7B61FF" ? "lilac" : pfam(a.color);
+const accGlyph = a => a.type === "epargne" ? "piggy" : a.type === "pret" ? "home" : a.type === "especes" ? "cash" : a.type === "carte" ? null : a.joint ? "people" : "bank";
+const accEnd = a => { const E = restEndOf(a); return [E, r2(balance(a.id, {upTo: E}) + occurrences(E).reduce((s, o) => s + amtFor(o, a.id), 0))]; };
+function AccPoche({a, kids, nx}) {
+  const b = shownBal(a), card = a.type === "carte", [E, e] = card ? [null, null] : accEnd(a), n = card ? nx[a.id] : null;
+  const low = !card && ((a.warn != null && a.warn !== "" && e < Number(a.warn)) || (inCash(a) && e < 0));
+  return html`<div class=${"apoche p-" + accFam(a)}>
+    <button class="arow" onClick=${() => NAV.push({v: "acc", id: a.id})}>
+      <span class="aic">${card ? html`<${Ic} n="card" s=${18} />` : html`<${IcSvg} k=${accGlyph(a)} s=${18} />`}</span>
+      <span class="grow"><span class="t1">${a.name}</span><span class=${"t2" + (low ? " bad" : "")}>${card ? (n ? "Débit le " + dayShort(n.date) : "Rien à débiter") : html`Après le prévu, <span style="white-space:nowrap">au ${dayShort(E)} : <b>${fmt(e)}</b></span>`}</span></span>
+      <span class="amt">${fmt(card ? (n ? n.amount : 0) : b)}</span></button>
+    ${kids.length > 0 && html`<div class="akids">${kids.map(c => { const k = nx[c.id]; return html`<button class="arow" onClick=${() => NAV.push({v: "acc", id: c.id})}>
+      <${Ic} n="card" s=${18} /><span class="grow"><span class="t1">${c.name}</span><span class="t2">${k ? "Débit le " + dayShort(k.date) : "Rien à débiter"}</span></span>
+      <span class="amt">${fmt(k ? k.amount : 0)}</span></button>`; })}</div>`}
+  </div>`;
+}
+function AccTile({a}) {
+  const b = shownBal(a); let sub;
+  if (a.type === "pret") { const lp = loanPlan(a); sub = "restant dû" + (lp && isFinite(lp.n) ? " · " + lp.n + " mensualités" : ""); }
+  else { const [E, e] = accEnd(a); sub = Math.abs(e - b) > .004 ? "au " + dayShort(E) + " : " + fmt(e) : a.rate ? "taux " + String(a.rate).replace(".", ",") + " %" : "épargne"; }
+  return html`<button class=${"atile p-" + accFam(a)} onClick=${() => NAV.push({v: "acc", id: a.id})}>
+    <span class="atn"><${IcSvg} k=${accGlyph(a)} s=${16} /><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.name}</span></span>
+    <span class="atv">${fmt(a.type === "pret" ? -b : b)}</span><span class="t2">${sub}</span></button>`;
 }
 function AccRow({a}) {
   const b = shownBal(a), t = today();
