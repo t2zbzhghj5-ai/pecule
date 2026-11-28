@@ -1159,9 +1159,10 @@ function halfSync() {
     const name = (side === "me" ? "Virement au " + accName(j) + " (50/50)" : halfLine()) + (comp ? " · complément" : "");
     if (!splits.length) continue; keep.add(id);
     const amount = r2(splits.reduce((a, x) => a + (x.amount || 0), 0));
-    if (!cur) { Store.put({k: "tx", id, account: side === "me" ? from : j, date: d, name, amount, splits, st: "prevue", pay: "virement", h50: k, h50k: k, h50s: side}); continue; }
+    if (!cur) { Store.put({k: "tx", id, account: side === "me" ? from : j, date: d, name, amount, splits, st: "prevue", ...(side === "me" ? {st2: "prevue"} : {}), pay: "virement", h50: k, h50k: k, h50s: side}); continue; }
     if (!halfOpen(cur)) continue;
-    const n = {...cur, account: side === "me" ? from : j, date: d, amount, splits, h50: k, h50k: k, h50s: side};
+    /* v78 : le virement est « prévu » des deux côtés (avant, le côté du joint, sans état, valait « créée ») ; un état choisi à la main n'est pas touché */
+    const n = {...cur, account: side === "me" ? from : j, date: d, amount, splits, h50: k, h50k: k, h50s: side, ...(side === "me" && cur.st === "prevue" && !cur.st2 ? {st2: "prevue"} : {})};
     if (JSON.stringify(n) !== JSON.stringify(cur)) Store.put(n);
   }
   for (const t of Object.values(A().tx)) {
@@ -1184,8 +1185,10 @@ function half50(k) { return memo("h50" + k, () => {
     it.half = r2(it.half + p.amount); if (!t) it.paid = r2(it.paid + p.amount * 2); }
   for (const it of Object.values(by)) { const t = D.tx[it.key]; if (t) it.paid = r2(-(t.splits || []).filter(x => !x.to && (x.amount || 0) < 0).reduce((a, x) => a + x.amount, 0)); }
   const items = Object.values(by).sort((a, b) => (a.date || "").localeCompare(b.date || "") || a.name.localeCompare(b.name));
-  const half = r2(items.reduce((a, x) => a + x.half, 0)), fixed = 0;
-  return {k, j, items, half, fixed, total: half, open: !lines.length || lines.some(halfOpen), date: d, sig: JSON.stringify([items.map(x => [x.key, x.half])])}; }); }
+  /* v78 : les parts ajoutées à la main dans la ligne de la partenaire (sans hf) comptent dans le virement annoncé ; la signature ne change pas sans elles */
+  const half = r2(items.reduce((a, x) => a + x.half, 0)), fixed = r2(lines.reduce((a, t) => a + (t.splits || []).filter(x => !x.hf).reduce((b, x) => b + (x.amount || 0), 0), 0));
+  const fx = Math.abs(fixed) > .004 ? [fixed] : [];
+  return {k, j, items, half, fixed, total: r2(half + fixed), open: !lines.length || lines.some(halfOpen), date: d, sig: JSON.stringify([items.map(x => [x.key, x.half]), ...fx])}; }); }
 /* Le mois à signaler : celui en cours (et le précédent les 5 premiers jours), tant que la ligne n'est pas validée */
 function half50Due() {
   const t = today(), k0 = ym(t), sent = S().half50Sent || {};
@@ -1345,7 +1348,7 @@ function calc(str) {
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
 /* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
-const APP_VERSION = 77;
+const APP_VERSION = 78;
 /* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
 const NEWS = {
   54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
@@ -1371,7 +1374,8 @@ const NEWS = {
   74: ["50/50 : plus de catégorie d'office pour les moitiés. Choisis celle de ta moitié et celle de l'autre moitié dans la dépense (sous « Remboursement 50/50 ») ou sur les lignes 50/50. Les 50/50 déjà saisis gardent la leur.", "La ligne de l'autre personne créée par Pécule porte « (50/50) » après son prénom."],
   75: ["50/50 : chaque dépense cochée crée ses deux lignes au jour du remboursement, ton virement vers le joint et la ligne « (50/50) » de l'autre personne. Elles suivent la dépense tant qu'elles ne sont pas validées.", "Ton virement 50/50 compte directement dans les budgets de ton compte, avec la catégorie que tu choisis. Tes opérations habituelles ne sont plus touchées."],
   76: ["50/50 : une seule paire par mois, ventilée avec une part par dépense, au lieu de deux lignes par dépense. Une fois validée, ce qui change ensuite part dans une paire « complément »."],
-  77: ["50/50 : une part ajoutée à la main dans la paire du mois reste en place quand les dépenses changent."]
+  77: ["50/50 : une part ajoutée à la main dans la paire du mois reste en place quand les dépenses changent."],
+  78: ["50/50 : le virement de la paire est « prévu » sur les deux comptes, comme l'autre ligne.", "50/50 : le message à envoyer annonce le montant total de la ligne, avec la part 50/50 en détail."]
 };
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));
@@ -2572,7 +2576,7 @@ function Half50Sheet({k, close}) {
         <span class="grow" style="min-width:0"><div class="t1">${x.name}${tag(x)}</div><div class="t2">${x.date ? dayShort(x.date) + " · " : ""}${x.st === "del" ? "plus partagée" : fmt0(x.paid) + " payés"}${x.st === "mod" ? " · avant " + h50Eur(x.was) : ""}</div></span>
         <span style="text-align:right;flex:none"><div class="t1" style=${x.st === "del" ? "text-decoration:line-through" : ""}>${h50Eur(x.half)}</div><div class="t2">pour ${nm}</div></span></div>`)}
       ${!d.rows.length && !d.gone.length && html`<div class="empty" style="padding:14px 16px">Aucune dépense partagée ce mois-ci.</div>`}
-      ${Math.abs(h.fixed) > .004 && html`<div class="row"><span class="grow t2">Montant fixe de la ligne</span><span class="t1">${fmt(h.fixed)}</span></div>`}
+      ${Math.abs(h.fixed) > .004 && html`<div class="row"><span class="grow t2">Autres montants de la ligne</span><span class="t1">${fmt(h.fixed)}</span></div>`}
       <div class="row"><span class="grow t2">Virement de ${nm}, le ${dayShort(h.date)}</span><span class="t1" style="white-space:nowrap">${fmt(h.total)}</span></div>
     </div>
     <label class="lb" for="h50m">Message (tu peux le modifier)</label>

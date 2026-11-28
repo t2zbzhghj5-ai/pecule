@@ -628,6 +628,9 @@ def cinquante_cinquante_parts_ajoutees(br, url):
       const splits = [own, ...t.splits]; D.Store.put({...t, splits, amount: Math.round(splits.reduce((a, x) => a + x.amount, 0) * 100) / 100}); }""", [j])
     a.wait(600)
     check([x[3] for x in h50(a, "2026-11")] == [-74, 74], "parts ajoutées gardées : %s" % h50(a, "2026-11"))
+    h = a.js("const h = D.half50('2026-11'); return [h.half, h.fixed, h.total, D.half50Msg(h)];")
+    check(h[:3] == [20, 54, 74], "message : montants %s" % h[:3])
+    check("virement de novembre : 74,00" in h[3] and "dont 50/50 : 20,00" in h[3], "message : %r" % h[3])
     a.js("D.Store.put({...D.A().tx.tx_pa, amount: -60, splits: [{amount: -60, cat: null}]});")
     a.wait(600)
     check([x[3] for x in h50(a, "2026-11")] == [-84, 84], "après changement de la dépense : %s" % h50(a, "2026-11"))
@@ -635,6 +638,26 @@ def cinquante_cinquante_parts_ajoutees(br, url):
     a.wait(600)
     check([x[3] for x in h50(a, "2026-11")] == [-54, 54], "dépense décochée, parts ajoutées seules : %s" % h50(a, "2026-11"))
     a.no_errors("parts ajoutées")
+    a.close()
+
+
+@test
+def cinquante_cinquante_etat_des_deux_cotes(br, url):
+    """v78 : le virement de la paire est « prévu » côté compte qui rembourse et côté joint ; une ancienne paire sans état côté joint est corrigée ; un état choisi à la main reste."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    j = a.acc_id("Joint")
+    a.js("D.Store.put({k: 'tx', id: 'tx_pe', account: arg, date: '2026-11-12', name: 'Cinéma', amount: -40, splits: [{amount: -40, cat: null}], st: 'saisie', half: true});", j)
+    a.wait(600)
+    st = lambda: a.js("const t = D.A().tx['tx_h50_2026-11'], m = D.A().tx['tx_h50m_2026-11']; return [t.st, t.st2 || null, m.st];")
+    check(st() == ["prevue", "prevue", "prevue"], "à la création : %s" % st())
+    a.js("const t = {...D.A().tx['tx_h50_2026-11']}; delete t.st2; D.Store.put(t);")
+    a.wait(600)
+    check(st() == ["prevue", "prevue", "prevue"], "ancienne paire sans état côté joint : %s" % st())
+    a.js("D.Store.put({...D.A().tx['tx_h50_2026-11'], st2: 'saisie'});")
+    a.wait(600)
+    check(st() == ["prevue", "saisie", "prevue"], "état choisi à la main : %s" % st())
+    a.no_errors("état des deux côtés")
     a.close()
 
 
