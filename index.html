@@ -1153,7 +1153,9 @@ function halfSync() {
     for (const kk of new Set([...Object.keys(wsum), ...Object.keys(got)])) { const dv = r2((wsum[kk] || 0) - (got[kk] || 0)); if (Math.abs(dv) < 0.005) continue;
       const x = tpl[kk], q = {...x, amount: dv}; delete q.bm; if (!(kk in wsum)) q.memo = (x.memo || "") + " (retirée)"; parts.push(q); }
     const comp = frozen.length > 0, id = pre + k + (comp ? "_c" + frozen.length : ""), d0 = halfDate(k), d = comp && d0 < today() ? today() : d0, bm = mn(k) - mn(ym(d));
-    const splits = bm ? parts.map(x => ({...x, bm})) : parts, cur = A().tx[id];
+    const cur = A().tx[id], own = cur ? (cur.splits || []).filter(x => !x.hf) : [];
+    /* v77 : les parts ajoutées à la main dans la paire (pas des moitiés 50/50) restent telles quelles, devant les moitiés */
+    const splits = [...own, ...(bm ? parts.map(x => ({...x, bm})) : parts)];
     const name = (side === "me" ? "Virement au " + accName(j) + " (50/50)" : halfLine()) + (comp ? " · complément" : "");
     if (!splits.length) continue; keep.add(id);
     const amount = r2(splits.reduce((a, x) => a + (x.amount || 0), 0));
@@ -1343,7 +1345,7 @@ function calc(str) {
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
 /* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
-const APP_VERSION = 76;
+const APP_VERSION = 77;
 /* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
 const NEWS = {
   54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
@@ -1368,7 +1370,8 @@ const NEWS = {
   73: ["Remboursement 50/50 : choisis sa date dans Réglages › Compte joint › Remboursement 50/50, l'avant-dernier jour du mois ou un jour du mois suivant (par exemple le 1er)."],
   74: ["50/50 : plus de catégorie d'office pour les moitiés. Choisis celle de ta moitié et celle de l'autre moitié dans la dépense (sous « Remboursement 50/50 ») ou sur les lignes 50/50. Les 50/50 déjà saisis gardent la leur.", "La ligne de l'autre personne créée par Pécule porte « (50/50) » après son prénom."],
   75: ["50/50 : chaque dépense cochée crée ses deux lignes au jour du remboursement, ton virement vers le joint et la ligne « (50/50) » de l'autre personne. Elles suivent la dépense tant qu'elles ne sont pas validées.", "Ton virement 50/50 compte directement dans les budgets de ton compte, avec la catégorie que tu choisis. Tes opérations habituelles ne sont plus touchées."],
-  76: ["50/50 : une seule paire par mois, ventilée avec une part par dépense, au lieu de deux lignes par dépense. Une fois validée, ce qui change ensuite part dans une paire « complément »."]
+  76: ["50/50 : une seule paire par mois, ventilée avec une part par dépense, au lieu de deux lignes par dépense. Une fois validée, ce qui change ensuite part dans une paire « complément »."],
+  77: ["50/50 : une part ajoutée à la main dans la paire du mois reste en place quand les dépenses changent."]
 };
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));

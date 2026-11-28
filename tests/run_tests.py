@@ -617,6 +617,28 @@ def cinquante_cinquante_passage_v76(br, url):
 
 
 @test
+def cinquante_cinquante_parts_ajoutees(br, url):
+    """v77 : une part ajoutée à la main dans une opération de la paire 50/50 reste quand les dépenses changent ; seules les moitiés sont recalculées."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    j = a.acc_id("Joint")
+    a.js("D.Store.put({k: 'tx', id: 'tx_pa', account: arg, date: '2026-11-12', name: 'Cinéma', amount: -40, splits: [{amount: -40, cat: null}], st: 'saisie', half: true});", j)
+    a.wait(600)
+    a.js("""const [j] = arg; for (const [id, v] of [['tx_h50_2026-11', -54], ['tx_h50m_2026-11', 54]]) { const t = D.A().tx[id], own = v < 0 ? {to: j, amount: v, cat: null} : {amount: v, cat: null};
+      const splits = [own, ...t.splits]; D.Store.put({...t, splits, amount: Math.round(splits.reduce((a, x) => a + x.amount, 0) * 100) / 100}); }""", [j])
+    a.wait(600)
+    check([x[3] for x in h50(a, "2026-11")] == [-74, 74], "parts ajoutées gardées : %s" % h50(a, "2026-11"))
+    a.js("D.Store.put({...D.A().tx.tx_pa, amount: -60, splits: [{amount: -60, cat: null}]});")
+    a.wait(600)
+    check([x[3] for x in h50(a, "2026-11")] == [-84, 84], "après changement de la dépense : %s" % h50(a, "2026-11"))
+    a.js("D.Store.put({...D.A().tx.tx_pa, half: false});")
+    a.wait(600)
+    check([x[3] for x in h50(a, "2026-11")] == [-54, 54], "dépense décochée, parts ajoutées seules : %s" % h50(a, "2026-11"))
+    a.no_errors("parts ajoutées")
+    a.close()
+
+
+@test
 def cinquante_cinquante_depuis_le_courant(br, url):
     """50/50 : un livret qui vire parfois vers le joint en fin de mois n'est jamais pris pour le compte d'où part ta moitié."""
     a = App(br, url)
