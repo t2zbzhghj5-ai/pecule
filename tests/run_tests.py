@@ -1854,7 +1854,7 @@ def echeance_sauf_mois(br, url):
     a.js("D.NAV.tab('echeancier')"); a.wait(400)
     a.pick("Courant")
     row = pg.locator("main button.row", has_text="Navigo").first
-    check("chaque mois sauf août" in row.inner_text(), "ligne : %r" % row.inner_text())
+    check("sauf en août" in row.inner_text(), "ligne : %r" % row.inner_text())
     check("Navigo compté pour 11 mois sur 12" in pg.locator("main").inner_text(), "total du mois sans la mention 11/12")
     row.click(); a.wait(400)
     sh = pg.locator(".sheet")
@@ -2414,6 +2414,37 @@ def page_compte(br, url):
     sel = pg.locator(".wiz select").first.input_value()
     check(sel == liv, "le + ne propose pas le compte ouvert : %s (attendu %s)" % (sel, liv))
     a.no_errors("page d'un compte")
+    a.close()
+
+
+@test
+def echeancier_jour_par_jour(br, url):
+    """v82 (maquette A) : en haut rentrées, sorties et ce qu'il reste ; mensuelles rangées par jour du mois ; « Calculé par Pécule » avec date et montant ; pastille du compte à sa couleur."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    norm = lambda s: s.replace("\u202f", " ").replace("\xa0", " ")
+    num = lambda s: float(norm(s).replace(" ", "").replace("€", "").replace("−", "-").replace("+", "").replace(",", "."))
+    a.js("D.NAV.tab('echeancier')"); a.wait(400)
+    a.pick("Courant")
+    pill = pg.locator('main [aria-label^="Changer de compte"]')
+    check("tinted p-" in pill.get_attribute("class"), "pastille du compte sans sa couleur : %s" % pill.get_attribute("class"))
+    vals = pg.locator(".schsum .v").all_inner_texts()
+    check(len(vals) == 3 and "Il reste" in pg.inner_text(".schsum"), "résumé : %s" % vals)
+    check(abs(num(vals[0]) + num(vals[1]) - num(vals[2])) < 0.011, "il reste ≠ rentrées + sorties : %s" % vals)
+    heads = pg.locator("main .dash-r .sec-h h2").all_inner_texts()
+    check(heads and all(h.startswith("Le ") or h in ("Une fois par an", "Autres rythmes", "Suspendues ou terminées") for h in heads), "sections : %s" % heads)
+    days = [h for h in heads if h.startswith("Le ")]
+    nums = [1 if h == "Le 1er du mois" else int(h[3:]) for h in days]
+    check(nums == sorted(nums) and len(set(nums)) == len(nums), "jours dans le désordre : %s" % days)
+    first = pg.locator("main .dash-r > div").first.locator(".row .dcirc").first.inner_text().strip()
+    check(first == ("1er" if nums[0] == 1 else str(nums[0])), "jour dans le rond : %r" % first)
+    calc = pg.locator(".sch-auto .row", has_text="Débit Carte Perso")
+    check(calc.count() == 1 and "le " in calc.inner_text() and "€" in calc.inner_text(), "débit de la carte sans date ni montant : %s" % (calc.inner_text() if calc.count() else None))
+    a.pick("Joint")
+    loan = pg.locator(".sch-auto button.row", has_text="Échéance Prêt")
+    check(loan.count() == 1 and "€" in loan.inner_text(), "mensualité du prêt absente de « Calculé par Pécule »")
+    a.no_errors("échéancier jour par jour")
     a.close()
 
 

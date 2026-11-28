@@ -395,6 +395,13 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .accp .row .t1{white-space:normal}.accp .sec-h .muted{font-size:13px}
 .aok{display:flex;align-items:center;gap:10px;padding:14px 16px;color:var(--muted);font-size:15px}.aok svg{color:var(--pos);flex:none}
 .amore{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;min-height:42px;font-size:15px}
+/* v82 : échéancier (maquette A « le mois jour par jour ») */
+.accpill.tinted{background:var(--pb)}.accpill.tinted .ini{background:var(--aov);color:var(--pi)}
+.schsum{background:var(--pb);border-radius:26px;padding:16px 18px;display:flex;flex-direction:column;gap:10px}.schsum .cap{font-size:14px;font-weight:600;color:var(--pi)}
+.schsum-g{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.15fr);gap:6px}.schsum .l{font-size:12px;color:var(--pi)}
+.schsum .v{font-family:var(--display);font-size:16px;font-weight:700;white-space:nowrap;letter-spacing:-.01em}.schsum .v.pos{color:var(--pos)}.schsum .v.bad{color:var(--neg)}
+.schsum-r{background:var(--aov);border-radius:12px;padding:4px 6px;margin:-4px 0}.schsum-r .v{font-weight:800}.schsum .n{font-size:13px;color:var(--pi)}
+.sch2 .row .t1,.sch2 .row .t2{white-space:normal}.sch2 .sec-h .muted{font-size:13px}
 .p-peach{--pb:var(--p-peach);--pi:var(--pi-peach)}.p-mint{--pb:var(--p-mint);--pi:var(--pi-mint)}.p-rose{--pb:var(--p-rose);--pi:var(--pi-rose)}
 /* v64 : budget à plusieurs enveloppes (séjours) en pleine largeur ; choix du séjour dans la fiche */
 .bwide{grid-column:1/-1;background:var(--card);border-radius:26px;display:flex;flex-direction:column;min-width:0}
@@ -1375,7 +1382,7 @@ function calc(str) {
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
 /* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
-const APP_VERSION = 81;
+const APP_VERSION = 82;
 /* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
 const NEWS = {
   54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
@@ -1405,7 +1412,8 @@ const NEWS = {
   78: ["50/50 : le virement de la paire est « prévu » sur les deux comptes, comme l'autre ligne.", "50/50 : le message à envoyer annonce le montant total de la ligne, avec la part 50/50 en détail."],
   79: ["Sécurité des données : Pécule te prévient tout de suite si l'enregistrement échoue, et ne remplace jamais des données qu'il n'arrive pas à lire.", "Une copie de tes données est gardée avant chaque mise à jour, restauration, import ou effacement : Réglages › Sauvegarde › Copies de sécurité."],
   80: ["Écran Comptes plus clair : chaque compte dans une poche de sa couleur, avec ce qu'il restera après le prévu ; chaque carte avec son prochain débit.", "En haut : ce que tu as à la banque aujourd'hui, et ce que les cartes prendront à leur prochain débit."],
-  81: ["Page d'un compte sur une seule page : en-tête à sa couleur, puis ce qui reste à valider, ce qui est prévu jusqu'à la fin de la période et les opérations validées.", "La loupe en haut ouvre toutes les opérations (recherche, filtres, sélection). Le + du bas saisit sur le compte ouvert."]
+  81: ["Page d'un compte sur une seule page : en-tête à sa couleur, puis ce qui reste à valider, ce qui est prévu jusqu'à la fin de la période et les opérations validées.", "La loupe en haut ouvre toutes les opérations (recherche, filtres, sélection). Le + du bas saisit sur le compte ouvert."],
+  82: ["Échéancier plus clair : ce qu'il reste chaque mois après les échéances, la liste rangée par jour du mois, et le débit des cartes, le 50/50 et le prêt avec leur date et leur montant."]
 };
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));
@@ -3356,10 +3364,10 @@ function GlanceBudgets() {
   return html`<${BudgetCursors} id=${id} cardIds=${g.cardIds} card />`;
 }
 const ALL_IC = html`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5" /><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" /><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" /><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5" /></svg>`;
-function AccPill({cur, onPick, allLbl, keep}) {
-  const main = cur !== undefined ? cur : mainAcc(), a = main && A().acc[main];
-  return html`<button class="accpill" onClick=${() => SHEET.open(onPick ? {type: "accPick", cur: main, onPick, allLbl, keep} : {type: "accPick"})} aria-label=${"Changer de compte, compte affiché : " + (a ? a.name : allLbl || "aucun")}>
-    <span class="ini">${!a && allLbl ? ALL_IC : (a?.name || "?").replace(/^compte\s+/i, "").charAt(0).toUpperCase()}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a ? a.name : allLbl || "Choisir un compte"}</span>
+function AccPill({cur, onPick, allLbl, keep, tint}) {
+  const main = cur !== undefined ? cur : mainAcc(), a = main && A().acc[main], tn = tint && a && a.type !== "carte";
+  return html`<button class=${"accpill" + (tn ? " tinted p-" + accFam(a) : "")} onClick=${() => SHEET.open(onPick ? {type: "accPick", cur: main, onPick, allLbl, keep} : {type: "accPick"})} aria-label=${"Changer de compte, compte affiché : " + (a ? a.name : allLbl || "aucun")}>
+    <span class="ini">${tn ? html`<${IcSvg} k=${accGlyph(a)} s=${16} />` : !a && allLbl ? ALL_IC : (a?.name || "?").replace(/^compte\s+/i, "").charAt(0).toUpperCase()}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a ? a.name : allLbl || "Choisir un compte"}</span>
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none;color:var(--muted)"><path d="M6 9l6 6 6-6" /></svg></button>`;
 }
 function HalfSheet({close}) {
@@ -4896,38 +4904,67 @@ function Schedules() {
   const offs = act.filter(x => offOf(x) && isM(x));
   const nx = act.filter(x => npOf(x)).sort((a, b) => npOf(a).localeCompare(npOf(b)))[0];
   const due = dueNow().filter(o => sides(o).some(([y]) => y === sel));
-  const byDay = (a, b) => Number(npOf(a).slice(8)) - Number(npOf(b).slice(8)) || a.name.localeCompare(b.name, "fr");
-  const G = [["Début de mois · du 1 au 10", act.filter(x => isM(x) && Number(npOf(x).slice(8)) <= 10).sort(byDay)],
-    ["Milieu de mois · du 11 au 20", act.filter(x => isM(x) && Number(npOf(x).slice(8)) > 10 && Number(npOf(x).slice(8)) <= 20).sort(byDay)],
-    ["Fin de mois · du 21 au 31", act.filter(x => isM(x) && Number(npOf(x).slice(8)) > 20).sort(byDay)],
-    ["Autres fréquences", act.filter(x => !isM(x)).sort((a, b) => npOf(a).localeCompare(npOf(b)))],
-    ["Suspendues ou terminées", rec.filter(off).sort((a, b) => a.name.localeCompare(b.name, "fr"))]].filter(g => g[1].length);
-  const Row = ({x}) => { const v = amtFor(x, sel), np = npOf(x), tr = (x.splits || []).find(sp => sp.to), dead = off(x);
-    const sub = (tr ? (x.account === sel ? "→ " + accName(tr.to) : "← " + accName(x.account)) : x.splits?.[0]?.cat ? catName(x.splits[0].cat) : "Sans catégorie") + " · " + (dead ? (x.paused ? "suspendue" : "terminée") : freqLabel(x.freq).toLowerCase() + offLabel(x)) + (x.left != null && !dead ? " · encore " + x.left + " fois" : x.end && !dead ? " · jusqu'au " + dayY(x.end) : "");
-    return html`<button class="row" style=${"min-height:64px" + (dead ? ";opacity:.55" : "")} onClick=${() => SHEET.open({type: "schDetail", id: x.id, aid: sel})}>
-      <span class="dcirc">${np && !dead ? html`<b>${Number(np.slice(8))}</b><span>${monthShort(np)}</span>` : html`<b>–</b>`}</span>
-      <span class="grow"><div class="t1">${x.name}</div><div class="t2">${sub}</div></span>
+  /* v82, maquette A « le mois jour par jour » (canevas « Pécule — échéancier ») : en haut rentrées, sorties et ce qu'il reste ; les mensuelles rangées
+     par jour du mois ; les autres rythmes à part ; « Calculé par Pécule » (débit des cartes, 50/50, prêts) avec date et montant */
+  const net = r2(incM + outM), dayOf = x => Number(x.anchor) || Number(npOf(x).slice(8)) || 1;
+  const cmpAmt = (a, b) => { const va = amtFor(a, sel), vb = amtFor(b, sel); return (va < 0) !== (vb < 0) ? (va < 0 ? -1 : 1) : Math.abs(vb) - Math.abs(va) || a.name.localeCompare(b.name, "fr"); };
+  const monthly = act.filter(isM), days = [...new Set(monthly.map(dayOf))].sort((a, b) => a - b);
+  const others = act.filter(x => !isM(x)).sort((a, b) => npOf(a).localeCompare(npOf(b))), dead = rec.filter(off).sort((a, b) => a.name.localeCompare(b.name, "fr"));
+  const yearly = others.length > 0 && others.every(x => x.freq?.u === "y" && (Number(x.freq.n) || 1) === 1);
+  const what = x => { const tr = (x.splits || []).find(sp => sp.to); return tr ? (x.account === sel ? "→ " + accName(tr.to) : "← " + accName(x.account)) : x.splits?.[0]?.cat ? catName(x.splits[0].cat) : "sans catégorie"; };
+  const dayLbl = d => d === 1 ? "1er" : String(d);
+  const Row = ({x, mode}) => { const v = amtFor(x, sel), np = npOf(x), isDead = mode === "dead";
+    const bits = [what(x)];
+    if (isDead) bits.push(x.paused ? "suspendue" : "terminée");
+    else {
+      if (mode === "other" && !yearly) bits.push(freqLabel(x.freq).toLowerCase());
+      if (offOf(x)) bits.push("sauf en " + monthsList(offOf(x)));
+      if (x.left != null) bits.push("encore " + x.left + " fois"); else if (x.end) bits.push("jusqu'au " + dayY(x.end));
+      if (mode === "m" && np && !offOf(x) && np > addDays(t, 31)) bits.push("à partir de " + MOIS[Number(np.slice(5, 7)) - 1] + (np.slice(0, 4) !== t.slice(0, 4) ? " " + np.slice(0, 4) : ""));
+      if (mode === "other" && np) bits.push("prochaine le " + dayY(np));
+    }
+    return html`<button class="row" style=${"min-height:64px" + (isDead ? ";opacity:.55" : "")} onClick=${() => SHEET.open({type: "schDetail", id: x.id, aid: sel})}>
+      <span class="dcirc">${mode === "m" ? html`<b>${dayLbl(dayOf(x))}</b>` : np && !isDead ? html`<b>${Number(np.slice(8))}</b><span>${monthShort(np)}</span>` : html`<b>–</b>`}</span>
+      <span class="grow"><div class="t1">${x.name}</div><div class="t2">${bits.join(" · ")}</div></span>
       <span class=${"amt" + (v > 0 ? " pos" : "")} style="font-size:15px">${fmt(v, true)}</span></button>`; };
-  const auto = sel ? autoOf(sel) : [];
+  /* calculé par Pécule : prochain montant et date */
+  const occ = sel ? occurrences(addDays(t, 70)) : [];
+  const calc = [];
+  if (sel) {
+    for (const c of accList()) if (c.type === "carte" && c.linked === sel) { const o = occ.find(y => y.card === c.id && y.date >= t);
+      calc.push({k: "c" + c.id, ic: html`<${Ic} n="card" s=${19} />`, fam: accFam(c), name: "Débit " + c.name, sub: (o ? "le " + dayShort(o.date) + " · " : "le " + c.debitDay + " de chaque mois · ") + "selon les dépenses de la carte", v: o ? amtFor(o, sel) : null, go: () => NAV.push({v: "acc", id: c.id})}); }
+    const pair = side => Object.values(A().tx).filter(x => x.h50 && x.h50s === side && x.account === sel && x.date >= t && x.st !== "annulee").sort((a, b) => a.date.localeCompare(b.date))[0];
+    if (sel === halfFrom() && halfJoint()) { const x = pair("me"); calc.push({k: "h", ic: html`<${Ic} n="users" s=${19} />`, fam: "rose", name: "Remboursement 50/50", sub: x ? "le " + dayShort(x.date) + " · vers " + accName(halfJoint()) : "vers " + accName(halfJoint()) + ", " + halfWhen(), v: x ? x.amount : null}); }
+    if (sel === halfJoint()) { const x = pair("her"); calc.push({k: "hh", ic: html`<${Ic} n="users" s=${19} />`, fam: "rose", name: "Part de " + halfName() + " (50/50)", sub: x ? "le " + dayShort(x.date) : halfWhen(), v: x ? x.amount : null}); }
+    for (const l of accList().filter(l => l.type === "pret" && l.loan?.payment && l.loan.from === sel)) { const o = occ.find(y => y.kind === "loan" && y.loanId === l.id);
+      calc.push({k: "l" + l.id, ic: html`<${Ic} n="home" s=${19} />`, fam: accFam(l), name: "Échéance " + l.name, sub: (o ? "le " + dayShort(o.date) + " · " : "chaque mois · ") + (l.loan.prorata ? "au prorata · " : "") + "capital, intérêts et assurance", v: o ? o.amount : -rateAt(l.loan.pays, t, l.loan.payment), go: () => SHEET.open({type: "acc", id: l.id})}); }
+    const sa = A().acc[sel]; if (sa?.type === "pret" && sa.loan) calc.push({k: "m", ic: html`<${Ic} n="home" s=${19} />`, fam: accFam(sa), name: "Mensualités", sub: "chaque mois", v: null, txt: fmt(sa.loan.payment) + " par mois"});
+  }
+  const later = [calc.some(c => c.k[0] === "c") ? (calc.filter(c => c.k[0] === "c").length > 1 ? "les dépenses des cartes" : "les dépenses de la carte") : "", calc.some(c => c.k[0] === "h") ? "le 50/50" : "", calc.some(c => c.k[0] === "l") ? "la mensualité du prêt" : ""].filter(Boolean);
+  const laterTxt = later.length ? "Avant " + (later.length > 1 ? later.slice(0, -1).join(", ") + " et " + later[later.length - 1] : later[0]) + ", calculés à part (en bas)." : "";
+  const sa = sel && A().acc[sel], fam = sa ? accFam(sa) : "sky";
   return html`
     <${Top} title="Échéancier" sub="Ce qui revient, mois après mois" right=${html`<button class="ibtn" aria-label="Importer un échéancier" onClick=${() => SHEET.open({type: "schedImport"})}><${Ic} n="import" /></button>`} />
-    <main class="scr wide dash" style="gap:16px">
-      <div class="dash-full" style="display:flex;align-items:center;min-width:0"><${AccPill} cur=${sel || null} onPick=${setSel} /></div>
+    <main class="scr wide dash sch2" style="gap:16px">
+      <div class="dash-full" style="display:flex;align-items:center;min-width:0"><${AccPill} cur=${sel || null} onPick=${setSel} tint=${true} /></div>
       ${due.length > 0 && html`<div class="banner dash-full" style="padding:10px 14px;align-items:center"><span class="grow"><b>${due.length} à valider</b></span><button class="link" onClick=${() => confirmIt("Tout valider ?", due.length + " échéances seront enregistrées avec leur montant prévu.", "Tout valider", async () => { for (const o of due) { validateOcc(o); await sleep(80); } toast("Échéances validées"); }, false)}>Tout valider</button></div>`}
-      ${sel && !rec.length && !auto.length && html`<div class="card dash-full"><div class="empty"><b>Rien de prévu sur ce compte</b>Ajoute une échéance avec le bouton +, ou choisis un autre compte.</div></div>`}
-      <div class="dash-l">${sel && rec.length > 0 && html`<section class="card" style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
-        <div class="muted" style="font-size:13px">Chaque mois sur ce compte</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div><div class="muted" style="font-size:12px">Rentrées</div><div style="font-size:20px;font-weight:700;color:var(--pos)">${fmt(incM, true)}</div></div>
-          <div><div class="muted" style="font-size:12px">Sorties</div><div style="font-size:20px;font-weight:700">${fmt(outM, true)}</div></div>
+      ${sel && !rec.length && !calc.length && html`<div class="card dash-full"><div class="empty"><b>Rien de prévu sur ce compte</b>Ajoute une échéance avec le bouton +, ou choisis un autre compte.</div></div>`}
+      <div class="dash-l">${sel && rec.length > 0 && html`<section class=${"schsum p-" + fam}>
+        <div class="cap">Chaque mois sur ce compte</div>
+        <div class="schsum-g">
+          <div><div class="l">Rentrées</div><div class="v pos">${fmt(incM, true)}</div></div>
+          <div><div class="l">Sorties</div><div class="v">${fmt(outM, true)}</div></div>
+          <div class="schsum-r"><div class="l">Il reste</div><div class=${"v" + (net < 0 ? " bad" : "")}>${fmt(net, true)}</div></div>
         </div>
-        ${offs.length > 0 && html`<div class="muted" style="font-size:13px">${offs.map(x => x.name + " compté pour " + (12 - offOf(x).length) + " mois sur 12").join(", ")}.</div>`}
-        <div style="font-size:14px;padding-top:10px;border-top:1px solid var(--line)">${nx ? html`Prochaine : <b>${nx.name}</b>, le ${dayShort(npOf(nx))} · ${fmt(amtFor(nx, sel), true)}` : "Aucune échéance à venir"}</div>
+        ${(laterTxt || offs.length > 0) && html`<div class="n">${laterTxt}${laterTxt && offs.length ? " " : ""}${offs.length > 0 ? offs.map(x => x.name + " compté pour " + (12 - offOf(x).length) + " mois sur 12").join(", ") + "." : ""}</div>`}
       </section>`}
-      ${auto.length > 0 && html`<div class="sch-auto"><div class="fgh">Calculé par Pécule</div><div class="card">${auto.map(([n2, d]) => html`<div class="row" style="min-height:56px"><span class="dcirc"><b style="font-size:14px">⚙︎</b></span><span class="grow"><div class="t1">${n2}</div><div class="t2" style="white-space:normal">${d}</div></span></div>`)}</div></div>`}</div>
-      <div class="dash-r">${sel && (loans => loans.length > 0 && html`<div><div class="fgh">Prêts · calculés par Pécule</div><div class="card">${loans.map(l => { const nx = occurrences(addDays(today(), 70)).find(o => o.kind === "loan" && o.loanId === l.id);
-          return html`<button class="row" onClick=${() => SHEET.open({type: "acc", id: l.id})}><span class="dcirc"><b>${Number((nx?.date || l.loan.first).slice(8))}</b><span>${monthShort(nx?.date || l.loan.first)}</span></span><span class="grow"><div class="t1">Échéance ${l.name}</div><div class="t2">${l.loan.prorata ? "au prorata · " : ""}chaque mois · capital, intérêts et assurance</div></span><span class="amt">${fmt(-(nx ? -nx.amount : rateAt(l.loan.pays, today(), l.loan.payment)))}</span></button>`; })}</div></div>`)(accList().filter(l => l.type === "pret" && l.loan?.payment && l.loan.from === sel))}
-        ${G.map(([title, l]) => html`<div><div class="fgh">${title}</div><div class="card">${l.map(x => html`<${Row} x=${x} key=${x.id} />`)}</div></div>`)}</div>
+      ${calc.length > 0 && html`<div class="sch-auto"><div class="sec-h"><h2>Calculé par Pécule</h2><span class="muted">les prochains</span></div><div class="card">${calc.map(c => { const inner = html`<span class=${"dcirc p-" + c.fam} style="background:var(--pb);color:var(--pi)">${c.ic}</span><span class="grow"><div class="t1">${c.name}</div><div class="t2" style="white-space:normal">${c.sub}</div></span>${c.v != null ? html`<span class=${"amt" + (c.v > 0 ? " pos" : "")} style="font-size:15px">${fmt(c.v, true)}</span>` : c.txt && html`<span class="amt" style="font-size:15px">${c.txt}</span>`}`;
+        return c.go ? html`<button class="row" style="min-height:64px" onClick=${c.go}>${inner}</button>` : html`<div class="row" style="min-height:64px">${inner}</div>`; })}</div></div>`}</div>
+      <div class="dash-r">
+        ${days.map(d => html`<div><div class="sec-h"><h2>${d === 1 ? "Le 1er du mois" : "Le " + d}</h2></div><div class="card">${monthly.filter(x => dayOf(x) === d).sort(cmpAmt).map(x => html`<${Row} x=${x} mode="m" key=${x.id} />`)}</div></div>`)}
+        ${others.length > 0 && html`<div><div class="sec-h"><h2>${yearly ? "Une fois par an" : "Autres rythmes"}</h2></div><div class="card">${others.map(x => html`<${Row} x=${x} mode="other" key=${x.id} />`)}</div></div>`}
+        ${dead.length > 0 && html`<div><div class="sec-h"><h2>Suspendues ou terminées</h2></div><div class="card">${dead.map(x => html`<${Row} x=${x} mode="dead" key=${x.id} />`)}</div></div>`}
+      </div>
       ${!accs.length && html`<div class="card dash-full"><div class="empty"><b>Rien de prévu</b>Ajoute ton salaire, ton loyer, tes abonnements… avec le bouton +.</div></div>`}
     </main>`;
 }
