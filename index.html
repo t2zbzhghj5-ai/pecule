@@ -386,6 +386,15 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .atile{background:var(--pb);border:0;border-radius:22px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;text-align:left;color:var(--ink);font:inherit;cursor:pointer;min-width:0}
 .atn{display:flex;align-items:center;gap:6px;font-size:15px;font-weight:600;min-width:0}.atn svg{color:var(--pi);flex:none}
 .atv{font-family:var(--display);font-size:20px;font-weight:700;letter-spacing:-.02em;white-space:nowrap}.atile .t2{font-size:12px;color:var(--pi)}
+/* v81 : page d'un compte (maquette A « tout sur une page ») */
+.ahero{background:var(--pb);color:var(--ink);padding:18px 20px 14px}.ahero .cap{color:var(--pi);margin-top:0;font-size:14px}.ahero .big{font-size:38px}
+.ahero .hint{color:var(--pi);font-size:14px;max-width:none}.ahero .hint.bad{color:var(--neg)}.ahero .chart text{fill:var(--pi)}
+.acyc{margin-top:10px;background:var(--aov2);border-radius:16px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;position:relative}
+.acyc-r{display:flex;justify-content:space-between;gap:8px;font-size:14px}.acyc-s{font-size:12px;color:var(--pi)}
+.acyc-bar{height:6px;border-radius:3px;background:color-mix(in srgb,var(--pi) 15%,transparent);overflow:hidden}.acyc-bar i{display:block;height:6px;background:var(--pi)}
+.accp .row .t1{white-space:normal}.accp .sec-h .muted{font-size:13px}
+.aok{display:flex;align-items:center;gap:10px;padding:14px 16px;color:var(--muted);font-size:15px}.aok svg{color:var(--pos);flex:none}
+.amore{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;min-height:42px;font-size:15px}
 .p-peach{--pb:var(--p-peach);--pi:var(--pi-peach)}.p-mint{--pb:var(--p-mint);--pi:var(--pi-mint)}.p-rose{--pb:var(--p-rose);--pi:var(--pi-rose)}
 /* v64 : budget à plusieurs enveloppes (séjours) en pleine largeur ; choix du séjour dans la fiche */
 .bwide{grid-column:1/-1;background:var(--card);border-radius:26px;display:flex;flex-direction:column;min-width:0}
@@ -1366,7 +1375,7 @@ function calc(str) {
 /* ============ Stockage synchronisé ============ */
 const STANDALONE = true; /* version hébergée hors de Claude : données sur cet appareil uniquement */
 /* Numéro de version : le même que CACHE dans sw.js (pecule-vNN), à augmenter ensemble à chaque mise à jour */
-const APP_VERSION = 80;
+const APP_VERSION = 81;
 /* Nouveautés montrées une fois après une mise à jour (quelques mots, du point de vue de l'utilisateur) */
 const NEWS = {
   54: ["Mise à jour en un geste, depuis l'accueil ou les Réglages : plus besoin de fermer l'app.", "Le numéro de version est affiché dans Réglages."],
@@ -1395,7 +1404,8 @@ const NEWS = {
   77: ["50/50 : une part ajoutée à la main dans la paire du mois reste en place quand les dépenses changent."],
   78: ["50/50 : le virement de la paire est « prévu » sur les deux comptes, comme l'autre ligne.", "50/50 : le message à envoyer annonce le montant total de la ligne, avec la part 50/50 en détail."],
   79: ["Sécurité des données : Pécule te prévient tout de suite si l'enregistrement échoue, et ne remplace jamais des données qu'il n'arrive pas à lire.", "Une copie de tes données est gardée avant chaque mise à jour, restauration, import ou effacement : Réglages › Sauvegarde › Copies de sécurité."],
-  80: ["Écran Comptes plus clair : chaque compte dans une poche de sa couleur, avec ce qu'il restera après le prévu ; chaque carte avec son prochain débit.", "En haut : ce que tu as à la banque aujourd'hui, et ce que les cartes prendront à leur prochain débit."]
+  80: ["Écran Comptes plus clair : chaque compte dans une poche de sa couleur, avec ce qu'il restera après le prévu ; chaque carte avec son prochain débit.", "En haut : ce que tu as à la banque aujourd'hui, et ce que les cartes prendront à leur prochain débit."],
+  81: ["Page d'un compte sur une seule page : en-tête à sa couleur, puis ce qui reste à valider, ce qui est prévu jusqu'à la fin de la période et les opérations validées.", "La loupe en haut ouvre toutes les opérations (recherche, filtres, sélection). Le + du bas saisit sur le compte ouvert."]
 };
 const KINDS = ["acc","tx","cat","sch","bud","bdg","rep","rule","per","pmv","set","bak"];
 const blank = () => Object.fromEntries(KINDS.map(k => [k, {}]));
@@ -3625,10 +3635,10 @@ function smoothPath(pts) {
   }
   return p;
 }
-function AreaChart({series, split, warn, mark, light: _l}) {
+function AreaChart({series, split, warn, mark, light: _l, col: col0, h: h0}) {
   const light = false;
   if (!series || series.length < 2) return null;
-  const W = typeof innerWidth === "number" && innerWidth >= 1000 ? 700 : 340, H = 130, top = 10, bot = 22;
+  const W = typeof innerWidth === "number" && innerWidth >= 1000 ? 700 : 340, H = h0 || 130, top = 10, bot = 22;
   const step = Math.max(1, Math.floor(series.length / 60));
   const s = series.filter((_, i) => i % step === 0 || i === series.length - 1 || series[i][0] === split || (mark && series[i][0] === mark[0]));
   const vals = s.map(p => p[1]); let mn = Math.min(...vals), mx = Math.max(...vals); if (mx - mn < 1) { mx += 50; mn -= 50; } const pad0 = (mx - mn) * .12; mn -= pad0; mx += pad0;
@@ -3636,7 +3646,7 @@ function AreaChart({series, split, warn, mark, light: _l}) {
   const si = Math.max(0, s.findIndex(p => p[0] >= split));
   const P = s.map((p, i) => [x(i), y(p[1])]);
   const past = P.slice(0, si + 1), fut = P.slice(si);
-  const col = light ? "#fff" : "var(--accent)";
+  const col = col0 || (light ? "#fff" : "var(--accent)");
   const lo = vals.indexOf(Math.min(...vals));
   return html`<svg class="chart" viewBox=${`0 0 ${W} ${H}`} role="img" aria-label="Évolution du solde, réel puis prévu">
     <defs><linearGradient id=${"g" + (light ? "l" : "d")} x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color=${col} stop-opacity=${light ? .35 : .22} /><stop offset="1" stop-color=${col} stop-opacity="0" /></linearGradient></defs>
@@ -3661,44 +3671,69 @@ function HBars({rows, total}) {
     <span class="progress" style="margin:6px 0 0 40px;height:6px"><i style=${`width:${Math.max(3, r.v / rows[0].v * 100)}%;background:${r.c ? catColor(r.c) : "#9AA1B5"}`}></i></span>
   </button>`)}</div>`;
 }
-const DASH_TAB = {}, ACC_FLT = {};
-function AccHero({a}) {
-  const t = today(), b = shownBal(a), E = restEndOf(a);
-  const eomBal = r2(balance(a.id, {upTo: E}) + occurrences(E).reduce((s, o) => s + amtFor(o, a.id), 0));
-  let label = "Solde validé", sub = [];
-  if (a.type === "carte") { const enc = balance(a.id), nx = occurrences(addDays(t, 45)).find(o => o.card === a.id); if (Math.abs(enc - b) > .004) sub.push("Encours " + fmt(enc)); sub.push(nx ? `Prochain débit le ${dayShort(nx.date)} : ${fmt(-nx.amount)}` : "Aucun débit à venir"); sub.push("sur " + accName(a.linked)); }
-  else if (a.type === "pret") { label = "Capital restant dû"; const lp = loanPlan(a); if (lp && isFinite(lp.n)) sub.push(`${lp.n} échéances · fin ${monthShort(ym(lp.end))} ${lp.end.slice(0, 4)}`); }
-  else sub.push("Restant " + dayShort(E) + " : " + fmt(eomBal));
-  const ser = a.type === "pret" ? null : dailySeries([a.id], addDays(t, -45), E);
+const ACC_FLT = {};
+/* v81 : page d'un compte, maquette A « tout sur une page » (canevas « Pécule — page d'un compte ») : en-tête à la couleur du compte,
+   puis « À valider », « À venir » jusqu'à la fin de la période (ou au débit d'une carte), « Validées » ; la loupe ouvre la liste complète (recherche, filtres, sélection) */
+function AccHero({a, nPend}) {
+  const t = today(), b = shownBal(a), card = a.type === "carte", pret = a.type === "pret";
+  const [E, eomBal] = card || pret ? [null, null] : accEnd(a);
   const low = a.warn != null && a.warn !== "" && b < Number(a.warn);
-  return html`<section class="hero acc-hero">
-    <div class="cap">${label}</div>
-    <div class="big">${fmt(a.type === "pret" ? -b : b)}</div>
-    <div class="hint">${sub.join(" · ")}${low ? " · sous l'alerte" : ""}</div>
-    ${ser && html`<${AreaChart} series=${ser} split=${t} light />`}
+  let hint = "", box = null;
+  if (card) {
+    const enc = balance(a.id), nx = occurrences(addDays(t, 45)).find(o => o.card === a.id), [cs, ce] = cardCycle(a, t);
+    const total = daysBetween(cs, ce) + 1, done = Math.min(total, Math.max(0, daysBetween(cs, t) + 1)), left = Math.max(0, total - done);
+    const prevDebit = occurrences(t).find(o => o.card === a.id && o.date <= t);
+    hint = [Math.abs(enc - b) > .004 ? "Encours " + fmt(enc) : "", nPend ? nPend + " à valider" : ""].filter(Boolean).join(" · ");
+    box = html`<div class="acyc">
+      <div class="acyc-r"><span>${nx ? "Débit le " + dayShort(nx.date) + (a.linked && A().acc[a.linked] ? " sur " + accName(a.linked) : "") : "Rien à débiter"}</span>${nx && html`<b>${fmt(-nx.amount)}</b>`}</div>
+      <div class="acyc-bar" aria-hidden="true"><i style=${"width:" + Math.round(done / total * 100) + "%"}></i></div>
+      <span class="acyc-s">Cycle du ${dayShort1(cs)} au ${dayShort(ce)} · ${left ? "se termine dans " + left + (left > 1 ? " jours" : " jour") : "se termine aujourd'hui"}</span>
+      ${prevDebit && html`<span class="acyc-s" style="color:var(--warn)">Le débit du ${dayShort(prevDebit.date)} (${fmt(-prevDebit.amount)}, cycle précédent) attend ta validation.</span>`}</div>`;
+  } else if (pret) { const lp = loanPlan(a); if (lp && isFinite(lp.n)) hint = `${lp.n} échéances · fin ${monthShort(ym(lp.end))} ${lp.end.slice(0, 4)}`; }
+  const ser = card || pret ? null : dailySeries([a.id], addDays(t, -45), E);
+  return html`<section class=${"hero acc-hero ahero p-" + accFam(a)}>
+    <div class="cap">${pret ? "Capital restant dû" : "Solde validé"}</div>
+    <div class="big">${fmt(pret ? -b : b)}</div>
+    ${!card && !pret ? html`<div class=${"hint" + (eomBal < 0 ? " bad" : "")}>Après le prévu, <span style="white-space:nowrap">au ${dayShort(E)} : <b>${fmt(eomBal)}</b></span>${low ? " · sous l'alerte" : ""}</div>` : hint && html`<div class="hint">${hint}</div>`}
+    ${box}
+    ${ser && html`<${AreaChart} series=${ser} split=${t} col="var(--pi)" h=${74} />`}
   </section>`;
 }
-function AccDash({a, go}) {
-  const id = a.id, t = today(), k = ym(t), pk = ymAdd(k, -1);
-  const [ps, pe] = accPeriod(a), pps = accPeriod({...a, restEnd: null}, addDays(ps, -1))[0], ppe = addDays(ps, -1);
-  const cur = flows(id, ps, pe), prev = flows(id, pps, ppe);
-  const prevSame = flows(id, pps, addDays(pps, daysBetween(ps, t))).exp;
-  const pName = isCalPeriod(a) ? MOISC[Number(pk.slice(5)) - 1] : "période préc.";
-  const delta = prevSame ? Math.round((cur.exp - prevSame) / prevSame * 100) : null;
-  const upcoming = occurrences(addDays(t, 31)).filter(o => o.date > t && sides(o).some(([x]) => x === id)).slice(0, 5);
-  const due = dueNow().filter(o => sides(o).some(([x]) => x === id));
-  const lines = budgets().filter(b => { const ba = bAccs(b); return !ba.length || ba.includes(id); }).flatMap(b => linesOf(b.id).filter(l => !l.income).map(l => lineAt(l, t)).filter(x => x && x.bud > 0)).sort((x, y) => y.pct - x.pct).slice(0, 3);
-  const recent = (idx()[id] || []).map(([x]) => x).filter(x => x.date <= t).sort((p, q) => q.date.localeCompare(p.date)).slice(0, 4);
-  const Act = ({ic, l, f}) => html`<button class="qa" onClick=${f}><span class="qa-i">${ic}</span><span>${l}</span></button>`;
+/* Ce que montre la page : à valider (avant aujourd'hui), à venir (jusqu'à la fin de la période, ou jusqu'au débit pour une carte), validées de la période */
+function accBuckets(a) {
+  const id = a.id, t = today(), card = a.type === "carte";
+  const nx = card ? occurrences(addDays(t, 45)).find(o => o.card === id) : null;
+  const end = card ? (nx ? nx.date : cardCycle(a, t)[1]) : a.type === "pret" ? addDays(t, 40) : restEndOf(a);
+  const isVal = x => ["pointee", "verrouillee"].includes(sideSt(x, id));
+  const all = (idx()[id] || []).map(([x]) => x).filter(x => sideSt(x, id) !== "annulee");
+  const planned = S().hidePlanned ? [] : occurrences(end).filter(o => o.date <= end && sides(o).some(([x]) => x === id));
+  const asc = l => sortTx(l, "dd", id).reverse();
+  const pend = asc([...planned.filter(o => o.date < t), ...all.filter(x => x.date < t && !isVal(x))]);
+  const up = asc([...planned.filter(o => o.date >= t), ...all.filter(x => x.date >= t && x.date <= end && !isVal(x))]);
+  const from = accPeriod(a)[0], val = sortTx(all.filter(x => isVal(x) && x.date <= t), "dd", id);
+  let done = val.filter(x => x.date >= from); if (done.length < 3) done = val.slice(0, 5);
+  const run = (S().runMode || "all") !== "none" ? runBal(id, end) : null, runV = {};
+  if (run) { let r = balance(id, {cleared: true}); for (const x of pend) { r += amtFor(x, id); runV[x.id] = r2(r); } }
+  return {pend, up, done, end, from, run, runV};
+}
+function JointCard() {
+  const pm = prOn() ? prMonth(ym(today())) : null, nm = (PR()?.name || "").trim() || "l'autre personne";
+  return html`<button class="card pad" style="border:0;text-align:left;width:100%;display:flex;gap:12px;align-items:center" onClick=${() => NAV.push({v: "joint"})}><span class="ic" style="background:var(--surface2);color:var(--accent)"><${Ic} n="users" s=${20} /></span><span class="grow"><div class="t1">Partage au prorata</div><div class="t2" style="white-space:normal">${pm ? `Ce mois-ci : toi ${fmt(pm.mine)} · ${nm} ${fmt(pm.hers)} (${Math.round(pm.r * 100)} / ${100 - Math.round(pm.r * 100)})` : "Partager les charges cochées au prorata de vos salaires"}</div></span><span class="muted">›</span></button>`;
+}
+function AccSections({a, B, open}) {
+  const id = a.id, N = 8, {pend, up, done, end, from, run, runV} = B;
+  const rows = (l, rv) => l.map(x => html`<${TxRow} t=${x} a=${id} dateCol="m" run=${rv ? rv[x.id] ?? null : null} />`);
+  const more = (l, f, txt) => l.length > N && html`<button class="link amore" onClick=${() => open(f)}>${txt} <span aria-hidden="true">›</span></button>`;
   return html`
-    ${isJoint(id) && (() => { const pm = prOn() ? prMonth(ym(today())) : null, nm = (PR()?.name || "").trim() || "l'autre personne";
-      return html`<button class="card pad" style="border:0;text-align:left;width:100%;display:flex;gap:12px;align-items:center" onClick=${() => NAV.push({v: "joint"})}><span class="ic" style="background:var(--surface2);color:var(--accent)"><${Ic} n="users" s=${20} /></span><span class="grow"><div class="t1">Partage au prorata</div><div class="t2" style="white-space:normal">${pm ? `Ce mois-ci : toi ${fmt(pm.mine)} · ${nm} ${fmt(pm.hers)} (${Math.round(pm.r * 100)} / ${100 - Math.round(pm.r * 100)})` : "Partager les charges cochées au prorata de vos salaires"}</div></span><span class="muted">›</span></button>`; })()}
-    ${a.type === "pret" ? html`<${LoanDash} a=${a} />` : html`
-    ${a.type === "carte" && html`<${CardCycle} a=${a} />`}
-    ${a.type === "epargne" && html`<${SavingsDash} a=${a} />`}
-    `}
-    <section><div class="sec-h"><h2>À venir</h2><span class="muted" style="font-size:13px">30 jours</span></div>
-      <div class="card">${upcoming.length ? upcoming.map(o => html`<button class="row" onClick=${() => openOcc(o)}><span class="datebox"><b>${Number(o.date.slice(8))}</b>${monthShort(o.date)}</span><span class="grow"><div class="t1">${o.name}</div><div class="t2">dans ${daysBetween(t, o.date)} j · ${txDesc(o, id)}</div></span><span class="amt ${amtFor(o, id) > 0 ? "pos" : ""}">${fmt(amtFor(o, id), true)}</span></button>`) : html`<div class="empty">Rien de prévu dans les 30 jours.</div>`}</div></section>`;
+    <section><div class="sec-h"><h2>À valider</h2>${pend.length > 0 && html`<span class="muted">${pend.length} ${pend.length > 1 ? "opérations" : "opération"}</span>`}</div>
+      <div class="card">${pend.length ? rows(pend.slice(0, N), runV) : html`<div class="aok"><${Ic} n="check" s=${20} w=${2.6} />Tout est validé jusqu'à aujourd'hui.</div>`}</div>
+      ${more(pend, "nonpointe", "Toutes les opérations à valider")}</section>
+    <section><div class="sec-h"><h2>À venir</h2><span class="muted">jusqu'au ${dayShort(end)}</span></div>
+      <div class="card">${up.length ? rows(up.slice(0, N), run) : html`<div class="empty" style="padding:16px">Rien de prévu d'ici le ${dayShort(end)}.</div>`}</div>
+      ${more(up, "prevu", "Tout le prévu")}</section>
+    <section><div class="sec-h"><h2>Validées</h2><span class="muted">${done.length && done[done.length - 1].date >= from ? "depuis le " + dayShort1(from) : "les dernières"}</span></div>
+      <div class="card">${done.length ? rows(done.slice(0, N), run) : html`<div class="empty" style="padding:16px">Aucune opération validée pour l'instant.</div>`}</div>
+      <button class="link amore" onClick=${() => open("tout")}>Toutes les opérations <span aria-hidden="true">›</span></button></section>`;
 }
 function cardCycle(a, d) {
   const close = a.closeDay ? Number(a.closeDay) : 0, k = ym(d);
@@ -3706,21 +3741,6 @@ function cardCycle(a, d) {
   let end = at(k); if (end < d) end = at(ymAdd(k, 1));
   const start = addDays(at(ymAdd(ym(end), -1)), 1);
   return [start, end];
-}
-function CardCycle({a}) {
-  const t = today(), [cutStart, cutEnd] = cardCycle(a, t);
-  const nx = occurrences(addDays(cutEnd, 40)).find(o => o.card === a.id && o.cut === cutEnd);
-  const total = daysBetween(cutStart, cutEnd) + 1, done = Math.min(total, Math.max(0, daysBetween(cutStart, t) + 1));
-  const inCycle = r2(-(idx()[a.id] || []).filter(([x]) => x.st !== "annulee" && x.account === a.id && (x.vdate || x.date) >= cutStart && (x.vdate || x.date) <= cutEnd).reduce((s, [, v]) => s + v, 0));
-  const prevDebit = occurrences(t).find(o => o.card === a.id && o.date <= t);
-  return html`<section class="card pad">
-    <div class="sec-h" style="margin:0 0 6px"><h2>Cycle en cours</h2><span class="muted" style="font-size:13px">${dayShort(cutStart)} → ${dayShort(cutEnd)}</span></div>
-    <div class="progress" style="height:10px"><i style=${`width:${done / total * 100}%;background:var(--accent)`}></i></div>
-    <div class="kv" style="margin-top:10px"><span>Dépensé sur ce cycle</span><span>${fmt(inCycle)}</span></div>
-    <div class="kv"><span>Fin du cycle dans</span><span>${Math.max(0, total - done)} j</span></div>
-    ${nx && html`<div class="kv"><span>Sera débité le ${dayShort(nx.date)} sur ${accName(a.linked)}</span><span>${fmt(-nx.amount)}</span></div>`}
-    ${prevDebit && html`<div class="help" style="margin-top:6px;color:var(--warn)">Le débit du ${dayShort(prevDebit.date)} (${fmt(-prevDebit.amount)}, cycle précédent) attend ta validation.</div>`}
-  </section>`;
 }
 function SavingsDash({a}) {
   const t = today(), y = t.slice(0, 4);
@@ -3751,9 +3771,10 @@ function AccountView({id}) {
   const [q, setQ] = useState(""), [flt, setFlt] = useState(() => { const v = ACC_FLT[id] || "tout"; delete ACC_FLT[id]; return v; }), [selMode, setSelMode] = useState(false), [sel, setSel] = useState(new Set());
   /* tri et filtres retenus : le tri pour tous les comptes, les filtres compte par compte */
   const [af, setAf] = useState(() => (S().accFlt || {})[id] || {}), [sort, setSort] = useState(() => S().accSort || "dd");
-  const [tab, setTab0] = useState(DASH_TAB[id] || "dash"); const setTab = v => { DASH_TAB[id] = v; setTab0(v); };
+  /* la page s'ouvre toujours sur la vue d'ensemble, sauf si on arrive avec un filtre */
+  const [search, setSearch0] = useState(() => flt !== "tout"); const setSearch = v => { setSearch0(v); if (!v) { setSelMode(false); setSel(new Set()); } };
   if (!a) return html`<${Top} title="Compte" back /><main class="scr"><div class="empty">Ce compte n'existe plus.</div></main>`;
-  const t = today(), hz = planHorizon();
+  const t = today(), hz = planHorizon(), B = accBuckets(a);
   const real = (idx()[id] || []).map(([x]) => x);
   const planned = S().hidePlanned ? [] : occurrences(hz).filter(o => sides(o).some(([x]) => x === id));
   const b = balance(id), cl = balance(id, {cleared: true});
@@ -3778,13 +3799,14 @@ function AccountView({id}) {
   const selected = () => [...sel].map(i => A().tx[i]).filter(Boolean);
   const batch = async (fn, msg) => { const l = selected().filter(x => sideSt(x, id) !== "verrouillee"); await Store.bulk(l.map(x => fn(x)).filter(Boolean)); setSel(new Set()); setSelMode(false); toast(msg.replace("#", l.length)); };
   return html`
-    <${Top} title=${a.name} back right=${html`<button class="ibtn" aria-label="Actions du compte" onClick=${() => SHEET.open({type:"accActions", id})}><${Ic} n="more" /></button>`} />
-    <main class="scr">
-      <${AccHero} a=${a} />
-      <${Seg} v=${tab} set=${setTab} opts=${[["dash", "Tableau de bord"], ["ops", "Opérations"]]} />
-      ${tab === "dash" ? html`<${AccDash} a=${a} go=${setTab} />` : html`
+    <${Top} title=${a.name} back right=${html`<span style="display:flex;gap:6px"><button class="ibtn" aria-pressed=${search} aria-label="Rechercher dans les opérations" style=${search ? "background:var(--accent);color:var(--onacc)" : ""} onClick=${() => { setSearch(!search); appTop(); }}><${Ic} n="search" /></button><button class="ibtn" aria-label="Actions du compte" onClick=${() => SHEET.open({type:"accActions", id})}><${Ic} n="more" /></button></span>`} />
+    <main class="scr accp">
+      <${AccHero} a=${a} nPend=${B.pend.length} />
+      ${!search && isJoint(id) && html`<${JointCard} />`}
+      ${!search && a.type === "pret" && html`<${LoanDash} a=${a} />`}
+      ${!search && a.type === "epargne" && html`<${SavingsDash} a=${a} />`}
+      ${!search ? html`<${AccSections} a=${a} B=${B} open=${f => { setFlt(f); setSearch(true); appTop(); }} />` : html`
       <div style="display:flex;flex-direction:column;gap:10px">
-        <${QuickEntry} acc=${id} />
         <div style="display:flex;gap:6px;align-items:center"><div class="searchbox grow" style="min-height:40px"><${Ic} n="search" s=${17} /><input type="search" style="min-height:38px;font-size:15px" placeholder="Libellé, montant…" value=${q} onInput=${e => setQ(e.target.value)} aria-label="Rechercher" /></div><${PlanSpan} /></div>
         <div style="display:flex;gap:6px;align-items:center"><div class="grow" style="display:flex;gap:4px;min-width:0">${[["tout","Toutes"],["nonpointe","À valider"],["prevu","Prévues"]].map(([k, l]) => html`<button class=${"chip" + (flt === k ? " on" : "")} style="min-height:30px;padding:3px 10px;font-size:12.5px;white-space:nowrap" onClick=${() => setFlt(k)}>${l}</button>`)}</div>
           <button class="ibtn" style="width:34px;height:34px;position:relative" aria-label="Filtres et tri" onClick=${() => SHEET.open({type: "filter", f0: af, sort0: sort, onApply: (x, s2) => { setAf(x); setSort(s2); Store.put({...S(), k: "set", id: "set_main", accSort: s2, accFlt: {...(S().accFlt || {}), [id]: x}}); }})}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>${(fltCount(af) || sort !== "dd") && html`<i style="position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;background:var(--accent)"></i>`}</button>
@@ -6482,7 +6504,7 @@ function App() {
   return html`<div class="app">
     ${Store.saveErr && html`<${SaveErrBar} />`}
     ${content}
-    <nav class="tabbar" aria-label="Navigation"><div class="tabbar-in"><div class="side side-brand" aria-hidden="true">Pécule</div>${[...TABS.slice(0, 2), null, ...TABS.slice(2), "sep", ...TABS_SIDE].map(x => x === "sep" ? html`<div class="side side-sep"></div>` : x ? (([k, l, ic, side]) => html`<button class=${"tab" + (side ? " side" : "") + (tab === k && !top ? " on" : "")} aria-current=${tab === k && !top ? "page" : null} onClick=${() => NAV.tab(k)}><${Ic} n=${ic} s=${22} />${l}</button>`)(x) : html`<div class="tab-plus" style="position:relative"><button aria-label="Saisir" onClick=${() => SHEET.open({type: "quick"})}><${Ic} n="plus" s=${22} w=${2.6} /><span class="plus-l" aria-hidden="true">Saisir</span></button></div>`)}</div></nav>
+    <nav class="tabbar" aria-label="Navigation"><div class="tabbar-in"><div class="side side-brand" aria-hidden="true">Pécule</div>${[...TABS.slice(0, 2), null, ...TABS.slice(2), "sep", ...TABS_SIDE].map(x => x === "sep" ? html`<div class="side side-sep"></div>` : x ? (([k, l, ic, side]) => html`<button class=${"tab" + (side ? " side" : "") + (tab === k && !top ? " on" : "")} aria-current=${tab === k && !top ? "page" : null} onClick=${() => NAV.tab(k)}><${Ic} n=${ic} s=${22} />${l}</button>`)(x) : html`<div class="tab-plus" style="position:relative"><button aria-label="Saisir" onClick=${() => SHEET.open({type: "quick", ...(top && top.v === "acc" ? {acc: top.id} : {})})}><${Ic} n="plus" s=${22} w=${2.6} /><span class="plus-l" aria-hidden="true">Saisir</span></button></div>`)}</div></nav>
     ${sheets.map((s, i) => html`<${SheetHost} key=${s.key} s=${s} close=${() => setSheets(x => x.filter(y => y.key !== s.key))} />`)}
     <${ToastHost} />
   </div>`;

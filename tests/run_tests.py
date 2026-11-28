@@ -902,7 +902,7 @@ def tri_et_filtres_retenus(br, url):
     cour = a.acc_id("Courant")
     a.js("D.NAV.push({v: 'acc', id: arg});", cour)
     a.wait(500)
-    a.pg.click('main button:has-text("Opérations")')
+    a.pg.click('[aria-label="Rechercher dans les opérations"]')
     a.wait(300)
     a.pg.click('[aria-label="Filtres et tri"]')
     a.wait(400)
@@ -915,7 +915,7 @@ def tri_et_filtres_retenus(br, url):
     a.wait(1500)
     a.js("D.NAV.push({v: 'acc', id: arg});", cour)
     a.wait(500)
-    a.pg.click('main button:has-text("Opérations")')
+    a.pg.click('[aria-label="Rechercher dans les opérations"]')
     a.wait(300)
     a.pg.click('[aria-label="Filtres et tri"]')
     a.wait(400)
@@ -1532,7 +1532,7 @@ def etat_prevue(br, url):
     # la ligne s'affiche « prévue », et le rond la fait passer en créée
     a.js("D.NAV.push({v: 'acc', id: arg});", acc)
     a.wait(600)
-    pg.locator(".seg button", has_text="Opérations").first.click()
+    pg.click('[aria-label="Rechercher dans les opérations"]')
     a.wait(500)
     row = pg.locator(".row", has_text="Test prévue").first
     check("prévue" in row.inner_text(), "ligne sans « prévue » : %s" % row.inner_text())
@@ -2097,7 +2097,7 @@ def valider_date_future(br, url):
     v0 = val()
     sheet = lambda: pg.locator(".sheet", has_text="Passée à la banque aujourd'hui ?")
     a.js("D.NAV.push({v: 'acc', id: arg});", cour); a.wait(600)
-    pg.locator(".seg button", has_text="Opérations").first.click(); a.wait(500)
+    pg.click('[aria-label="Rechercher dans les opérations"]'); a.wait(500)
     pg.locator(".row", has_text="Salaire test").first.locator("button.st").click(); a.wait(500)
     check(sheet().count() == 1 and "Salaire test" in sheet().inner_text(), "question absente après le rond de statut")
     sheet().locator(".btn", has_text="Garder le").click(); a.wait(400)
@@ -2258,7 +2258,7 @@ def soldes_courants_ordre(br, url):
     for srt in ("da", "dd"):
         a.js("D.Store.put({...D.S(), accSort: arg, planUntil: 'm12'});", srt); a.wait(300)
         a.js("D.NAV.push({v: 'acc', id: arg});", liv); a.wait(500)
-        pg.locator(".seg button", has_text="Opérations").first.click(); a.wait(600)
+        pg.click('[aria-label="Rechercher dans les opérations"]'); a.wait(600)
         rows = a.js("return [...document.querySelectorAll('main .card .row')].map(r => { const am = r.querySelector('.amt'); return [(r.querySelector('.t1') || r).textContent.trim(), am ? am.childNodes[0].textContent : null, am?.querySelector('small')?.textContent || null]; }).filter(x => x[2]);")
         if srt == "dd": rows = rows[::-1]
         check(len(rows) > 20, "trop peu de lignes (%d)" % len(rows))
@@ -2364,6 +2364,56 @@ def comptes_poches(br, url):
     a.wait(500)
     check("Carte Claire" in pg.inner_text("header"), "la carte ne s'ouvre pas")
     a.no_errors("écran Comptes en poches")
+    a.close()
+
+
+@test
+def page_compte(br, url):
+    """v81 (maquette A « tout sur une page ») : en-tête à la couleur du compte ; À valider, À venir (avec « puis »), Validées ; la loupe ouvre la liste complète ; carte : débit et cycle dans l'en-tête ; joint : partage au prorata ; le + du bas saisit sur le compte ouvert."""
+    a = App(br, url)
+    a.import_ic(FICTIF)
+    pg = a.pg
+    norm = lambda s: s.replace("\u202f", " ").replace("\xa0", " ")
+    cour = a.acc_id("Courant")
+    a.js("D.NAV.push({v: 'acc', id: arg});", cour)
+    a.wait(600)
+    check(pg.locator(".seg", has_text="Tableau de bord").count() == 0, "les onglets sont encore là")
+    hero = pg.locator("section.acc-hero")
+    check(" p-" in " " + hero.get_attribute("class") and "Solde validé" in hero.inner_text() and "Après le prévu, au" in norm(hero.inner_text()), "en-tête : %r" % hero.inner_text())
+    heads = pg.locator("main .sec-h h2").all_inner_texts()
+    check(heads[:3] == ["À valider", "À venir", "Validées"], "sections : %s" % heads)
+    up = pg.locator("main section", has=pg.locator("h2", has_text="À venir")).locator(".row")
+    check(up.count() > 0 and "puis" in up.first.inner_text(), "À venir sans « puis » : %s" % (up.first.inner_text() if up.count() else None))
+    pg.click('[aria-label="Rechercher dans les opérations"]')
+    a.wait(400)
+    check(pg.locator('main input[type=search]').count() == 1 and pg.locator('[aria-label="Filtres et tri"]').count() == 1, "la loupe n'ouvre pas la liste complète")
+    pg.click('[aria-label="Rechercher dans les opérations"]')
+    a.wait(400)
+    check(pg.locator('main input[type=search]').count() == 0 and pg.locator("main .sec-h h2", has_text="À valider").count() == 1, "la loupe ne ramène pas la vue d'ensemble")
+    # carte : un achat d'hier à valider, débit et cycle dans l'en-tête
+    c = a.acc_id("Carte Joint")
+    a.js("D.Store.put({k: 'tx', id: 'tx_pc1', account: arg, date: D.addDays(D.today(), -1), name: 'Achat d\\'hier', amount: -9.5, splits: [{amount: -9.5, cat: null}], st: 'saisie'});", c)
+    a.js("D.NAV.push({v: 'acc', id: arg});", c)
+    a.wait(600)
+    h = norm(pg.locator("section.acc-hero").inner_text())
+    check("Solde validé" in h and "Débit le" in h and "Cycle du" in h and "à valider" in h, "en-tête de la carte : %r" % h)
+    pend = pg.locator("main section", has=pg.locator("h2", has_text="À valider")).locator(".row", has_text="Achat d'hier")
+    check(pend.count() == 1 and "puis" in pend.inner_text(), "achat à valider absent")
+    # joint : partage au prorata sous l'en-tête
+    a.js("D.NAV.push({v: 'acc', id: arg});", a.acc_id("Joint"))
+    a.wait(600)
+    check("Partage au prorata" in pg.inner_text("main"), "carte du partage absente sur le joint")
+    # le + du bas saisit sur le compte ouvert
+    liv = a.acc_id("Livret")
+    a.js("D.NAV.push({v: 'acc', id: arg});", liv)
+    a.wait(600)
+    pg.click('nav [aria-label="Saisir"]')
+    a.wait(500)
+    pg.locator(".wiz .wtile").first.click()
+    a.wait(400)
+    sel = pg.locator(".wiz select").first.input_value()
+    check(sel == liv, "le + ne propose pas le compte ouvert : %s (attendu %s)" % (sel, liv))
+    a.no_errors("page d'un compte")
     a.close()
 
 
